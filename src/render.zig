@@ -2,85 +2,137 @@ const std = @import("std");
 const utils = @import("utils.zig");
 const zd = @import("zigdown.zig");
 
-pub fn render(parser: zd.Parser) void {
-    render_begin();
-    for (parser.sections.items) |section| {
-        switch (section) {
-            .heading => |h| render_heading(h),
-            .code => |c| render_code(c),
-            .list => |l| render_list(l),
-            .numlist => |l| render_numlist(l),
-            .quote => |q| render_quote(q),
-            .plaintext => |t| render_text(t),
-            .textblock => |t| render_textblock(t),
-            .linebreak => render_break(),
+// Constructor function for HtmlRenderer
+pub fn htmlRenderer(out_stream: anytype) HtmlRenderer(@TypeOf(out_stream)) {
+    return HtmlRenderer(@TypeOf(out_stream)).init(out_stream);
+}
+
+// Render a Markdown document to HTML to the given output stream
+pub fn HtmlRenderer(comptime OutStream: type) type {
+    return struct {
+        const Self = @This();
+        stream: OutStream,
+
+        pub fn init(stream: OutStream) Self {
+            return Self{
+                .stream = stream,
+            };
         }
-    }
-    render_end();
-}
 
-fn render_begin() void {
-    utils.stdout("<html><body>\n", .{});
-}
+        // Write an array of bytes to the underlying writer
+        pub fn write(self: *Self, bytes: []const u8) !void {
+            try self.stream.writeAll(bytes);
+        }
 
-fn render_end() void {
-    utils.stdout("</body></html>\n", .{});
-}
+        pub fn print(self: *Self, fmt: []const u8, args: anytype) !void {
+            try self.stream.print(fmt, args);
+        }
 
-fn render_heading(h: zd.Heading) void {
-    utils.stdout("<h{d}>{s}</h{d}>\n", .{ h.level, h.text, h.level });
-}
+        // Render the Markdown object to HTML into the given writer
+        pub fn render(self: *Self, md: zd.Markdown) !void {
+            try self.render_begin();
+            for (md.sections.items) |section| {
+                try switch (section) {
+                    .heading => |h| self.render_heading(h),
+                    .code => |c| self.render_code(c),
+                    .list => |l| self.render_list(l),
+                    .numlist => |l| self.render_numlist(l),
+                    .quote => |q| self.render_quote(q),
+                    .plaintext => |t| self.render_text(t),
+                    .textblock => |t| self.render_textblock(t),
+                    .linebreak => self.render_break(),
+                };
+            }
+            try self.render_end();
+        }
 
-fn render_quote(q: zd.Quote) void {
-    utils.stdout("<blockquote>\n", .{});
-    var i: i32 = @as(i32, q.level) - 1;
-    while (i > 0) : (i -= 1) {
-        utils.stdout("<blockquote>\n", .{});
-    }
+        /// ----------------------------------------------
+        /// Private implementation methods
+        fn render_begin(self: *Self) !void {
+            try self.stream.print("<html><body>\n", .{});
+        }
 
-    render_textblock(q.textblock);
+        fn render_end(self: *Self) !void {
+            try self.stream.print("</body></html>\n", .{});
+        }
 
-    i = @as(i32, q.level) - 1;
-    while (i > 0) : (i -= 1) {
-        utils.stdout("</blockquote>\n", .{});
-    }
-    utils.stdout("</blockquote>\n", .{});
-}
+        fn render_heading(self: *Self, h: zd.Heading) !void {
+            try self.stream.print("<h{d}>{s}</h{d}>\n", .{ h.level, h.text, h.level });
+        }
 
-fn render_code(c: zd.Code) void {
-    utils.stdout("<pre><code>{s}</code></pre>\n", .{c.text});
-}
+        fn render_quote(self: *Self, q: zd.Quote) !void {
+            try self.stream.print("<blockquote>", .{});
+            var i: i32 = @as(i32, q.level) - 1;
+            while (i > 0) : (i -= 1) {
+                try self.stream.print("<blockquote>", .{});
+            }
 
-fn render_list(list: zd.List) void {
-    utils.stdout("<ul>\n", .{});
-    for (list.lines.items) |line| {
-        utils.stdout("<li>\n", .{});
-        render_textblock(line);
-        utils.stdout("</li>\n", .{});
-    }
-    utils.stdout("</ul>\n", .{});
-}
+            try self.render_textblock(q.textblock);
 
-fn render_numlist(list: zd.NumList) void {
-    utils.stdout("<ul>\n", .{});
-    for (list.lines.items) |line| {
-        utils.stdout("<li>\n", .{});
-        render_textblock(line);
-        utils.stdout("</li>\n", .{});
-    }
-    utils.stdout("</ul>\n", .{});
-}
+            i = @as(i32, q.level) - 1;
+            while (i > 0) : (i -= 1) {
+                try self.stream.print("</blockquote>", .{});
+            }
+            try self.stream.print("</blockquote>\n", .{});
+        }
 
-fn render_text(text: zd.Text) void {
-    utils.stdout("{s}\n", .{text.text});
-}
+        fn render_code(self: *Self, c: zd.Code) !void {
+            try self.stream.print("<pre><code>{s}</code></pre>\n", .{c.text});
+        }
 
-fn render_break() void {
-    utils.stdout("\n", .{});
-}
+        fn render_list(self: *Self, list: zd.List) !void {
+            try self.stream.print("<ul>\n", .{});
+            for (list.lines.items) |line| {
+                try self.stream.print("<li>\n", .{});
+                try self.render_textblock(line);
+                try self.stream.print("</li>\n", .{});
+            }
+            try self.stream.print("</ul>\n", .{});
+        }
 
-fn render_textblock(block: zd.TextBlock) void {
-    for (block.text.items) |text| {
-        render_text(text);
-    }
+        fn render_numlist(self: *Self, list: zd.NumList) !void {
+            try self.stream.print("<ul>\n", .{});
+            for (list.lines.items) |line| {
+                try self.stream.print("<li>\n", .{});
+                try self.render_textblock(line);
+                try self.stream.print("</li>\n", .{});
+            }
+            try self.stream.print("</ul>\n", .{});
+        }
+
+        fn render_text(self: *Self, text: zd.Text) !void {
+            // for style in style => add style tag
+            for (text.style) |style| {
+                const start_tag: []const u8 = switch (style) {
+                    .Normal => "",
+                    .Bold => "<b>",
+                    .Italic => "<i>",
+                    .Underline => "<u>",
+                };
+                try self.stream.print("{s}", .{start_tag});
+            }
+
+            try self.stream.print("{s}", .{text.text});
+
+            for (text.style) |style| {
+                const end_tag: []const u8 = switch (style) {
+                    .Normal => "",
+                    .Bold => "</b>",
+                    .Italic => "</i>",
+                    .Underline => "</u>",
+                };
+                try self.stream.print("{s}", .{end_tag});
+            }
+        }
+
+        fn render_break(self: *Self) !void {
+            try self.stream.print("<br>\n", .{});
+        }
+
+        fn render_textblock(self: *Self, block: zd.TextBlock) !void {
+            for (block.text.items) |text| {
+                try self.render_text(text);
+            }
+        }
+    };
 }

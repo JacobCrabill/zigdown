@@ -2,22 +2,29 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
-pub const Parser = struct {
+pub const Markdown = struct {
     sections: ArrayList(Section) = undefined,
     alloc: Allocator = undefined,
 
-    pub fn init(allocator: Allocator) Parser {
-        return Parser{
+    // Initialize a new Markdown file
+    pub fn init(allocator: Allocator) Markdown {
+        return Markdown{
             .sections = ArrayList(Section).init(allocator),
             .alloc = allocator,
         };
     }
 
-    pub fn deinit(self: *Parser) void {
+    // Deallocate all heap memory
+    pub fn deinit(self: *Markdown) void {
         for (self.sections.items) |_, i| {
             self.sections.items[i].deinit();
         }
         self.sections.deinit();
+    }
+
+    // Append a section to the Markdown file
+    pub fn append(self: *Markdown, sec: Section) !void {
+        try self.sections.append(sec);
     }
 };
 
@@ -30,6 +37,13 @@ pub const SectionType = enum {
     plaintext,
     textblock,
     linebreak,
+};
+
+pub const TextStyle = enum {
+    Normal,
+    Bold,
+    Italic,
+    Underline,
 };
 
 //pub const Section = union(enum) {
@@ -124,7 +138,7 @@ pub const Break = struct {};
 /// Section of formatted text (single style)
 /// Example: "plain text" or "**bold text**"
 pub const Text = struct {
-    style: u8,
+    style: []const TextStyle,
     text: []const u8,
 };
 
