@@ -102,27 +102,26 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
 
         fn render_text(self: *Self, text: zd.Text) !void {
             // for style in style => add style tag
-            for (text.style) |style| {
-                const start_tag: []const u8 = switch (style) {
-                    .Normal => "",
-                    .Bold => "<b>",
-                    .Italic => "<i>",
-                    .Underline => "<u>",
-                };
-                try self.stream.print("{s}", .{start_tag});
-            }
+            if (text.style.bold)
+                try self.stream.print("<b>", .{});
+
+            if (text.style.italic)
+                try self.stream.print("<i>", .{});
+
+            if (text.style.underline)
+                try self.stream.print("<u>", .{});
 
             try self.stream.print("{s}", .{text.text});
 
-            for (text.style) |style| {
-                const end_tag: []const u8 = switch (style) {
-                    .Normal => "",
-                    .Bold => "</b>",
-                    .Italic => "</i>",
-                    .Underline => "</u>",
-                };
-                try self.stream.print("{s}", .{end_tag});
-            }
+            // Don't forget to reverse the order!
+            if (text.style.underline)
+                try self.stream.print("</u>", .{});
+
+            if (text.style.italic)
+                try self.stream.print("</i>", .{});
+
+            if (text.style.bold)
+                try self.stream.print("</b>", .{});
         }
 
         fn render_break(self: *Self) !void {

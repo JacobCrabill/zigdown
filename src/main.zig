@@ -1,12 +1,14 @@
 const std = @import("std");
 const utils = @import("utils.zig");
 const render = @import("render.zig");
+const parsing = @import("parsing.zig");
 const zd = @import("zigdown.zig");
 
 const ArrayList = std.ArrayList;
 const File = std.fs.File;
 const TS = zd.TextStyle;
 const htmlRenderer = render.htmlRenderer;
+const Parser = parsing.Parser;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -26,10 +28,8 @@ pub fn main() !void {
         },
     };
     // Apply styling to the text block
-    const bold = TS.Bold;
-    const italic = TS.Italic;
-    const style1 = [_]TS{ bold, italic };
-    try quote.quote.textblock.text.append(zd.Text{ .style = &style1, .text = "Quote!" });
+    const style1 = TS{ .bold = true, .italic = true };
+    try quote.quote.textblock.text.append(zd.Text{ .style = style1, .text = "Quote!" });
     try md.append(quote);
 
     var renderer = htmlRenderer(std.io.getStdOut().writer());
@@ -39,6 +39,8 @@ pub fn main() !void {
 test "Markdown struct basics" {
     // Simulate the following Markdown file:
     // # Hello!
+    //
+    // > **_Quote!_**
     //
     var md = zd.Markdown.init(std.testing.allocator);
     defer md.deinit();
@@ -59,10 +61,8 @@ test "Markdown struct basics" {
     };
 
     // Apply styling to the text block
-    const bold = TS.Bold;
-    const italic = TS.Italic;
-    const style1 = [_]TS{ bold, italic };
-    try quote.quote.textblock.text.append(zd.Text{ .style = &style1, .text = "Quote!" });
+    const style1 = TS{ .bold = true, .italic = true };
+    try quote.quote.textblock.text.append(zd.Text{ .style = style1, .text = "Quote!" });
     try md.append(quote);
 
     // Render HTML into file
@@ -79,7 +79,7 @@ test "Markdown struct basics" {
     const expected_output =
         \\<html><body>
         \\<h1>Hello!</h1>
-        \\<blockquote><b><i>Quote!</b></i></blockquote>
+        \\<blockquote><b><i>Quote!</i></b></blockquote>
         \\</body></html>
         \\
     ;
@@ -95,6 +95,16 @@ test "Markdown struct basics" {
 
     var res = std.mem.eql(u8, buffer, expected_output);
     try std.testing.expect(res == true);
+}
+
+test "Basic parsing" {
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+
+    var md = parser.parse(test_input).?;
+
+    var renderer = htmlRenderer(std.io.getStdErr().writer());
+    try renderer.render(md);
 }
 
 const test_input =

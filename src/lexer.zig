@@ -9,7 +9,6 @@ pub const TokenType = enum {
     INVALID,
     WORD,
     BREAK,
-    HEADER,
     HASH1,
     HASH2,
     HASH3,
@@ -17,8 +16,23 @@ pub const TokenType = enum {
     CODE_BLOCK,
     CODE_INLINE,
     QUOTE,
+    PLUS,
+    MINUS,
     STAR,
     USCORE,
+};
+
+const CharMap = struct {
+    char: u8,
+    kind: TokenType,
+};
+
+const cmap = [_]CharMap{
+    .{ .char = '>', .kind = TokenType.QUOTE },
+    .{ .char = '*', .kind = TokenType.STAR },
+    .{ .char = '_', .kind = TokenType.USCORE },
+    .{ .char = '+', .kind = TokenType.PLUS },
+    .{ .char = '-', .kind = TokenType.MINUS },
 };
 
 pub const Token = struct {
@@ -53,23 +67,6 @@ pub const Lexer = struct {
             self.cursor = self.data.len;
             return false;
         }
-    }
-
-    /// Try parsing a header line
-    pub fn parseHeader(self: *Lexer) ?Token {
-        if (self.data[self.cursor] == '#') {
-            // Header
-            var token = Token{};
-            token.kind = TokenType.HEADER;
-            const cursor = self.cursor;
-            if (self.eatLine()) {
-                token.text = self.data[cursor .. self.cursor - 1];
-            } else {
-                token.text = self.data[cursor..self.cursor];
-            }
-            return token;
-        }
-        return null;
     }
 
     /// Try parsing one or more hash characters
@@ -114,18 +111,15 @@ pub const Lexer = struct {
         return null;
     }
 
-    /// Try parsing a quote line
-    pub fn parseQuote(self: *Lexer) ?Token {
-        if (self.data[self.cursor] == '>') {
-            var token = Token{};
-            token.kind = TokenType.QUOTE;
-            const cursor = self.cursor;
-            if (self.eatLine()) {
-                token.text = self.data[cursor .. self.cursor - 1];
-            } else {
-                token.text = self.data[cursor..self.cursor];
-            }
-            return token;
+    /// Parse a single-character token 'char' as type 'kind'
+    pub fn parseSingularToken(self: *Lexer, char: u8, kind: TokenType) ?Token {
+        if (self.data[self.cursor] == char) {
+            const start = self.cursor;
+            self.cursor += 1;
+            return Token{
+                .kind = kind,
+                .text = self.data[start .. start + 1],
+            };
         }
         return null;
     }
@@ -159,7 +153,7 @@ pub const Lexer = struct {
         const text = self.data[self.cursor..];
         var end = self.data.len;
         for (text) |c, i| {
-            if (!std.ascii.isASCII(c) or isWhitespace(c) or isLineBreak(c)) {
+            if (!std.ascii.isASCII(c) or isWhitespace(c) or isLineBreak(c) or isSpecial(c)) {
                 end = self.cursor + i;
                 break;
             }
@@ -178,12 +172,17 @@ pub const Lexer = struct {
     }
 
     /// Consume the next token in the text
-    pub fn next(self: *Lexer) Token {
+    pub fn next(self: *Lexer) ?Token {
         var token = Token{};
 
         self.trimLeft();
 
-        if (self.cursor >= self.data.len) return token;
+        if (self.cursor > self.data.len) {
+            return null;
+        } else if (self.cursor == self.data.len) {
+            self.cursor += 1;
+            return Token{ .kind = TokenType.END, .text = "" };
+        }
 
         if (self.parseHash()) |hash| {
             return hash;
@@ -193,12 +192,14 @@ pub const Lexer = struct {
             return br;
         }
 
-        if (self.parseQuote()) |quote| {
-            return quote;
-        }
-
         if (self.parseCode()) |code| {
             return code;
+        }
+
+        for (cmap) |cm| {
+            if (self.parseSingularToken(cm.char, cm.kind)) |tk| {
+                return tk;
+            }
         }
 
         if (self.parseText()) |text| {
@@ -230,11 +231,20 @@ pub fn isLineBreak(c: u8) bool {
     return false;
 }
 
-test "lex hash" {
+/// Check if the character is a special Markdown character
+pub fn isSpecial(c: u8) bool {
+    const special = "*_`";
+    if (std.mem.indexOfScalar(u8, special, c)) |_| {
+        return true;
+    }
+    return false;
+}
+
+test "markdown basics" {
     const data =
         \\# Header!
         \\## Header 2
-        \\  some generic text here
+        \\  some *generic* text _here_
         \\
         \\after the break...
         \\> Quote line
@@ -243,19 +253,95 @@ test "lex hash" {
         \\```
         \\code
         \\```
+        \\
+        \\And now a list:
+        \\+ foo
+        \\  + no indents yet
+        \\- bar
     ;
 
-    // var gpa = GPA(.{}){};
-    // var alloc = gpa.allocator();
+    var gpa = GPA(.{}){};
+    var alloc = gpa.allocator();
+    var tokens = ArrayList(Token).init(alloc);
 
     var lex: Lexer = Lexer.init(data);
-    var token = lex.next();
 
-    std.debug.print("Tokens:\n", .{});
-
-    while (token.kind != TokenType.END) {
-        std.debug.print("Type: {any}, Text: '{s}'\n", .{ token.kind, token.text });
-        token = lex.next();
+    while (lex.next()) |token| {
+        try tokens.append(token);
     }
-    std.debug.print("Type: {any}, Text: '{s}'\n", .{ token.kind, token.text });
+
+    parseTokens(tokens);
 }
+
+/// Basic parser of Markdown tokens
+pub fn parseTokens(tokens: ArrayList(Token)) void {
+    std.debug.print("Tokens:\n", .{});
+    for (tokens.items) |token| {
+        std.debug.print("Type: {any}, Text: '{s}'\n", .{ token.kind, token.text });
+    }
+
+    var i: usize = 0;
+    while (i < tokens.items.len) {
+        const token = tokens.items[i];
+        switch (token.kind) {
+            TokenType.HASH1 => printHeader(tokens, &i),
+            TokenType.BREAK => printNewline(&i),
+            else => printWord(token.text, &i),
+        }
+    }
+}
+
+pub fn printHeader(tokens: ArrayList(Token), idx: *usize) void {
+    idx.* += 1;
+    beginHeader();
+    while (idx.* < tokens.items.len and tokens.items[idx.*].kind == TokenType.WORD) : (idx.* += 1) {
+        std.debug.print("{s} ", .{tokens.items[idx.*].text});
+    }
+    endHeader();
+}
+
+pub fn printWord(text: []const u8, idx: *usize) void {
+    std.debug.print("{s} ", .{text});
+    idx.* += 1;
+}
+
+pub fn printNewline(idx: *usize) void {
+    std.debug.print("\n", .{});
+    idx.* += 1;
+}
+
+pub fn beginHeader() void {
+    std.debug.print(text_bold, .{});
+}
+
+pub fn endHeader() void {
+    std.debug.print(ansi_end, .{});
+}
+
+// ANSI terminal escape character
+pub const ansi = [1]u8{0x1b};
+//pub const ansi: [*]const u8 = "\u{033}";
+
+// ANSI Reset command (clear formatting)
+pub const ansi_end = ansi ++ "[m";
+
+// ANSI cursor movements
+pub const ansi_back = ansi ++ "[{}D";
+pub const ansi_up = ansi ++ "[{}A";
+pub const ansi_setcol = ansi ++ "[{}G";
+pub const ansi_home = ansi ++ "[0G";
+
+// ====================================================
+// ANSI display codes (colors, styles, etc.)
+// ----------------------------------------------------
+pub const bg_red = ansi ++ "[41m";
+pub const bg_green = ansi ++ "[42m";
+pub const bg_yellow = ansi ++ "[43m";
+pub const bg_blue = ansi ++ "[44m";
+pub const bg_purple = ansi ++ "[45m";
+pub const bg_cyan = ansi ++ "[46m";
+pub const bg_white = ansi ++ "[47m";
+
+pub const text_blink = ansi ++ "[5m";
+pub const text_bold = ansi ++ "[1m";
+pub const text_italic = ansi ++ "[3m";

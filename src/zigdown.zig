@@ -39,11 +39,10 @@ pub const SectionType = enum {
     linebreak,
 };
 
-pub const TextStyle = enum {
-    Normal,
-    Bold,
-    Italic,
-    Underline,
+pub const TextStyle = struct {
+    bold: bool = false,
+    italic: bool = false,
+    underline: bool = false,
 };
 
 //pub const Section = union(enum) {
@@ -138,14 +137,18 @@ pub const Break = struct {};
 /// Section of formatted text (single style)
 /// Example: "plain text" or "**bold text**"
 pub const Text = struct {
-    style: []const TextStyle,
-    text: []const u8,
+    style: TextStyle = TextStyle{},
+    text: []const u8 = undefined,
 };
 
 /// Block of multiple sections of formatted text
 /// Example: "plain and **bold** text together"
 pub const TextBlock = struct {
     text: ArrayList(Text),
+
+    pub fn init(alloc: std.mem.Allocator) TextBlock {
+        return TextBlock{ .text = ArrayList(Text).init(alloc) };
+    }
 
     pub fn deinit(self: *TextBlock) void {
         self.text.deinit();
