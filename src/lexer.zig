@@ -1,8 +1,12 @@
 const std = @import("std");
+const zd = @import("zigdown.zig");
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const GPA = std.heap.GeneralPurposeAllocator;
+const print = std.debug.print;
+
+const TokenList = ArrayList(Token);
 
 pub const TokenType = enum {
     END,
@@ -40,15 +44,131 @@ pub const Token = struct {
     text: []const u8 = undefined,
 };
 
+pub const HashTokenizer = struct {
+    pub fn peek(text: []const u8) ?Token {
+        var token = Token{};
+        if (text.len > 3 and std.mem.startsWith(u8, text, "####")) {
+            token.kind = TokenType.HASH4;
+            token.text = text[0..4];
+            return token;
+        } else if (text.len > 2 and std.mem.startsWith(u8, text, "###")) {
+            token.kind = TokenType.HASH3;
+            token.text = text[0..3];
+            return token;
+        } else if (text.len > 1 and std.mem.startsWith(u8, text, "##")) {
+            token.kind = TokenType.HASH2;
+            token.text = text[0..2];
+            return token;
+        } else if (text.len > 0 and std.mem.startsWith(u8, text, "#")) {
+            token.kind = TokenType.HASH1;
+            token.text = text[0..1];
+            return token;
+        }
+
+        return null;
+    }
+};
+
+/// Try parsing a line break
+pub const BreakTokenizer = struct {
+    pub fn peek(text: []const u8) ?Token {
+        // TODO: Handle \r\n
+        if (text.len > 0 and text[0] == '\n') {
+            return Token{
+                .kind = TokenType.BREAK,
+                .text = text[0..1],
+            };
+        }
+
+        return null;
+    }
+};
+
+/// Try parsing a code tag (block or inline)
+const CodeTokenizer = struct {
+    pub fn peek(text: []const u8) ?Token {
+        if (std.mem.startsWith(u8, text, "```")) {
+            const token = Token{
+                .kind = TokenType.CODE_BLOCK,
+                .text = text[0..3],
+            };
+            return token;
+        }
+
+        if (std.mem.startsWith(u8, text, "`")) {
+            const token = Token{
+                .kind = TokenType.CODE_INLINE,
+                .text = text[0..1],
+            };
+            return token;
+        }
+
+        return null;
+    }
+};
+
+/// Parse a single-character token 'char' as type 'kind'
+pub fn SingularTokenizer(comptime char: u8, comptime kind: TokenType) type {
+    return struct {
+        pub fn peek(text: []const u8) ?Token {
+            if (text.len > 0 and text[0] == char) {
+                return Token{
+                    .kind = kind,
+                    .text = text[0..1],
+                };
+            }
+            return null;
+        }
+    };
+}
+
+/// Try parsing a line of generic text
+const TextTokenizer = struct {
+    pub fn peek(text: []const u8) ?Token {
+        var end = text.len;
+        for (text) |c, i| {
+            if (!std.ascii.isASCII(c) or isWhitespace(c) or isLineBreak(c) or isSpecial(c)) {
+                end = i;
+                break;
+            }
+        }
+
+        if (end > 0) {
+            return Token{
+                .kind = TokenType.WORD,
+                .text = text[0..end],
+            };
+        }
+
+        return null;
+    }
+};
+
+/// Organize all available tokenizers
+const Tokenizers = .{
+    HashTokenizer,
+    BreakTokenizer,
+    CodeTokenizer,
+    SingularTokenizer('>', TokenType.QUOTE),
+    SingularTokenizer('*', TokenType.STAR),
+    SingularTokenizer('_', TokenType.USCORE),
+    SingularTokenizer('+', TokenType.PLUS),
+    SingularTokenizer('-', TokenType.MINUS),
+    TextTokenizer,
+};
+
+/// Convert Markdown text into a stream of tokens
 pub const Lexer = struct {
     data: []const u8 = undefined,
     cursor: usize = 0,
+    alloc: Allocator = undefined,
 
     /// Create a new Lexer from the text of a document
-    pub fn init(text: []const u8) Lexer {
+    pub fn init(text: []const u8, alloc: Allocator) Lexer {
         return Lexer{
             .data = text,
             .cursor = 0,
+            .alloc = alloc,
         };
     }
 
@@ -69,112 +189,8 @@ pub const Lexer = struct {
         }
     }
 
-    /// Try parsing one or more hash characters
-    pub fn parseHash(self: *Lexer) ?Token {
-        const text = self.data[self.cursor..];
-        var token = Token{};
-        if (std.mem.startsWith(u8, text, "####")) {
-            token.kind = TokenType.HASH4;
-            token.text = self.data[self.cursor .. self.cursor + 4];
-            self.cursor += 4;
-            return token;
-        } else if (std.mem.startsWith(u8, text, "###")) {
-            token.kind = TokenType.HASH3;
-            token.text = self.data[self.cursor .. self.cursor + 3];
-            self.cursor += 3;
-            return token;
-        } else if (std.mem.startsWith(u8, text, "##")) {
-            token.kind = TokenType.HASH2;
-            token.text = self.data[self.cursor .. self.cursor + 2];
-            self.cursor += 2;
-            return token;
-        } else if (std.mem.startsWith(u8, text, "#")) {
-            token.kind = TokenType.HASH1;
-            token.text = self.data[self.cursor .. self.cursor + 1];
-            self.cursor += 1;
-            return token;
-        }
-
-        return null;
-    }
-
-    /// Try parsing a line break
-    pub fn parseBreak(self: *Lexer) ?Token {
-        // TODO: Handle \r\n
-        if (self.data[self.cursor] == '\n') {
-            self.cursor += 1;
-            return Token{
-                .kind = TokenType.BREAK,
-                .text = "",
-            };
-        }
-        return null;
-    }
-
-    /// Parse a single-character token 'char' as type 'kind'
-    pub fn parseSingularToken(self: *Lexer, char: u8, kind: TokenType) ?Token {
-        if (self.data[self.cursor] == char) {
-            const start = self.cursor;
-            self.cursor += 1;
-            return Token{
-                .kind = kind,
-                .text = self.data[start .. start + 1],
-            };
-        }
-        return null;
-    }
-
-    /// Try parsing a code tag (block or inline)
-    pub fn parseCode(self: *Lexer) ?Token {
-        const text = self.data[self.cursor..];
-        if (std.mem.startsWith(u8, text, "```")) {
-            const token = Token{
-                .kind = TokenType.CODE_BLOCK,
-                .text = self.data[self.cursor .. self.cursor + 3],
-            };
-            self.cursor += 3;
-            return token;
-        }
-
-        if (std.mem.startsWith(u8, text, "`")) {
-            const token = Token{
-                .kind = TokenType.CODE_INLINE,
-                .text = self.data[self.cursor .. self.cursor + 1],
-            };
-            self.cursor += 1;
-            return token;
-        }
-
-        return null;
-    }
-
-    /// Try parsing a line of generic text
-    pub fn parseText(self: *Lexer) ?Token {
-        const text = self.data[self.cursor..];
-        var end = self.data.len;
-        for (text) |c, i| {
-            if (!std.ascii.isASCII(c) or isWhitespace(c) or isLineBreak(c) or isSpecial(c)) {
-                end = self.cursor + i;
-                break;
-            }
-        }
-
-        if (end > self.cursor) {
-            const start = self.cursor;
-            self.cursor = end;
-            return Token{
-                .kind = TokenType.WORD,
-                .text = self.data[start..end],
-            };
-        }
-
-        return null;
-    }
-
     /// Consume the next token in the text
     pub fn next(self: *Lexer) ?Token {
-        var token = Token{};
-
         self.trimLeft();
 
         if (self.cursor > self.data.len) {
@@ -184,30 +200,17 @@ pub const Lexer = struct {
             return Token{ .kind = TokenType.END, .text = "" };
         }
 
-        if (self.parseHash()) |hash| {
-            return hash;
-        }
-
-        if (self.parseBreak()) |br| {
-            return br;
-        }
-
-        if (self.parseCode()) |code| {
-            return code;
-        }
-
-        for (cmap) |cm| {
-            if (self.parseSingularToken(cm.char, cm.kind)) |tk| {
-                return tk;
+        // Apply each of our tokenizers to the current text
+        inline for (Tokenizers) |tokenizer| {
+            const text = self.data[self.cursor..];
+            if (tokenizer.peek(text)) |token| {
+                self.cursor += token.text.len;
+                print("{any}\n", .{token});
+                return token;
             }
         }
 
-        if (self.parseText()) |text| {
-            return text;
-        }
-
-        token.kind = TokenType.INVALID;
-        return token;
+        return Token{ .kind = TokenType.INVALID };
     }
 };
 
@@ -240,6 +243,10 @@ pub fn isSpecial(c: u8) bool {
     return false;
 }
 
+//////////////////////////////////////////////////////////
+// Tests
+//////////////////////////////////////////////////////////
+
 test "markdown basics" {
     const data =
         \\# Header!
@@ -262,19 +269,23 @@ test "markdown basics" {
 
     var gpa = GPA(.{}){};
     var alloc = gpa.allocator();
-    var tokens = ArrayList(Token).init(alloc);
+    var tokens = TokenList.init(alloc);
 
-    var lex: Lexer = Lexer.init(data);
+    // Tokenize the input text
+    var lex: Lexer = Lexer.init(data, alloc);
 
     while (lex.next()) |token| {
         try tokens.append(token);
     }
 
+    // Parse (and "display") the tokens
     parseTokens(tokens);
+
+    _ = try parseMarkdown(alloc, tokens.items);
 }
 
-/// Basic parser of Markdown tokens
-pub fn parseTokens(tokens: ArrayList(Token)) void {
+/// Basic 'parser' of Markdown tokens
+pub fn parseTokens(tokens: TokenList) void {
     std.debug.print("Tokens:\n", .{});
     for (tokens.items) |token| {
         std.debug.print("Type: {any}, Text: '{s}'\n", .{ token.kind, token.text });
@@ -291,7 +302,8 @@ pub fn parseTokens(tokens: ArrayList(Token)) void {
     }
 }
 
-pub fn printHeader(tokens: ArrayList(Token), idx: *usize) void {
+/// TODO: These fns should return zd.Section types
+pub fn printHeader(tokens: TokenList, idx: *usize) void {
     idx.* += 1;
     beginHeader();
     while (idx.* < tokens.items.len and tokens.items[idx.*].kind == TokenType.WORD) : (idx.* += 1) {
@@ -345,3 +357,55 @@ pub const bg_white = ansi ++ "[47m";
 pub const text_blink = ansi ++ "[5m";
 pub const text_bold = ansi ++ "[1m";
 pub const text_italic = ansi ++ "[3m";
+
+pub fn parseMarkdown(alloc: Allocator, tokens: []const Token) !zd.Markdown {
+    var md = zd.Markdown.init(alloc);
+
+    var i: usize = 0;
+    while (i < tokens.len) {
+        const token = tokens[i];
+        switch (token.kind) {
+            .HASH1, .HASH2, .HASH3, .HASH4 => try parseHeader(alloc, tokens, &i, &md),
+            else => {
+                i += 1;
+            },
+        }
+    }
+
+    return md;
+}
+
+/// Parse a header line from the token list
+pub fn parseHeader(alloc: Allocator, tokens: []const Token, idx: *usize, md: *zd.Markdown) !void {
+    // check what level of heading (HASH1/2/3/4)
+    const token = tokens[idx.*];
+    var level: u8 = switch (token.kind) {
+        .HASH1 => 1,
+        .HASH2 => 2,
+        .HASH3 => 3,
+        .HASH4 => 4,
+        else => 0,
+    };
+
+    idx.* += 1;
+
+    var words = ArrayList([]const u8).init(alloc);
+    while (idx.* < tokens.len and tokens[idx.*].kind != TokenType.BREAK) : (idx.* += 1) {
+        try words.append(tokens[idx.*].text);
+        try words.append(" ");
+    }
+    _ = words.pop();
+
+    // Append text up to next line break
+    // Return Section of type Heading
+    var sec = zd.Section{ .heading = zd.Heading{
+        .level = level,
+        .text = try std.mem.concat(alloc, u8, words.items),
+    } };
+
+    std.debug.print("Parsed a header of level {d} with text '{s}'\n", .{ level, sec.heading.text });
+
+    md.append(sec) catch |err| {
+        print("Unable to append Markdown section! '{any}'\n", .{err});
+    };
+}
