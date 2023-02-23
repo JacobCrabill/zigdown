@@ -1,43 +1,170 @@
 const std = @import("std");
-const utils = @import("utils.zig");
-const zd = @import("zigdown.zig");
+
+pub const zd = struct {
+    usingnamespace @import("utils.zig");
+    usingnamespace @import("tokens.zig");
+    usingnamespace @import("zigdown.zig");
+};
 
 const Allocator = std.mem.Allocator;
+const ArrayList = std.ArrayList;
 const startsWith = std.mem.startsWith;
+const print = std.debug.print;
 
-pub fn parseMarkdown(data: []const u8, alloc: Allocator) !zd.Markdown {
+const TokenType = zd.TokenType;
+const Token = zd.Token;
+const TokenList = zd.TokenList;
+
+// const ParseState = enum {
+//
+// };
+
+/// WIP
+/// Parse a token stream into Markdown objects
+pub fn parseMarkdown(alloc: Allocator, tokens: []const Token) !zd.Markdown {
     var md = zd.Markdown.init(alloc);
 
-    var lines = std.mem.tokenize(u8, data, "\n");
-    for (lines) |line| {
-        if (startsWith(u8, line, "#")) {
-            // count number of leading '#' chars
-            // extract reaminder of line into Header struct
-            try md.append(parseHeader(line, alloc));
-        } else if (startsWith(u8, line, "```")) {
-            // Code block
-        } else if (startsWith(u8, line, ">")) {}
+    var i: usize = 0;
+    while (i < tokens.len) {
+        const token = tokens[i];
+        switch (token.kind) {
+            .HASH1, .HASH2, .HASH3, .HASH4 => try parseHeader(alloc, tokens, &i, &md),
+            .QUOTE => try parseQuoteBlock(alloc, tokens, &i, &md),
+            else => {
+                i += 1;
+            },
+        }
     }
 
     return md;
 }
 
-pub fn parseHeader(data: []const u8, _: Allocator) zd.Section {
-    // Count the number of '#'s
-    var count: u8 = 0;
-    for (data) |c| {
-        switch (c) {
-            '#' => count += 1,
-            else => break,
-        }
+/// Parse a header line from the token list
+pub fn parseHeader(alloc: Allocator, tokens: []const Token, idx: *usize, md: *zd.Markdown) !void {
+    // check what level of heading (HASH1/2/3/4)
+    const token = tokens[idx.*];
+    var level: u8 = switch (token.kind) {
+        .HASH1 => 1,
+        .HASH2 => 2,
+        .HASH3 => 3,
+        .HASH4 => 4,
+        else => 0,
+    };
 
-        if (count > 5) break;
+    idx.* += 1;
+
+    var words = ArrayList([]const u8).init(alloc);
+    while (idx.* < tokens.len and tokens[idx.*].kind != TokenType.BREAK) : (idx.* += 1) {
+        try words.append(tokens[idx.*].text);
+        try words.append(" ");
+    }
+    _ = words.pop();
+
+    // Append text up to next line break
+    // Return Section of type Heading
+    var sec = zd.Section{ .heading = zd.Heading{
+        .level = level,
+        .text = try std.mem.concat(alloc, u8, words.items),
+    } };
+
+    print("Parsed a header of level {d} with text '{s}'\n", .{ level, sec.heading.text });
+
+    md.append(sec) catch |err| {
+        print("Unable to append Markdown section! '{any}'\n", .{err});
+    };
+}
+
+/// Parse a quote line from the token stream
+pub fn parseQuoteBlock(alloc: Allocator, tokens: []const Token, idx: *usize, md: *zd.Markdown) !void {
+    // consume the quote token
+    idx.* += 1;
+
+    var block = zd.TextBlock.init(alloc);
+    var style = zd.TextStyle{};
+
+    // Concatenate the tokens up to the end of the line
+    var words = ArrayList([]const u8).init(alloc);
+    tloop: while (idx.* < tokens.len) : (idx.* += 1) {
+        const token = tokens[idx.*];
+        switch (token.kind) {
+            .WORD => {
+                try words.append(token.text);
+                try words.append(" ");
+            },
+            .BREAK => {
+                if (idx.* + 1 < tokens.len and tokens[idx.* + 1].kind == TokenType.QUOTE) {
+                    // Another line in the quote block
+                    idx.* += 1;
+                    continue :tloop;
+                } else {
+                    break :tloop;
+                }
+            },
+            .STAR => {
+                if (words.items.len > 0) {
+                    // End the current Text object with the current style
+                    var text = zd.Text{
+                        .style = style,
+                        .text = try std.mem.concat(alloc, u8, words.items),
+                    };
+                    try block.text.append(text);
+                    words.clearRetainingCapacity();
+                }
+                style.bold = !style.bold;
+            },
+            .USCORE => {
+                if (words.items.len > 0) {
+                    // End the current Text object with the current style
+                    var text = zd.Text{
+                        .style = style,
+                        .text = try std.mem.concat(alloc, u8, words.items),
+                    };
+                    try block.text.append(text);
+                    words.clearRetainingCapacity();
+                }
+                style.italic = !style.italic;
+            },
+            .TILDE => {
+                if (words.items.len > 0) {
+                    // End the current Text object with the current style
+                    var text = zd.Text{
+                        .style = style,
+                        .text = try std.mem.concat(alloc, u8, words.items),
+                    };
+                    try block.text.append(text);
+                    words.clearRetainingCapacity();
+                }
+                style.underline = !style.underline;
+            },
+            else => {},
+        }
     }
 
-    return zd.Section{ .heading = zd.Heading{
-        .level = count,
-        .text = data,
+    if (words.items.len > 0) {
+        // Remove the trailing " "
+        _ = words.pop();
+
+        // End the current Text object with the current style
+        var text = zd.Text{
+            .style = style,
+            .text = try std.mem.concat(alloc, u8, words.items),
+        };
+        try block.text.append(text);
+        words.clearRetainingCapacity();
+    }
+
+    // Append text up to next line break
+    // Return Section of type Quote
+    var sec = zd.Section{ .quote = zd.Quote{
+        .level = 1,
+        .textblock = block,
     } };
+
+    print("Parsed a quote block with text '{any}'\n", .{sec.quote.textblock});
+
+    md.append(sec) catch |err| {
+        print("Unable to append Markdown section! '{any}'\n", .{err});
+    };
 }
 
 pub fn parseTextBlock(data: []const u8, _: Allocator) zd.Section {
@@ -149,7 +276,7 @@ pub const Parser = struct {
                     .text = self.data[j0..j1],
                 };
                 sec.textblock.text.append(txt) catch {
-                    std.debug.print("Unable to end block\n", .{});
+                    print("Unable to end block\n", .{});
                     return;
                 };
                 self.md.append(sec) catch return;

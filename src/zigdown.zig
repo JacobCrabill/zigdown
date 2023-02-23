@@ -1,3 +1,5 @@
+/// zigdown.zig
+/// Zig representation of Markdown objects.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
@@ -37,12 +39,6 @@ pub const SectionType = enum {
     plaintext,
     textblock,
     linebreak,
-};
-
-pub const TextStyle = struct {
-    bold: bool = false,
-    italic: bool = false,
-    underline: bool = false,
 };
 
 //pub const Section = union(enum) {
@@ -133,6 +129,12 @@ pub const Quote = struct {
 
 /// Single line/paragragh break
 pub const Break = struct {};
+
+pub const TextStyle = struct {
+    bold: bool = false,
+    italic: bool = false,
+    underline: bool = false,
+};
 
 /// Section of formatted text (single style)
 /// Example: "plain text" or "**bold text**"

@@ -1,4 +1,35 @@
+/// utils.zig
+/// Common utilities.
 const std = @import("std");
+
+/// Check if the character is a whitespace character
+pub fn isWhitespace(c: u8) bool {
+    const ws_chars = " \t\r";
+    if (std.mem.indexOfScalar(u8, ws_chars, c)) |_| {
+        return true;
+    }
+
+    return false;
+}
+
+/// Check if the character is a line-break character
+pub fn isLineBreak(c: u8) bool {
+    const ws_chars = "\r\n";
+    if (std.mem.indexOfScalar(u8, ws_chars, c)) |_| {
+        return true;
+    }
+
+    return false;
+}
+
+/// Check if the character is a special Markdown character
+pub fn isSpecial(c: u8) bool {
+    const special = "*_`";
+    if (std.mem.indexOfScalar(u8, special, c)) |_| {
+        return true;
+    }
+    return false;
+}
 
 pub fn stdout(comptime fmt: []const u8, args: anytype) void {
     const out = std.io.getStdOut().writer();
