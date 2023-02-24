@@ -5,6 +5,7 @@ const std = @import("std");
 /// Import all Zigdown tyeps
 const zd = struct {
     usingnamespace @import("parsing.zig");
+    usingnamespace @import("render.zig");
     usingnamespace @import("tokens.zig");
     usingnamespace @import("utils.zig");
     usingnamespace @import("zigdown.zig");
@@ -19,6 +20,7 @@ const print = std.debug.print;
 const TokenType = zd.TokenType;
 const Token = zd.Token;
 const TokenList = zd.TokenList;
+const htmlRenderer = zd.htmlRenderer;
 
 /// Convert Markdown text into a stream of tokens
 pub const Lexer = struct {
@@ -114,7 +116,13 @@ test "markdown basics" {
     // Parse (and "display") the tokens
     parseTokens(tokens);
 
-    _ = try zd.parseMarkdown(alloc, tokens.items);
+    var parser = zd.Parser.init(alloc, tokens.items);
+    var md = try parser.parseMarkdown();
+
+    std.debug.print("\n----------------------------\n", .{});
+    var renderer = htmlRenderer(std.io.getStdOut().writer());
+    try renderer.render(md);
+    std.debug.print("\n----------------------------\n", .{});
 }
 
 /// Basic 'parser' of Markdown tokens

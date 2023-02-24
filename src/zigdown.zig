@@ -84,7 +84,7 @@ pub const Heading = struct {
 /// Code block (unformatted text)
 /// TODO: Plug in syntax highlighter eventually...
 pub const Code = struct {
-    language: u8,
+    language: []const u8,
     text: []const u8,
 };
 
