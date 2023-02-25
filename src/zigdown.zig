@@ -90,8 +90,17 @@ pub const Code = struct {
 
 /// Bulleted (unordered) list
 pub const List = struct {
+    alloc: Allocator,
     level: u8,
     lines: ArrayList(TextBlock),
+
+    pub fn init(alloc: Allocator) List {
+        return .{
+            .alloc = alloc,
+            .level = 0,
+            .lines = ArrayList(TextBlock).init(alloc),
+        };
+    }
 
     pub fn deinit(self: *List) void {
         for (self.lines.items) |_, i| {
@@ -99,6 +108,12 @@ pub const List = struct {
         }
 
         self.lines.deinit();
+    }
+
+    pub fn addLine(self: *List) !*TextBlock {
+        var tb = try self.lines.addOne();
+        tb.text = ArrayList(Text).init(self.alloc);
+        return tb;
     }
 };
 

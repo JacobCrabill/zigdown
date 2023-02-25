@@ -46,8 +46,18 @@ pub const Parser = struct {
                 .QUOTE => {
                     try md.append(try self.parseQuoteBlock());
                 },
+                .MINUS, .PLUS => {
+                    try md.append(try self.parseList());
+                },
                 .CODE_BLOCK => {
                     try md.append(try self.parseCodeBlock());
+                },
+                .WORD => {
+                    try md.append(try self.parseTextBlock());
+                },
+                .BREAK => {
+                    try md.append(zd.Section{ .linebreak = zd.Break{} });
+                    self.cursor += 1;
                 },
                 else => {
                     self.cursor += 1;
@@ -61,8 +71,7 @@ pub const Parser = struct {
     /// Parse a header line from the token list
     pub fn parseHeader(self: *Self) !zd.Section {
         // check what level of heading (HASH1/2/3/4)
-        const token = self.tokens[self.cursor];
-        var level: u8 = switch (token.kind) {
+        var level: u8 = switch (self.tokens[self.cursor].kind) {
             .HASH1 => 1,
             .HASH2 => 2,
             .HASH3 => 3,
@@ -74,8 +83,15 @@ pub const Parser = struct {
 
         var words = ArrayList([]const u8).init(self.alloc);
         defer words.deinit();
-        while (self.cursor < self.tokens.len and self.tokens[self.cursor].kind != TokenType.BREAK) : (self.cursor += 1) {
-            try words.append(self.tokens[self.cursor].text);
+        while (self.cursor < self.tokens.len) : (self.cursor += 1) {
+            const token = self.tokens[self.cursor];
+            if (token.kind == TokenType.BREAK or token.kind == TokenType.END) {
+                // Consume the token and finish the header
+                self.cursor += 1;
+                break;
+            }
+
+            try words.append(token.text);
             try words.append(" ");
         }
         _ = words.pop();
@@ -93,18 +109,6 @@ pub const Parser = struct {
         // consume the quote token
         self.cursor += 1;
 
-        const text_sec = try self.parseTextBlock();
-
-        // Append text up to next line break
-        // Return Section of type Quote
-        return zd.Section{ .quote = zd.Quote{
-            .level = 1,
-            .textblock = text_sec.textblock,
-        } };
-    }
-
-    /// Parse a quote line from the token stream
-    pub fn parseTextBlock(self: *Self) !zd.Section {
         var block = zd.TextBlock.init(self.alloc);
         var style = zd.TextStyle{};
 
@@ -179,6 +183,191 @@ pub const Parser = struct {
             try block.text.append(text);
         }
 
+        // Append text up to next line break
+        // Return Section of type Quote
+        return zd.Section{ .quote = zd.Quote{
+            .level = 1,
+            .textblock = block,
+        } };
+    }
+
+    /// Parse a list from the token stream
+    pub fn parseList(self: *Self) !zd.Section {
+        // consume the '-' token
+        self.cursor += 1;
+
+        var list = zd.List.init(self.alloc);
+        var block = try list.addLine();
+        var style = zd.TextStyle{};
+
+        // Concatenate the tokens up to the end of the line
+        var words = ArrayList([]const u8).init(self.alloc);
+        defer words.deinit();
+        tloop: while (self.cursor < self.tokens.len) : (self.cursor += 1) {
+            const token = self.tokens[self.cursor];
+            switch (token.kind) {
+                .WORD => {
+                    try words.append(token.text);
+                    try words.append(" ");
+                },
+                .BREAK => {
+                    // End the current list item
+                    // Remove the trailing ' ' and end the current Text object with the current style
+                    if (words.items.len > 0) {
+                        _ = words.pop();
+                        var text = zd.Text{
+                            .style = style,
+                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                        };
+                        try block.text.append(text);
+                        // Prepare a TextBlock for the next list item
+                        block = try list.addLine();
+                    }
+                    style = zd.TextStyle{};
+                },
+                .STAR => {
+                    if (words.items.len > 0) {
+                        // End the current Text object with the current style
+                        var text = zd.Text{
+                            .style = style,
+                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                        };
+                        try block.text.append(text);
+                        words.clearRetainingCapacity();
+                    }
+                    style.bold = !style.bold;
+                },
+                .USCORE => {
+                    if (words.items.len > 0) {
+                        // End the current Text object with the current style
+                        var text = zd.Text{
+                            .style = style,
+                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                        };
+                        try block.text.append(text);
+                        words.clearRetainingCapacity();
+                    }
+                    style.italic = !style.italic;
+                },
+                .TILDE => {
+                    if (words.items.len > 0) {
+                        // End the current Text object with the current style
+                        var text = zd.Text{
+                            .style = style,
+                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                        };
+                        try block.text.append(text);
+                        words.clearRetainingCapacity();
+                    }
+                    style.underline = !style.underline;
+                },
+                .MINUS, .PLUS => {
+                    if (self.cursor > 0 and self.tokens[self.cursor - 1].kind == TokenType.BREAK) {
+                        // New list item - keep going
+                        self.cursor += 1;
+                        continue :tloop;
+                    } else {
+                        // End the list
+                        break :tloop;
+                    }
+                },
+                else => {},
+            }
+        }
+
+        if (words.items.len > 1) {
+            // Remove the trailing " "
+            _ = words.pop();
+
+            // End the current Text object with the current style
+            var text = zd.Text{
+                .style = style,
+                .text = try std.mem.concat(self.alloc, u8, words.items),
+            };
+            try block.text.append(text);
+        }
+
+        return zd.Section{ .list = list };
+    }
+
+    /// Parse a quote line from the token stream
+    pub fn parseTextBlock(self: *Self) !zd.Section {
+        var block = zd.TextBlock.init(self.alloc);
+        var style = zd.TextStyle{};
+
+        // Concatenate the tokens up to the end of the line
+        var words = ArrayList([]const u8).init(self.alloc);
+        defer words.deinit();
+        tloop: while (self.cursor < self.tokens.len) : (self.cursor += 1) {
+            const token = self.tokens[self.cursor];
+            switch (token.kind) {
+                .WORD => {
+                    try words.append(token.text);
+                    try words.append(" ");
+                },
+                .BREAK => {
+                    if (self.cursor + 1 < self.tokens.len and self.tokens[self.cursor + 1].kind == TokenType.BREAK) {
+                        // Double line break; end the block
+                        break :tloop;
+                    } else {
+                        continue :tloop;
+                    }
+                },
+                .STAR => {
+                    if (words.items.len > 0) {
+                        // End the current Text object with the current style
+                        var text = zd.Text{
+                            .style = style,
+                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                        };
+                        try block.text.append(text);
+                        words.clearRetainingCapacity();
+                    }
+                    style.bold = !style.bold;
+                },
+                .USCORE => {
+                    if (words.items.len > 0) {
+                        // End the current Text object with the current style
+                        var text = zd.Text{
+                            .style = style,
+                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                        };
+                        try block.text.append(text);
+                        words.clearRetainingCapacity();
+                    }
+                    style.italic = !style.italic;
+                },
+                .TILDE => {
+                    if (words.items.len > 0) {
+                        // End the current Text object with the current style
+                        var text = zd.Text{
+                            .style = style,
+                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                        };
+                        try block.text.append(text);
+                        words.clearRetainingCapacity();
+                    }
+                    style.underline = !style.underline;
+                },
+                else => {
+                    print("Breaking tloop on token type {any}\n", .{token.kind});
+                    break :tloop;
+                },
+            }
+        }
+
+        if (words.items.len > 0) {
+            // Remove the trailing " "
+            _ = words.pop();
+
+            // End the current Text object with the current style
+            var text = zd.Text{
+                .style = style,
+                .text = try std.mem.concat(self.alloc, u8, words.items),
+            };
+            try block.text.append(text);
+        }
+
         return zd.Section{ .textblock = block };
     }
 
@@ -196,6 +385,10 @@ pub const Parser = struct {
 
         // Advance past the codeblock tag
         if (self.cursor < self.tokens.len)
+            self.cursor += 1;
+
+        // Consume the following line break, if it exists
+        if (self.cursor < self.tokens.len and self.tokens[self.cursor].kind == TokenType.BREAK)
             self.cursor += 1;
 
         return zd.Section{ .code = zd.Code{
