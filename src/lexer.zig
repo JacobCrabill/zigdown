@@ -4,7 +4,7 @@ const std = @import("std");
 
 /// Import all Zigdown tyeps
 const zd = struct {
-    usingnamespace @import("parsing.zig");
+    usingnamespace @import("parser.zig");
     usingnamespace @import("render.zig");
     usingnamespace @import("tokens.zig");
     usingnamespace @import("utils.zig");

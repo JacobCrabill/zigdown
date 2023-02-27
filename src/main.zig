@@ -1,36 +1,54 @@
 const std = @import("std");
-const utils = @import("utils.zig");
-const render = @import("render.zig");
-const parsing = @import("parsing.zig");
-const zd = @import("zigdown.zig");
+
+const zd = struct {
+    usingnamespace @import("lexer.zig");
+    usingnamespace @import("render.zig");
+    usingnamespace @import("parser.zig");
+    usingnamespace @import("tokens.zig");
+    usingnamespace @import("utils.zig");
+    usingnamespace @import("zigdown.zig");
+};
 
 const ArrayList = std.ArrayList;
 const File = std.fs.File;
 const TS = zd.TextStyle;
-const htmlRenderer = render.htmlRenderer;
-const Parser = parsing.Parser;
+const htmlRenderer = zd.htmlRenderer;
+const Parser = zd.Parser;
+const TokenList = zd.TokenList;
+
+const test_data =
+    \\# Header!
+    \\## Header 2
+    \\  some *generic* text _here_
+    \\
+    \\after the break...
+    \\> Quote line
+    \\> Another quote line
+    \\
+    \\```
+    \\code
+    \\```
+    \\
+    \\And now a list:
+    \\+ foo
+    \\  + no indents yet
+    \\- bar
+;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var alloc = gpa.allocator();
 
-    var md = zd.Markdown.init(alloc);
-    defer md.deinit();
-    try md.sections.append(zd.Section{ .heading = zd.Heading{
-        .level = 1,
-        .text = "Hello!",
-    } });
+    // Tokenize the input text
+    var tokens = TokenList.init(alloc);
+    var lex = zd.Lexer.init(test_data, alloc);
 
-    var quote = zd.Section{
-        .quote = zd.Quote{
-            .level = 1,
-            .textblock = zd.TextBlock{ .text = ArrayList(zd.Text).init(alloc) },
-        },
-    };
-    // Apply styling to the text block
-    const style1 = TS{ .bold = true, .italic = true };
-    try quote.quote.textblock.text.append(zd.Text{ .style = style1, .text = "Quote!" });
-    try md.append(quote);
+    while (lex.next()) |token| {
+        try tokens.append(token);
+    }
+
+    var parser = zd.Parser.init(alloc, tokens.items);
+    var md = try parser.parseMarkdown();
 
     var renderer = htmlRenderer(std.io.getStdOut().writer());
     try renderer.render(md);
