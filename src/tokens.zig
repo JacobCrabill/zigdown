@@ -13,6 +13,8 @@ pub const TokenType = enum {
     END,
     INVALID,
     WORD,
+    INDENT,
+    SPACE,
     BREAK,
     HASH1,
     HASH2,
@@ -115,6 +117,43 @@ pub fn SingularTokenizer(comptime char: u8, comptime kind: TokenType) type {
     };
 }
 
+/// Generic parser for multi-character literals
+pub fn LiteralTokenizer(comptime delim: []const u8, comptime kind: TokenType) type {
+    return struct {
+        pub fn peek(text: []const u8) ?Token {
+            if (text.len >= delim.len and std.mem.startsWith(u8, text, delim)) {
+                return Token{
+                    .kind = kind,
+                    .text = text[0..delim.len],
+                };
+            }
+
+            return null;
+        }
+    };
+}
+
+/// Parser for an indent (tab)
+pub const IndentTokenizer = struct {
+    pub fn peek(text: []const u8) ?Token {
+        if (std.mem.startsWith(u8, text, "    ")) {
+            return Token{
+                .kind = TokenType.INDENT,
+                .text = text[0..4],
+            };
+        }
+
+        if (std.mem.startsWith(u8, text, "\t")) {
+            return Token{
+                .kind = TokenType.INDENT,
+                .text = text[0..1],
+            };
+        }
+
+        return null;
+    }
+};
+
 /// Parser for a generic word
 pub const WordTokenizer = struct {
     pub fn peek(text: []const u8) ?Token {
@@ -142,6 +181,11 @@ pub const Tokenizers = .{
     HashTokenizer,
     BreakTokenizer,
     CodeTokenizer,
+    LiteralTokenizer("    ", TokenType.INDENT),
+    //LiteralTokenizer("***", TokenType.EMBOLD),
+    //LiteralTokenizer("**", TokenType.BOLD),
+    SingularTokenizer('\t', TokenType.QUOTE),
+    SingularTokenizer(' ', TokenType.SPACE),
     SingularTokenizer('>', TokenType.QUOTE),
     SingularTokenizer('*', TokenType.STAR),
     SingularTokenizer('_', TokenType.USCORE),

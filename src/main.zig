@@ -19,7 +19,7 @@ const TokenList = zd.TokenList;
 const test_data =
     \\# Header!
     \\## Header 2
-    \\  some *generic* text _here_
+    \\  some *generic* text _here_, with formatting!
     \\
     \\after the break...
     \\> Quote line

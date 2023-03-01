@@ -61,10 +61,10 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         fn render_quote(self: *Self, q: zd.Quote) !void {
-            try self.stream.print("<blockquote>", .{});
+            try self.stream.print("\n<blockquote>", .{});
             var i: i32 = @as(i32, q.level) - 1;
             while (i > 0) : (i -= 1) {
-                try self.stream.print("<blockquote>", .{});
+                try self.stream.print("<blockquote>\n", .{});
             }
 
             try self.render_textblock(q.textblock);
@@ -77,7 +77,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         fn render_code(self: *Self, c: zd.Code) !void {
-            try self.stream.print("<pre><code>{s}</code></pre>\n", .{c.text});
+            try self.stream.print("\n<pre><code>{s}</code></pre>\n", .{c.text});
         }
 
         fn render_list(self: *Self, list: zd.List) !void {
@@ -93,7 +93,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         fn render_numlist(self: *Self, list: zd.NumList) !void {
             try self.stream.print("<ul>\n", .{});
             for (list.lines.items) |line| {
-                try self.stream.print("<li>\n", .{});
+                try self.stream.print("<li>", .{});
                 try self.render_textblock(line);
                 try self.stream.print("</li>\n", .{});
             }
@@ -101,6 +101,8 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         fn render_text(self: *Self, text: zd.Text) !void {
+            try self.stream.print(" ", .{});
+
             // for style in style => add style tag
             if (text.style.bold)
                 try self.stream.print("<b>", .{});
@@ -132,6 +134,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             for (block.text.items) |text| {
                 try self.render_text(text);
             }
+            // try self.stream.print("\n", .{});
         }
     };
 }

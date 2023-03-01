@@ -91,15 +91,13 @@ pub const Parser = struct {
             }
 
             try words.append(token.text);
-            try words.append(" ");
         }
-        _ = words.pop();
 
         // Append text up to next line break
         // Return Section of type Heading
         try self.md.append(zd.Section{ .heading = zd.Heading{
             .level = level,
-            .text = try std.mem.concat(self.alloc, u8, words.items),
+            .text = try std.mem.join(self.alloc, " ", words.items),
         } });
     }
 
@@ -119,7 +117,6 @@ pub const Parser = struct {
             switch (token.kind) {
                 .WORD => {
                     try words.append(token.text);
-                    try words.append(" ");
                 },
                 .BREAK => {
                     if (self.cursor + 1 < self.tokens.len and self.tokens[self.cursor + 1].kind == TokenType.QUOTE) {
@@ -135,7 +132,7 @@ pub const Parser = struct {
                         // End the current Text object with the current style
                         var text = zd.Text{
                             .style = style,
-                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                            .text = try std.mem.join(self.alloc, " ", words.items),
                         };
                         try block.text.append(text);
                         words.clearRetainingCapacity();
@@ -147,7 +144,7 @@ pub const Parser = struct {
                         // End the current Text object with the current style
                         var text = zd.Text{
                             .style = style,
-                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                            .text = try std.mem.join(self.alloc, " ", words.items),
                         };
                         try block.text.append(text);
                         words.clearRetainingCapacity();
@@ -159,7 +156,7 @@ pub const Parser = struct {
                         // End the current Text object with the current style
                         var text = zd.Text{
                             .style = style,
-                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                            .text = try std.mem.join(self.alloc, " ", words.items),
                         };
                         try block.text.append(text);
                         words.clearRetainingCapacity();
@@ -171,13 +168,10 @@ pub const Parser = struct {
         }
 
         if (words.items.len > 0) {
-            // Remove the trailing " "
-            _ = words.pop();
-
             // End the current Text object with the current style
             var text = zd.Text{
                 .style = style,
-                .text = try std.mem.concat(self.alloc, u8, words.items),
+                .text = try std.mem.join(self.alloc, " ", words.items),
             };
             try block.text.append(text);
         }
@@ -207,18 +201,17 @@ pub const Parser = struct {
             switch (token.kind) {
                 .WORD => {
                     try words.append(token.text);
-                    try words.append(" ");
                 },
                 .BREAK => {
                     // End the current list item
                     // Remove the trailing ' ' and end the current Text object with the current style
                     if (words.items.len > 0) {
-                        _ = words.pop();
                         var text = zd.Text{
                             .style = style,
-                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                            .text = try std.mem.join(self.alloc, " ", words.items),
                         };
                         try block.text.append(text);
+                        words.clearRetainingCapacity();
                         // Prepare a TextBlock for the next list item
                         block = try list.addLine();
                     }
@@ -229,7 +222,7 @@ pub const Parser = struct {
                         // End the current Text object with the current style
                         var text = zd.Text{
                             .style = style,
-                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                            .text = try std.mem.join(self.alloc, " ", words.items),
                         };
                         try block.text.append(text);
                         words.clearRetainingCapacity();
@@ -241,7 +234,7 @@ pub const Parser = struct {
                         // End the current Text object with the current style
                         var text = zd.Text{
                             .style = style,
-                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                            .text = try std.mem.join(self.alloc, " ", words.items),
                         };
                         try block.text.append(text);
                         words.clearRetainingCapacity();
@@ -253,7 +246,7 @@ pub const Parser = struct {
                         // End the current Text object with the current style
                         var text = zd.Text{
                             .style = style,
-                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                            .text = try std.mem.join(self.alloc, " ", words.items),
                         };
                         try block.text.append(text);
                         words.clearRetainingCapacity();
@@ -263,7 +256,6 @@ pub const Parser = struct {
                 .MINUS, .PLUS => {
                     if (self.cursor > 0 and self.tokens[self.cursor - 1].kind == TokenType.BREAK) {
                         // New list item - keep going
-                        self.cursor += 1;
                         continue :tloop;
                     } else {
                         // End the list
@@ -275,13 +267,10 @@ pub const Parser = struct {
         }
 
         if (words.items.len > 1) {
-            // Remove the trailing " "
-            _ = words.pop();
-
             // End the current Text object with the current style
             var text = zd.Text{
                 .style = style,
-                .text = try std.mem.concat(self.alloc, u8, words.items),
+                .text = try std.mem.join(self.alloc, " ", words.items),
             };
             try block.text.append(text);
         }
@@ -302,8 +291,8 @@ pub const Parser = struct {
             switch (token.kind) {
                 .WORD => {
                     try words.append(token.text);
-                    try words.append(" ");
                 },
+                .SPACE => {},
                 .BREAK => {
                     if (self.cursor + 1 < self.tokens.len and self.tokens[self.cursor + 1].kind == TokenType.BREAK) {
                         // Double line break; end the block
@@ -317,7 +306,7 @@ pub const Parser = struct {
                         // End the current Text object with the current style
                         var text = zd.Text{
                             .style = style,
-                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                            .text = try std.mem.join(self.alloc, " ", words.items),
                         };
                         try block.text.append(text);
                         words.clearRetainingCapacity();
@@ -329,7 +318,7 @@ pub const Parser = struct {
                         // End the current Text object with the current style
                         var text = zd.Text{
                             .style = style,
-                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                            .text = try std.mem.join(self.alloc, " ", words.items),
                         };
                         try block.text.append(text);
                         words.clearRetainingCapacity();
@@ -341,7 +330,7 @@ pub const Parser = struct {
                         // End the current Text object with the current style
                         var text = zd.Text{
                             .style = style,
-                            .text = try std.mem.concat(self.alloc, u8, words.items),
+                            .text = try std.mem.join(self.alloc, " ", words.items),
                         };
                         try block.text.append(text);
                         words.clearRetainingCapacity();
@@ -349,20 +338,16 @@ pub const Parser = struct {
                     style.underline = !style.underline;
                 },
                 else => {
-                    print("Breaking tloop on token type {any}\n", .{token.kind});
                     break :tloop;
                 },
             }
         }
 
         if (words.items.len > 0) {
-            // Remove the trailing " "
-            _ = words.pop();
-
             // End the current Text object with the current style
             var text = zd.Text{
                 .style = style,
-                .text = try std.mem.concat(self.alloc, u8, words.items),
+                .text = try std.mem.join(self.alloc, " ", words.items),
             };
             try block.text.append(text);
         }
@@ -392,7 +377,121 @@ pub const Parser = struct {
 
         try self.md.append(zd.Section{ .code = zd.Code{
             .language = "",
-            .text = try std.mem.concat(self.alloc, u8, words.items),
+            .text = try std.mem.join(self.alloc, " ", words.items),
         } });
+    }
+
+    /// Parse a generic line of text (up to BREAK or EOF)
+    pub fn parseLine(self: *Self, line: []Token) !zd.TextBlock {
+        var block = zd.TextBlock.init(self.alloc);
+        var style = zd.TextStyle{};
+
+        // Concatenate the tokens up to the end of the line
+        var words = ArrayList([]const u8).init(self.alloc);
+        defer words.deinit();
+
+        var prev_type: TokenType = TokenType.INVALID;
+
+        // Loop over the tokens, excluding the final BREAK or END tag
+        var i: usize = 0;
+        while (i < line.len - 1) : (i += 1) {
+            const token = line[i];
+            // const next = line[i + 1];
+            switch (token.kind) {
+                .WORD => {
+                    try words.append(token.text);
+                },
+                .STAR => {
+                    // Actually need to handle case of 1, 2, or 3 '*'s... complicated!
+                    // Maybe first scan through line and count number of '*' and '_' tokens
+                    // then, use the known totals to toggle styles on/off at the right counts
+                    // if (next.kind == TokenType.STAR) {
+                    //     // If italic
+                    //     // If bold is not active, activate BOLD style
+                    //     // Otherwise, deactivate BOLD style
+                    // } else {
+                    //     // If italic is not active, activate ITALIC style
+                    // }
+                    if (words.items.len > 0) {
+                        // End the current Text object with the current style
+                        var text = zd.Text{
+                            .style = style,
+                            .text = try std.mem.join(self.alloc, " ", words.items),
+                        };
+                        try block.text.append(text);
+                        words.clearRetainingCapacity();
+                    }
+                    style.bold = !style.bold;
+                },
+                .USCORE => {
+                    if (words.items.len > 0) {
+                        // End the current Text object with the current style
+                        var text = zd.Text{
+                            .style = style,
+                            .text = try std.mem.join(self.alloc, " ", words.items),
+                        };
+                        try block.text.append(text);
+                        words.clearRetainingCapacity();
+                    }
+                    style.italic = !style.italic;
+                },
+                .TILDE => {
+                    if (words.items.len > 0) {
+                        // End the current Text object with the current style
+                        var text = zd.Text{
+                            .style = style,
+                            .text = try std.mem.join(self.alloc, " ", words.items),
+                        };
+                        try block.text.append(text);
+                        words.clearRetainingCapacity();
+                    }
+                    style.underline = !style.underline;
+                },
+                else => {},
+            }
+
+            prev_type = token.kind;
+        }
+
+        if (words.items.len > 0) {
+            // End the current Text object with the current style
+            var text = zd.Text{
+                .style = style,
+                .text = try std.mem.join(self.alloc, " ", words.items),
+            };
+            try block.text.append(text);
+        }
+
+        return block;
+    }
+
+    /// Find the index of the next token of any of type 'kind' at or beyond 'idx'
+    fn findFirstOf(self: *Self, idx: usize, kinds: []TokenType) usize {
+        var i: usize = idx;
+        while (i < self.tokens.len) : (i += 1) {
+            if (std.mem.indexOf(TokenType, kinds, self.tokens[i].kind)) |_| {
+                break;
+            }
+        }
+        return i;
+    }
+
+    /// Return the index of the next BREAK token, or EOF
+    fn nextBreak(self: *Self, idx: usize) usize {
+        var i: usize = idx;
+        while (i < self.tokens.len) : (i += 1) {
+            if (self.tokens[i].kind == TokenType.BREAK) {
+                break;
+            }
+        }
+
+        return i;
+    }
+
+    /// Get a slice of tokens up to the next BREAK or EOF
+    fn getLine(self: *Self) ?[]Token {
+        if (self.cursor >= self.tokens.len) return null;
+        const end = self.nextBreak(self.cursor);
+        return self.tokens[self.cursor..end];
     }
 };

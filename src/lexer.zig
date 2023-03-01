@@ -2,6 +2,8 @@
 /// Markdown lexer. Processes Markdown text into a list of tokens.
 const std = @import("std");
 
+const con = @import("console.zig");
+
 /// Import all Zigdown tyeps
 const zd = struct {
     usingnamespace @import("parser.zig");
@@ -56,8 +58,6 @@ pub const Lexer = struct {
 
     /// Consume the next token in the text
     pub fn next(self: *Lexer) ?Token {
-        self.trimLeft();
-
         if (self.cursor > self.data.len) {
             return null;
         } else if (self.cursor == self.data.len) {
@@ -86,7 +86,7 @@ test "markdown basics" {
     const data =
         \\# Header!
         \\## Header 2
-        \\  some *generic* text _here_
+        \\  some *generic* text _here_, with formatting!
         \\
         \\after the break...
         \\> Quote line
@@ -98,10 +98,11 @@ test "markdown basics" {
         \\
         \\And now a list:
         \\+ foo
-        \\  + no indents yet
+        \\    + no indents yet
         \\- bar
     ;
 
+    // var alloc = std.testing.allocator; // Use for leak checking when ready
     var gpa = GPA(.{}){};
     var alloc = gpa.allocator();
     var tokens = TokenList.init(alloc);
@@ -154,7 +155,7 @@ pub fn printHeader(tokens: TokenList, idx: *usize) void {
 }
 
 pub fn printWord(text: []const u8, idx: *usize) void {
-    print("{s} ", .{text});
+    print("{s}", .{text});
     idx.* += 1;
 }
 
@@ -164,37 +165,9 @@ pub fn printNewline(idx: *usize) void {
 }
 
 pub fn beginHeader() void {
-    print(text_bold, .{});
+    print(con.text_bold, .{});
 }
 
 pub fn endHeader() void {
-    print(ansi_end, .{});
+    print(con.ansi_end, .{});
 }
-
-// ANSI terminal escape character
-pub const ansi = [1]u8{0x1b};
-//pub const ansi: [*]const u8 = "\u{033}";
-
-// ANSI Reset command (clear formatting)
-pub const ansi_end = ansi ++ "[m";
-
-// ANSI cursor movements
-pub const ansi_back = ansi ++ "[{}D";
-pub const ansi_up = ansi ++ "[{}A";
-pub const ansi_setcol = ansi ++ "[{}G";
-pub const ansi_home = ansi ++ "[0G";
-
-// ====================================================
-// ANSI display codes (colors, styles, etc.)
-// ----------------------------------------------------
-pub const bg_red = ansi ++ "[41m";
-pub const bg_green = ansi ++ "[42m";
-pub const bg_yellow = ansi ++ "[43m";
-pub const bg_blue = ansi ++ "[44m";
-pub const bg_purple = ansi ++ "[45m";
-pub const bg_cyan = ansi ++ "[46m";
-pub const bg_white = ansi ++ "[47m";
-
-pub const text_blink = ansi ++ "[5m";
-pub const text_bold = ansi ++ "[1m";
-pub const text_italic = ansi ++ "[3m";
