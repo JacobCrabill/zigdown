@@ -112,6 +112,11 @@ pub const Parser = struct {
         // Concatenate the tokens up to the end of the line
         var words = ArrayList([]const u8).init(self.alloc);
         defer words.deinit();
+
+        // Strip leading whitespace
+        while (self.tokens[self.cursor].kind == TokenType.SPACE)
+            self.cursor += 1;
+
         tloop: while (self.cursor < self.tokens.len) : (self.cursor += 1) {
             const token = self.tokens[self.cursor];
             switch (token.kind) {
@@ -127,7 +132,20 @@ pub const Parser = struct {
                         break :tloop;
                     }
                 },
-                .STAR => {
+                .EMBOLD => {
+                    if (words.items.len > 0) {
+                        // End the current Text object with the current style
+                        var text = zd.Text{
+                            .style = style,
+                            .text = try std.mem.join(self.alloc, " ", words.items),
+                        };
+                        try block.text.append(text);
+                        words.clearRetainingCapacity();
+                    }
+                    style.bold = !style.bold;
+                    style.italic = !style.italic;
+                },
+                .STAR, .BOLD => {
                     if (words.items.len > 0) {
                         // End the current Text object with the current style
                         var text = zd.Text{
@@ -198,83 +216,69 @@ pub const Parser = struct {
         defer words.deinit();
         tloop: while (self.cursor < self.tokens.len) : (self.cursor += 1) {
             const token = self.tokens[self.cursor];
+            std.debug.print("token: {any}, {s}\n", .{ token.kind, token.text });
             switch (token.kind) {
                 .WORD => {
                     try words.append(token.text);
                 },
                 .BREAK => {
                     // End the current list item
-                    // Remove the trailing ' ' and end the current Text object with the current style
-                    if (words.items.len > 0) {
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
-                        // Prepare a TextBlock for the next list item
-                        block = try list.addLine();
-                    }
+                    // End the current Text object with the current style
+                    try self.appendWord(block, &words, style);
                     style = zd.TextStyle{};
-                },
-                .STAR => {
-                    if (words.items.len > 0) {
-                        // End the current Text object with the current style
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
+
+                    if (self.cursor + 1 < self.tokens.len) {
+                        const next_kind = self.tokens[self.cursor + 1].kind;
+                        switch (next_kind) {
+                            .PLUS, .MINUS => {
+                                self.cursor += 1;
+                                continue :tloop;
+                            },
+                            // TODO: increment list indent!
+                            .INDENT, .SPACE => continue :tloop,
+                            else => {},
+                        }
                     }
+
+                    break :tloop;
+                },
+                .EMBOLD => {
+                    try self.appendWord(block, &words, style);
+                    style.bold = !style.bold;
+                    style.italic = !style.italic;
+                },
+                .STAR, .BOLD => {
+                    try self.appendWord(block, &words, style);
                     style.bold = !style.bold;
                 },
                 .USCORE => {
-                    if (words.items.len > 0) {
-                        // End the current Text object with the current style
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
-                    }
+                    try self.appendWord(block, &words, style);
                     style.italic = !style.italic;
                 },
                 .TILDE => {
-                    if (words.items.len > 0) {
-                        // End the current Text object with the current style
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
-                    }
+                    try self.appendWord(block, &words, style);
                     style.underline = !style.underline;
                 },
                 .MINUS, .PLUS => {
-                    if (self.cursor > 0 and self.tokens[self.cursor - 1].kind == TokenType.BREAK) {
-                        // New list item - keep going
+                    try self.appendWord(block, &words, style);
+                    style = zd.TextStyle{};
+
+                    if (self.cursor > 0) {
+                        const prev_kind = self.tokens[self.cursor - 1].kind;
+                        switch (prev_kind) {
+                            // New list item - keep going
+                            .BREAK, .INDENT => continue :tloop,
+                            // End the list
+                            else => break :tloop,
+                        }
                         continue :tloop;
-                    } else {
-                        // End the list
-                        break :tloop;
                     }
                 },
                 else => {},
             }
         }
 
-        if (words.items.len > 1) {
-            // End the current Text object with the current style
-            var text = zd.Text{
-                .style = style,
-                .text = try std.mem.join(self.alloc, " ", words.items),
-            };
-            try block.text.append(text);
-        }
-
+        try self.appendWord(block, &words, style);
         try self.md.append(zd.Section{ .list = list });
     }
 
@@ -282,6 +286,12 @@ pub const Parser = struct {
     pub fn parseTextBlock(self: *Self) !void {
         var block = zd.TextBlock.init(self.alloc);
         var style = zd.TextStyle{};
+
+        // const kinds: []TokenType = &.{TokenType.BREAK, TokenType.QUOTE};
+        // const end = self.findFirstOf(self.cursor, kinds);
+        // var line = self.tokens[self.cursor .. end];
+
+        // var lblock = self.parseLine(line);
 
         // Concatenate the tokens up to the end of the line
         var words = ArrayList([]const u8).init(self.alloc);
@@ -301,7 +311,20 @@ pub const Parser = struct {
                         continue :tloop;
                     }
                 },
-                .STAR => {
+                .EMBOLD => {
+                    if (words.items.len > 0) {
+                        // End the current Text object with the current style
+                        var text = zd.Text{
+                            .style = style,
+                            .text = try std.mem.join(self.alloc, " ", words.items),
+                        };
+                        try block.text.append(text);
+                        words.clearRetainingCapacity();
+                    }
+                    style.bold = !style.bold;
+                    style.italic = !style.italic;
+                },
+                .STAR, .BOLD => {
                     if (words.items.len > 0) {
                         // End the current Text object with the current style
                         var text = zd.Text{
@@ -401,7 +424,20 @@ pub const Parser = struct {
                 .WORD => {
                     try words.append(token.text);
                 },
-                .STAR => {
+                .EMBOLD => {
+                    if (words.items.len > 0) {
+                        // End the current Text object with the current style
+                        var text = zd.Text{
+                            .style = style,
+                            .text = try std.mem.join(self.alloc, " ", words.items),
+                        };
+                        try block.text.append(text);
+                        words.clearRetainingCapacity();
+                    }
+                    style.bold = !style.bold;
+                    style.italic = !style.italic;
+                },
+                .STAR, .BOLD => {
                     // Actually need to handle case of 1, 2, or 3 '*'s... complicated!
                     // Maybe first scan through line and count number of '*' and '_' tokens
                     // then, use the known totals to toggle styles on/off at the right counts
@@ -493,5 +529,17 @@ pub const Parser = struct {
         if (self.cursor >= self.tokens.len) return null;
         const end = self.nextBreak(self.cursor);
         return self.tokens[self.cursor..end];
+    }
+
+    fn appendWord(self: *Self, block: *zd.TextBlock, words: *ArrayList([]const u8), style: zd.TextStyle) !void {
+        if (words.items.len > 0) {
+            // End the current Text object with the current style
+            var text = zd.Text{
+                .style = style,
+                .text = try std.mem.join(self.alloc, " ", words.items),
+            };
+            try block.text.append(text);
+            words.clearRetainingCapacity();
+        }
     }
 };

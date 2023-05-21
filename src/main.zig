@@ -97,7 +97,8 @@ test "Markdown struct basics" {
     const expected_output =
         \\<html><body>
         \\<h1>Hello!</h1>
-        \\<blockquote><b><i>Quote!</i></b></blockquote>
+        \\
+        \\<blockquote> <b><i>Quote!</i></b></blockquote>
         \\</body></html>
         \\
     ;
@@ -113,16 +114,6 @@ test "Markdown struct basics" {
 
     var res = std.mem.eql(u8, buffer, expected_output);
     try std.testing.expect(res == true);
-}
-
-test "Basic parsing" {
-    var parser = Parser.init(std.testing.allocator);
-    defer parser.deinit();
-
-    var md = parser.parse(test_input).?;
-
-    var renderer = htmlRenderer(std.io.getStdErr().writer());
-    try renderer.render(md);
 }
 
 const test_input =

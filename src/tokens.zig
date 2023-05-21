@@ -28,6 +28,8 @@ pub const TokenType = enum {
     STAR,
     USCORE,
     TILDE,
+    BOLD,
+    EMBOLD,
 };
 
 pub const Token = struct {
@@ -178,19 +180,30 @@ pub const WordTokenizer = struct {
 
 /// Collect all available tokenizers
 pub const Tokenizers = .{
+    LiteralTokenizer("\n>", TokenType.QUOTE),
+    LiteralTokenizer("\n+", TokenType.PLUS),
+    LiteralTokenizer("\n-", TokenType.MINUS),
     HashTokenizer,
     BreakTokenizer,
     CodeTokenizer,
     LiteralTokenizer("    ", TokenType.INDENT),
-    //LiteralTokenizer("***", TokenType.EMBOLD),
-    //LiteralTokenizer("**", TokenType.BOLD),
     SingularTokenizer('\t', TokenType.QUOTE),
     SingularTokenizer(' ', TokenType.SPACE),
     SingularTokenizer('>', TokenType.QUOTE),
+    LiteralTokenizer("***", TokenType.EMBOLD),
+    LiteralTokenizer("_**", TokenType.EMBOLD),
+    LiteralTokenizer("**_", TokenType.EMBOLD),
+    LiteralTokenizer("*__", TokenType.EMBOLD),
+    LiteralTokenizer("__*", TokenType.EMBOLD),
+    LiteralTokenizer("___", TokenType.EMBOLD),
+    LiteralTokenizer("**", TokenType.BOLD),
+    LiteralTokenizer("__", TokenType.BOLD),
     SingularTokenizer('*', TokenType.STAR),
     SingularTokenizer('_', TokenType.USCORE),
+    //SingularTokenizer('+', TokenType.PLUS),
+    //SingularTokenizer('-', TokenType.MINUS),
+    SingularTokenizer('~', TokenType.TILDE),
     SingularTokenizer('+', TokenType.PLUS),
     SingularTokenizer('-', TokenType.MINUS),
-    SingularTokenizer('~', TokenType.TILDE),
     WordTokenizer,
 };

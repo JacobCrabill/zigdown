@@ -23,6 +23,7 @@ const TokenType = zd.TokenType;
 const Token = zd.Token;
 const TokenList = zd.TokenList;
 const htmlRenderer = zd.htmlRenderer;
+const consoleRenderer = zd.consoleRenderer;
 
 /// Convert Markdown text into a stream of tokens
 pub const Lexer = struct {
@@ -82,15 +83,21 @@ pub const Lexer = struct {
 // Tests
 //////////////////////////////////////////////////////////
 
-test "markdown basics" {
+test "tokenizing" {
     const data =
         \\# Header!
         \\## Header 2
+        \\### Header 3...
+        \\#### ...and Header 4
         \\  some *generic* text _here_, with formatting!
+        \\  including ***BOLD italic*** text!
+        \\  Note that the renderer should automaticallly wrap test for us
+        \\  at some parameterizeable wrap width
         \\
         \\after the break...
         \\> Quote line
         \\> Another quote line
+        \\> > And a nested quote
         \\
         \\```
         \\code
@@ -98,8 +105,14 @@ test "markdown basics" {
         \\
         \\And now a list:
         \\+ foo
+        \\+ fuzz
         \\    + no indents yet
         \\- bar
+        \\
+        \\
+        \\1. Numbered lists, too!
+        \\2. 2nd item
+        \\2. not the 2nd item
     ;
 
     // var alloc = std.testing.allocator; // Use for leak checking when ready
@@ -120,18 +133,31 @@ test "markdown basics" {
     var parser = zd.Parser.init(alloc, tokens.items);
     var md = try parser.parseMarkdown();
 
+    //const cwd: std.fs.Dir = std.fs.cwd();
+    //var outfile: std.fs.File = try cwd.createFile("test/out.html", .{
+    //    .truncate = true,
+    //});
+    //defer outfile.close();
+
+    std.debug.print("\n------- HTML Output --------\n", .{});
+    var h_renderer = htmlRenderer(std.io.getStdErr().writer());
+    try h_renderer.render(md);
     std.debug.print("\n----------------------------\n", .{});
-    var renderer = htmlRenderer(std.io.getStdOut().writer());
-    try renderer.render(md);
+
+    std.debug.print("\n------ Console Output ------\n", .{});
+    var c_renderer = consoleRenderer(std.io.getStdErr().writer());
+    try c_renderer.render(md);
     std.debug.print("\n----------------------------\n", .{});
 }
 
 /// Basic 'parser' of Markdown tokens
 pub fn parseTokens(tokens: TokenList) void {
+    print("--------------------\n", .{});
     print("Tokens:\n", .{});
     for (tokens.items) |token| {
         print("Type: {any}, Text: '{s}'\n", .{ token.kind, token.text });
     }
+    print("--------------------\n", .{});
 
     var i: usize = 0;
     while (i < tokens.items.len) {
