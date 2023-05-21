@@ -40,11 +40,11 @@ pub fn build(b: *std.build.Builder) void {
 
 /// Add a unit test step using the given file
 ///
-/// @param b: Mutable pointer to the Build object
-/// @param cmd: The build step name ('zig build cmd')
-/// @param description: The description for 'zig build -l'
-/// @param path: The zig file to test
-/// @param optimize: Build optimization settings
+/// @param[inout] b: Mutable pointer to the Build object
+/// @param[in] cmd: The build step name ('zig build cmd')
+/// @param[in] description: The description for 'zig build -l'
+/// @param[in] path: The zig file to test
+/// @param[in] optimize: Build optimization settings
 fn addTest(b: *std.Build, cmd: []const u8, description: []const u8, path: []const u8, optimize: std.builtin.Mode) void {
     const test_exe = b.addTest(.{
         .root_source_file = .{ .path = path },
