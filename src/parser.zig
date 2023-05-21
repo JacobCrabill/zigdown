@@ -133,66 +133,27 @@ pub const Parser = struct {
                     }
                 },
                 .EMBOLD => {
-                    if (words.items.len > 0) {
-                        // End the current Text object with the current style
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
-                    }
+                    try self.appendWord(&block, &words, style);
                     style.bold = !style.bold;
                     style.italic = !style.italic;
                 },
                 .STAR, .BOLD => {
-                    if (words.items.len > 0) {
-                        // End the current Text object with the current style
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
-                    }
+                    try self.appendWord(&block, &words, style);
                     style.bold = !style.bold;
                 },
                 .USCORE => {
-                    if (words.items.len > 0) {
-                        // End the current Text object with the current style
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
-                    }
+                    try self.appendWord(&block, &words, style);
                     style.italic = !style.italic;
                 },
                 .TILDE => {
-                    if (words.items.len > 0) {
-                        // End the current Text object with the current style
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
-                    }
+                    try self.appendWord(&block, &words, style);
                     style.underline = !style.underline;
                 },
                 else => {},
             }
         }
 
-        if (words.items.len > 0) {
-            // End the current Text object with the current style
-            var text = zd.Text{
-                .style = style,
-                .text = try std.mem.join(self.alloc, " ", words.items),
-            };
-            try block.text.append(text);
-        }
+        try self.appendWord(&block, &words, style);
 
         // Append text up to next line break
         // Return Section of type Quote
@@ -312,52 +273,23 @@ pub const Parser = struct {
                     }
                 },
                 .EMBOLD => {
-                    if (words.items.len > 0) {
-                        // End the current Text object with the current style
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
-                    }
+                    try self.appendWord(&block, &words, style);
                     style.bold = !style.bold;
                     style.italic = !style.italic;
                 },
                 .STAR, .BOLD => {
-                    if (words.items.len > 0) {
-                        // End the current Text object with the current style
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
-                    }
+                    style.bold = !style.bold;
+                    try self.appendWord(&block, &words, style);
                     style.bold = !style.bold;
                 },
                 .USCORE => {
-                    if (words.items.len > 0) {
-                        // End the current Text object with the current style
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
-                    }
+                    style.bold = !style.bold;
+                    try self.appendWord(&block, &words, style);
                     style.italic = !style.italic;
                 },
                 .TILDE => {
-                    if (words.items.len > 0) {
-                        // End the current Text object with the current style
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
-                    }
+                    style.bold = !style.bold;
+                    try self.appendWord(&block, &words, style);
                     style.underline = !style.underline;
                 },
                 else => {
@@ -366,15 +298,7 @@ pub const Parser = struct {
             }
         }
 
-        if (words.items.len > 0) {
-            // End the current Text object with the current style
-            var text = zd.Text{
-                .style = style,
-                .text = try std.mem.join(self.alloc, " ", words.items),
-            };
-            try block.text.append(text);
-        }
-
+        try self.appendWord(&block, &words, style);
         try self.md.append(zd.Section{ .textblock = block });
     }
 
@@ -425,15 +349,7 @@ pub const Parser = struct {
                     try words.append(token.text);
                 },
                 .EMBOLD => {
-                    if (words.items.len > 0) {
-                        // End the current Text object with the current style
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
-                    }
+                    try self.appendWord(&block, &words, style);
                     style.bold = !style.bold;
                     style.italic = !style.italic;
                 },
@@ -448,39 +364,15 @@ pub const Parser = struct {
                     // } else {
                     //     // If italic is not active, activate ITALIC style
                     // }
-                    if (words.items.len > 0) {
-                        // End the current Text object with the current style
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
-                    }
+                    try self.appendWord(&block, &words, style);
                     style.bold = !style.bold;
                 },
                 .USCORE => {
-                    if (words.items.len > 0) {
-                        // End the current Text object with the current style
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
-                    }
+                    try self.appendWord(&block, &words, style);
                     style.italic = !style.italic;
                 },
                 .TILDE => {
-                    if (words.items.len > 0) {
-                        // End the current Text object with the current style
-                        var text = zd.Text{
-                            .style = style,
-                            .text = try std.mem.join(self.alloc, " ", words.items),
-                        };
-                        try block.text.append(text);
-                        words.clearRetainingCapacity();
-                    }
+                    try self.appendWord(&block, &words, style);
                     style.underline = !style.underline;
                 },
                 else => {},
@@ -489,14 +381,7 @@ pub const Parser = struct {
             prev_type = token.kind;
         }
 
-        if (words.items.len > 0) {
-            // End the current Text object with the current style
-            var text = zd.Text{
-                .style = style,
-                .text = try std.mem.join(self.alloc, " ", words.items),
-            };
-            try block.text.append(text);
-        }
+        try self.appendWord(&block, &words, style);
 
         return block;
     }
