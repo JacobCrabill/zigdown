@@ -160,7 +160,7 @@ pub const IndentTokenizer = struct {
 pub const WordTokenizer = struct {
     pub fn peek(text: []const u8) ?Token {
         var end = text.len;
-        for (text) |c, i| {
+        for (text, 0..) |c, i| {
             if (!std.ascii.isASCII(c) or std.ascii.isWhitespace(c) or zd.isSpecial(c)) {
                 end = i;
                 break;

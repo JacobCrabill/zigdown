@@ -17,3 +17,10 @@ pub fn htmlRenderer(out_stream: anytype) HtmlRenderer(@TypeOf(out_stream)) {
 pub fn consoleRenderer(out_stream: anytype) ConsoleRenderer(@TypeOf(out_stream)) {
     return ConsoleRenderer(@TypeOf(out_stream)).init(out_stream);
 }
+
+test "foo" {
+    const a: usize = 1;
+    const b: usize = 2;
+    try std.testing.expect(a + b == 3);
+    std.debug.print("hello!\n", .{});
+}

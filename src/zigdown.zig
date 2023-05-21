@@ -18,7 +18,7 @@ pub const Markdown = struct {
 
     // Deallocate all heap memory
     pub fn deinit(self: *Markdown) void {
-        for (self.sections.items) |_, i| {
+        for (self.sections.items, 0..) |_, i| {
             self.sections.items[i].deinit();
         }
         self.sections.deinit();
@@ -103,7 +103,7 @@ pub const List = struct {
     }
 
     pub fn deinit(self: *List) void {
-        for (self.lines.items) |_, i| {
+        for (self.lines.items, 0..) |_, i| {
             self.lines.items[i].deinit();
         }
 
@@ -123,7 +123,7 @@ pub const NumList = struct {
     lines: ArrayList(TextBlock),
 
     pub fn deinit(self: *NumList) void {
-        for (self.lines.items) |_, i| {
+        for (self.lines.items, 0..) |_, i| {
             self.lines.items[i].deinit();
         }
 

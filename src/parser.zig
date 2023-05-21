@@ -543,3 +543,10 @@ pub const Parser = struct {
         }
     }
 };
+
+test "foo" {
+    std.debug.print("Starting test foo...\n", .{});
+    const a: i32 = 1;
+    const b: i32 = 1;
+    try std.testing.expect(a + b == 2);
+}
