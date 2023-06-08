@@ -200,8 +200,6 @@ pub const Tokenizers = .{
     LiteralTokenizer("__", TokenType.BOLD),
     SingularTokenizer('*', TokenType.STAR),
     SingularTokenizer('_', TokenType.USCORE),
-    //SingularTokenizer('+', TokenType.PLUS),
-    //SingularTokenizer('-', TokenType.MINUS),
     SingularTokenizer('~', TokenType.TILDE),
     SingularTokenizer('+', TokenType.PLUS),
     SingularTokenizer('-', TokenType.MINUS),

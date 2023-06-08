@@ -165,7 +165,7 @@ pub const Parser = struct {
 
     /// Parse a list from the token stream
     pub fn parseList(self: *Self) !void {
-        // consume the '-' token
+        // consume the '-' or '+' token
         self.cursor += 1;
 
         var list = zd.List.init(self.alloc);
@@ -184,10 +184,10 @@ pub const Parser = struct {
                 },
                 .BREAK => {
                     // End the current list item
-                    // End the current Text object with the current style
                     try self.appendWord(block, &words, style);
                     style = zd.TextStyle{};
 
+                    // Check if the next line is a list item or not
                     if (self.cursor + 1 < self.tokens.len) {
                         const next_kind = self.tokens[self.cursor + 1].kind;
                         switch (next_kind) {
