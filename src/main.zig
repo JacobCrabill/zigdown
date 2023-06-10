@@ -17,6 +17,8 @@ const consoleRenderer = zd.consoleRenderer;
 const Parser = zd.Parser;
 const TokenList = zd.TokenList;
 
+const os = std.os;
+
 const test_data =
     \\# Header!
     \\## Header 2
@@ -40,8 +42,24 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var alloc = gpa.allocator();
 
+    // Get command-line arguments
+    const args = try std.process.argsAlloc(alloc);
+    defer std.process.argsFree(alloc, args);
+
+    if (args.len < 2) {
+        std.debug.print("Expected .png filename\n", .{});
+        os.exit(1);
+    }
+
+    // Read file into memory
+    var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+    var realpath = try std.fs.realpath(args[1], &path_buf);
+    var md_file: File = try std.fs.openFileAbsolute(realpath, .{});
+    var md_text = try md_file.readToEndAlloc(alloc, 1e9);
+    defer alloc.free(md_text);
+
     // Tokenize the input text
-    var lex = zd.Lexer.init(test_data, alloc);
+    var lex = zd.Lexer.init(md_text, alloc);
 
     var parser = zd.Parser.init(alloc, &lex);
     var md = try parser.parseMarkdown();

@@ -16,7 +16,7 @@ unless the previous line ends with '  '
 
 > Quote Block  
 > With embedded `code`? (embedded code not allowed)  
-> _Fin_
+> **_Fin_**.
 
 A C++ code block.
 
