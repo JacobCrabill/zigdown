@@ -191,21 +191,14 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
 const box_style = cons.RoundedBox;
 
-// test "Print a text box" {
-//     std.debug.print("\n", .{});
-//     printABox("I'm computed at compile time!", 25, 5, box_style);
-// }
-//
-// test "Print ANSI char demo table" {
-//     try printANSITable();
-// }
-//
-// test "simple test" {
-//     var list = std.ArrayList(i32).init(std.testing.allocator);
-//     defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
-//     try list.append(42);
-//     try std.testing.expectEqual(@as(i32, 42), list.pop());
-// }
+test "Print a text box" {
+    std.debug.print("\n", .{});
+    printABox("I'm computed at compile time!", 25, 5, box_style);
+}
+
+test "Print ANSI char demo table" {
+    try printANSITable();
+}
 
 inline fn printANSITable() !void {
     const stdout_file = std.io.getStdOut().writer();
@@ -238,10 +231,8 @@ inline fn printANSITable() !void {
             }
             try stdout.print("\n", .{});
             try bw.flush(); // don't forget to flush!
-            //sleep(0.1);
         }
         try bw.flush(); // don't forget to flush!
-        //sleep(1);
     }
 
     try stdout.print("\n", .{});
@@ -341,9 +332,8 @@ inline fn printABox(comptime str: []const u8, comptime width: u8, comptime heigh
     std.debug.print("{s}", .{full_str});
 }
 
-// test "print cwd" {
-//     //const cwd: []u8 = std.fs.cwd();
-//     var buffer: [1024]u8 = .{0} ** 1024;
-//     const path = std.fs.selfExeDirPath(&buffer) catch unreachable;
-//     std.debug.print("{s}", .{path});
-// }
+test "print cwd" {
+    var buffer: [1024]u8 = .{0} ** 1024;
+    const path = std.fs.selfExeDirPath(&buffer) catch unreachable;
+    std.debug.print("\ncwd: {s}\n", .{path});
+}

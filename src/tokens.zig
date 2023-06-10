@@ -10,16 +10,13 @@ const zd = struct {
 };
 
 pub const TokenType = enum {
-    END,
     INVALID,
+    END,
     WORD,
     INDENT,
     SPACE,
     BREAK,
-    HASH1,
-    HASH2,
-    HASH3,
-    HASH4,
+    HASH,
     CODE_BLOCK,
     CODE_INLINE,
     QUOTE,
@@ -38,6 +35,9 @@ pub const Token = struct {
 };
 
 pub const TokenList = ArrayList(Token);
+
+pub const EndToken = Token{ .kind = .END, .text = "" };
+pub const InvalidToken = Token{ .kind = .INVALID, .text = "" };
 
 /// Parser for one or more hash characters
 pub const HashTokenizer = struct {
@@ -183,7 +183,7 @@ pub const Tokenizers = .{
     LiteralTokenizer("\n>", TokenType.QUOTE),
     LiteralTokenizer("\n+", TokenType.PLUS),
     LiteralTokenizer("\n-", TokenType.MINUS),
-    HashTokenizer,
+    SingularTokenizer('#', TokenType.HASH),
     BreakTokenizer,
     CodeTokenizer,
     LiteralTokenizer("    ", TokenType.INDENT),

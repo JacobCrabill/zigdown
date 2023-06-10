@@ -25,3 +25,11 @@ int main() {
   std::cout << "Hello, world!" << std::endl;
 }
 ```
+
+# Images
+
+![I Love Zig!](zig-zero.png)
+
+Note: hologram.nvim somehow renders this properly(ish) within the NeoVim buffer,
+but mdcat and image_cat don't (even though they work in plain terminal).
+What's the difference between how Hologram does it vs. sending the raw graphics protocol data?

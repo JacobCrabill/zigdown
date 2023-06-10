@@ -6,15 +6,12 @@ const con = @import("console.zig");
 
 /// Import all Zigdown tyeps
 const zd = struct {
-    usingnamespace @import("parser.zig");
-    usingnamespace @import("render.zig");
     usingnamespace @import("tokens.zig");
     usingnamespace @import("utils.zig");
     usingnamespace @import("zigdown.zig");
 };
 
 const Allocator = std.mem.Allocator;
-const ArrayList = std.ArrayList;
 const GPA = std.heap.GeneralPurposeAllocator;
 const print = std.debug.print;
 
@@ -22,8 +19,6 @@ const print = std.debug.print;
 const TokenType = zd.TokenType;
 const Token = zd.Token;
 const TokenList = zd.TokenList;
-const htmlRenderer = zd.htmlRenderer;
-const consoleRenderer = zd.consoleRenderer;
 
 /// Convert Markdown text into a stream of tokens
 pub const Lexer = struct {
@@ -58,9 +53,9 @@ pub const Lexer = struct {
     }
 
     /// Consume the next token in the text
-    pub fn next(self: *Lexer) ?Token {
+    pub fn next(self: *Lexer) Token {
         if (self.cursor > self.data.len) {
-            return null;
+            return zd.EndToken;
         } else if (self.cursor == self.data.len) {
             self.cursor += 1;
             return Token{ .kind = TokenType.END, .text = "" };
@@ -83,73 +78,6 @@ pub const Lexer = struct {
 // Tests
 //////////////////////////////////////////////////////////
 
-test "tokenizing" {
-    const data =
-        \\# Header!
-        \\## Header 2
-        \\### Header 3...
-        \\#### ...and Header 4
-        \\  some *generic* text _here_, with formatting!
-        \\  including ***BOLD italic*** text!
-        \\  Note that the renderer should automaticallly wrap test for us
-        \\  at some parameterizeable wrap width
-        \\
-        \\after the break...
-        \\> Quote line
-        \\> Another quote line
-        \\> > And a nested quote
-        \\
-        \\```
-        \\code
-        \\```
-        \\
-        \\And now a list:
-        \\+ foo
-        \\+ fuzz
-        \\    + no indents yet
-        \\- bar
-        \\
-        \\
-        \\1. Numbered lists, too!
-        \\2. 2nd item
-        \\2. not the 2nd item
-    ;
-
-    // var alloc = std.testing.allocator; // Use for leak checking when ready
-    var gpa = GPA(.{}){};
-    var alloc = gpa.allocator();
-    var tokens = TokenList.init(alloc);
-
-    // Tokenize the input text
-    var lex: Lexer = Lexer.init(data, alloc);
-
-    while (lex.next()) |token| {
-        try tokens.append(token);
-    }
-
-    // Parse (and "display") the tokens
-    parseTokens(tokens);
-
-    var parser = zd.Parser.init(alloc, tokens.items);
-    var md = try parser.parseMarkdown();
-
-    //const cwd: std.fs.Dir = std.fs.cwd();
-    //var outfile: std.fs.File = try cwd.createFile("test/out.html", .{
-    //    .truncate = true,
-    //});
-    //defer outfile.close();
-
-    std.debug.print("\n------- HTML Output --------\n", .{});
-    var h_renderer = htmlRenderer(std.io.getStdErr().writer());
-    try h_renderer.render(md);
-    std.debug.print("\n----------------------------\n", .{});
-
-    std.debug.print("\n------ Console Output ------\n", .{});
-    var c_renderer = consoleRenderer(std.io.getStdErr().writer());
-    try c_renderer.render(md);
-    std.debug.print("\n----------------------------\n", .{});
-}
-
 /// Basic 'parser' of Markdown tokens
 pub fn parseTokens(tokens: TokenList) void {
     print("--------------------\n", .{});
@@ -163,7 +91,7 @@ pub fn parseTokens(tokens: TokenList) void {
     while (i < tokens.items.len) {
         const token = tokens.items[i];
         switch (token.kind) {
-            TokenType.HASH1 => printHeader(tokens, &i),
+            TokenType.HASH => printHeader(tokens, &i),
             TokenType.BREAK => printNewline(&i),
             else => printWord(token.text, &i),
         }
