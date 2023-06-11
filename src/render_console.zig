@@ -9,6 +9,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         const Self = @This();
         stream: OutStream,
         column: usize = 0,
+        box_style: cons.Box = cons.BoldBox,
 
         // Width of the console
         const Width: usize = 80;
@@ -66,12 +67,13 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             // Pad to place text in center of console
             const lpad: usize = (Width - text.len) / 2;
-            if (lpad > 0 and h.level > 1)
+            if (lpad > 0 and h.level > 2)
                 self.write_n(" ", lpad);
 
             switch (h.level) {
-                1 => try printBox(self.stream, text, Width, 3, cons.RoundedBox),
-                2 => self.print("{s}{s}{s}{s}{s}\n\n", .{ cons.bg_red, cons.fg_white, cons.text_bold, text, cons.ansi_end }),
+                1 => cons.printBox(self.stream, text, Width, 3, cons.DoubleBox, cons.text_bold ++ cons.fg_blue),
+                2 => cons.printBox(self.stream, text, Width, 3, cons.BoldBox, cons.text_bold ++ cons.fg_green),
+                //2 => self.print("{s}{s}{s}{s}{s}\n\n", .{ cons.bg_red, cons.fg_white, cons.text_bold, text, cons.ansi_end }),
                 3 => self.print("{s}{s}{s}{s}\n\n", .{ cons.text_italic, cons.text_underline, text, cons.ansi_end }),
                 else => self.print("{s}{s}{s}\n\n", .{ cons.text_underline, text, cons.ansi_end }),
             }
@@ -187,152 +189,4 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
         }
     };
-}
-
-const box_style = cons.RoundedBox;
-
-test "Print a text box" {
-    std.debug.print("\n", .{});
-    printABox("I'm computed at compile time!", 25, 5, box_style);
-}
-
-test "Print ANSI char demo table" {
-    try printANSITable();
-}
-
-inline fn printANSITable() !void {
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
-
-    const options = .{
-        @as([]const u8, "38;5{}"),
-        @as([]const u8, "38;1{}"),
-        @as([]const u8, "{}"),
-    };
-
-    // Give ourselves some lines to play with right here-o
-    try stdout.print("\n" ** 12, .{});
-    try stdout.print(cons.ansi_up, .{1});
-
-    inline for (options) |option| {
-        try stdout.print(cons.ansi_back, .{100});
-        try stdout.print(cons.ansi_up, .{10});
-
-        const fmt = cons.ansi ++ "[" ++ option ++ "m {d:>3}" ++ cons.ansi ++ "[m";
-
-        var i: u8 = 0;
-        outer: while (i < 11) : (i += 1) {
-            var j: u8 = 0;
-            while (j < 10) : (j += 1) {
-                var n = 10 * i + j;
-                if (n > 108) continue :outer;
-                try stdout.print(fmt, .{ n, n });
-            }
-            try stdout.print("\n", .{});
-            try bw.flush(); // don't forget to flush!
-        }
-        try bw.flush(); // don't forget to flush!
-    }
-
-    try stdout.print("\n", .{});
-
-    const bg_red = cons.ansi ++ "[101m";
-    const blink = cons.ansi ++ "[5m";
-    try stdout.print(bg_red ++ blink ++ " hello! " ++ cons.ansi_end ++ "\n", .{});
-    try bw.flush(); // don't forget to flush!
-}
-
-// Wrapper function for stdout.print to catch and discard any errors
-fn print(comptime fmt: []const u8, args: anytype) void {
-    const stdout = std.io.getStdErr().writer();
-    stdout.print(fmt, args) catch return;
-}
-
-fn printC(stream: anytype, c: anytype) !void {
-    try stream.print("{s}", .{c});
-}
-
-// Print a box with a given width and height, using the given style
-pub fn printBox(stream: anytype, str: []const u8, width: usize, height: usize, style: cons.Box) !void {
-    const len: usize = str.len;
-    const w: usize = std.math.max(len + 2, width);
-    const h: usize = std.math.max(height, 3);
-
-    const lpad: usize = (w - len - 2) / 2;
-    const rpad: usize = w - len - lpad - 2;
-
-    // Top row (┌─...─┐)
-    try stream.print("{s}", .{style.tl});
-    var i: u8 = 0;
-    while (i < w - 2) : (i += 1) {
-        try stream.print("{s}", .{style.hb});
-    }
-    try stream.print("{s}", .{style.tr});
-    try stream.print("\n", .{});
-
-    // Print the middle rows (│  ...  │)
-    var j: u8 = 0;
-    const mid = (h - 2) / 2;
-    while (j < h - 2) : (j += 1) {
-        i = 0;
-        try stream.print("{s}", .{style.vb});
-        if (j == mid) {
-            var k: u8 = 0;
-            while (k < lpad) : (k += 1) {
-                try stream.print(" ", .{});
-            }
-            try stream.print("{s}", .{str});
-            k = 0;
-            while (k < rpad) : (k += 1) {
-                try stream.print(" ", .{});
-            }
-        } else {
-            while (i < w - 2) : (i += 1) {
-                try stream.print(" ", .{});
-            }
-        }
-        try stream.print("{s}\n", .{style.vb});
-    }
-
-    // Bottom row (└─...─┘)
-    i = 0;
-    try printC(stream, style.bl);
-    while (i < w - 2) : (i += 1) {
-        try printC(stream, style.hb);
-    }
-    try printC(stream, style.br);
-    try stream.print("\n", .{});
-}
-
-// Print a box with a given width and height, using the given style
-inline fn printABox(comptime str: []const u8, comptime width: u8, comptime height: u8, comptime style: cons.Box) void {
-    const len: usize = str.len;
-    const w: usize = if (len + 2 < width) width else len + 2;
-    const w2: usize = w - 2;
-    const h: usize = if (height > 3) height else 3;
-
-    const lpad: usize = (w - len - 2) / 2;
-    const rpad: usize = w - len - lpad - 2;
-    const mid: usize = (h - 2) / 2 + 1;
-    const tpad: usize = mid - 1;
-    const bpad: usize = (h - 1) - (mid + 1);
-
-    // Top row     (┌─...─┐)
-    // Middle rows (│ ... │)
-    // Bottom row  (└─...─┘)
-    const top_line = style.tl ++ (style.hb ** (w2)) ++ style.tr ++ "\n";
-    const empty_line = style.vb ++ (" " ** (w2)) ++ style.vb ++ "\n";
-    const text_line = style.vb ++ (" " ** lpad) ++ str ++ (" " ** rpad) ++ style.vb ++ "\n";
-    const btm_line = style.bl ++ (style.hb ** (w2)) ++ style.br ++ "\n";
-
-    const full_str = top_line ++ (empty_line ** tpad) ++ text_line ++ (empty_line ** bpad) ++ btm_line;
-
-    std.debug.print("{s}", .{full_str});
-}
-
-test "print cwd" {
-    var buffer: [1024]u8 = .{0} ** 1024;
-    const path = std.fs.selfExeDirPath(&buffer) catch unreachable;
-    std.debug.print("\ncwd: {s}\n", .{path});
 }

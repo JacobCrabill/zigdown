@@ -15,6 +15,7 @@ pub const ansi_home = ansi ++ "[0G";
 // ====================================================
 // ANSI display codes (colors, styles, etc.)
 // ----------------------------------------------------
+
 pub const bg_black = ansi ++ "[40m";
 pub const bg_red = ansi ++ "[41m";
 pub const bg_green = ansi ++ "[42m";
@@ -41,6 +42,13 @@ pub const text_blink = ansi ++ "[5m";
 // ====================================================
 // Assemble our suite of box-drawing Unicode characters
 // ----------------------------------------------------
+
+// Styles
+//
+//   Sharp:     Round:     Double:    Bold:
+//     ┌─┬─┐      ╭─┬─╮      ╔═╦═╗      ┏━┳━┓
+//     ├─┼─┤      ├─┼─┤      ╠═╬═╣      ┣━╋━┫
+//     └─┴─┘      ╰─┴─╯      ╚═╩═╝      ┗━┻━┛
 
 // "base class" for all our box-drawing character sets
 pub const Box = struct {
@@ -132,44 +140,160 @@ pub const BoldBox = Box{
     .cj = "╋",
 };
 
-const sharp_box =
-    \\ ┌─┐
-    \\ │ │
-    \\ └─┘
-;
+// ====================================================
+// Functions to print boxes
+// ----------------------------------------------------
 
-const single_junctions =
-    \\ ┌─┬─┐
-    \\ ├─┼─┤
-    \\ └─┴─┘
-;
+/// Wrapper function <stream>.print to catch and discard any errors
+fn print(stream: anytype, comptime fmt: []const u8, args: anytype) void {
+    stream.print(fmt, args) catch return;
+}
 
-const round_box =
-    \\ ╭─╮
-    \\ │ │
-    \\ ╰─╯
-;
+/// Wrapper function to print a single object (i.e. char) as a string, discarding any errors
+fn printC(stream: anytype, c: anytype) void {
+    stream.print("{s}", .{c}) catch return;
+}
 
-const double_box =
-    \\  ╔═╗
-    \\  ║ ║
-    \\  ╚═╝
-;
+/// Print a box with a given width and height, using the given style
+pub fn printBox(stream: anytype, str: []const u8, width: usize, height: usize, style: Box, text_style: []const u8) void {
+    const len: usize = str.len;
+    const w: usize = std.math.max(len + 2, width);
+    const h: usize = std.math.max(height, 3);
 
-const bold_box =
-    \\ ┏━┓
-    \\ ┃ ┃
-    \\ ┗━┛
-;
+    const lpad: usize = (w - len - 2) / 2;
+    const rpad: usize = w - len - lpad - 2;
 
-const double_junctions =
-    \\  ╔═╦═╗
-    \\  ╠═╬═╣
-    \\  ╚═╩═╝
-;
+    // Setup overall text style
+    print(stream, "{s}", .{text_style});
 
-const bold_junctions =
-    \\ ┏━┳━┓
-    \\ ┣━╋━┫
-    \\ ┗━┻━┛
-;
+    // Top row (┌─...─┐)
+    print(stream, "{s}", .{style.tl});
+    var i: u8 = 0;
+    while (i < w - 2) : (i += 1) {
+        print(stream, "{s}", .{style.hb});
+    }
+    print(stream, "{s}", .{style.tr});
+    print(stream, "{s}\n", .{ansi_end});
+
+    // Print the middle rows (│  ...  │)
+    var j: u8 = 0;
+    const mid = (h - 2) / 2;
+    while (j < h - 2) : (j += 1) {
+        print(stream, "{s}", .{text_style});
+
+        i = 0;
+        print(stream, "{s}", .{style.vb});
+        if (j == mid) {
+            var k: u8 = 0;
+            while (k < lpad) : (k += 1) {
+                print(stream, " ", .{});
+            }
+            print(stream, "{s}", .{str});
+            k = 0;
+            while (k < rpad) : (k += 1) {
+                print(stream, " ", .{});
+            }
+        } else {
+            while (i < w - 2) : (i += 1) {
+                print(stream, " ", .{});
+            }
+        }
+        print(stream, "{s}{s}\n", .{ style.vb, ansi_end });
+    }
+
+    // Bottom row (└─...─┘)
+    i = 0;
+    print(stream, "{s}", .{text_style});
+    printC(stream, style.bl);
+    while (i < w - 2) : (i += 1) {
+        printC(stream, style.hb);
+    }
+    printC(stream, style.br);
+    print(stream, "{s}\n", .{ansi_end});
+}
+
+// ====================================================
+// Tests of ANSI Escape Codes
+// ----------------------------------------------------
+
+// Print a box with a given width and height, using the given style
+inline fn printABox(comptime str: []const u8, comptime width: u8, comptime height: u8, comptime style: Box) void {
+    const len: usize = str.len;
+    const w: usize = if (len + 2 < width) width else len + 2;
+    const w2: usize = w - 2;
+    const h: usize = if (height > 3) height else 3;
+
+    const lpad: usize = (w - len - 2) / 2;
+    const rpad: usize = w - len - lpad - 2;
+    const mid: usize = (h - 2) / 2 + 1;
+    const tpad: usize = mid - 1;
+    const bpad: usize = (h - 1) - (mid + 1);
+
+    // Top row     (┌─...─┐)
+    // Middle rows (│ ... │)
+    // Bottom row  (└─...─┘)
+    const top_line = style.tl ++ (style.hb ** (w2)) ++ style.tr ++ "\n";
+    const empty_line = style.vb ++ (" " ** (w2)) ++ style.vb ++ "\n";
+    const text_line = style.vb ++ (" " ** lpad) ++ str ++ (" " ** rpad) ++ style.vb ++ "\n";
+    const btm_line = style.bl ++ (style.hb ** (w2)) ++ style.br ++ "\n";
+
+    const full_str = top_line ++ (empty_line ** tpad) ++ text_line ++ (empty_line ** bpad) ++ btm_line;
+
+    std.debug.print("{s}", .{full_str});
+}
+
+test "print cwd" {
+    var buffer: [1024]u8 = .{0} ** 1024;
+    const path = std.fs.selfExeDirPath(&buffer) catch unreachable;
+    std.debug.print("\ncwd: {s}\n", .{path});
+}
+test "Print a text box" {
+    const box_style = BoldBox;
+    std.debug.print("\n", .{});
+    printABox("I'm computed at compile time!", 25, 5, box_style);
+}
+
+test "Print ANSI char demo table" {
+    try printANSITable();
+}
+
+inline fn printANSITable() !void {
+    const stdout_file = std.io.getStdOut().writer();
+    var bw = std.io.bufferedWriter(stdout_file);
+    const stdout = bw.writer();
+
+    const options = .{
+        @as([]const u8, "38;5{}"),
+        @as([]const u8, "38;1{}"),
+        @as([]const u8, "{}"),
+    };
+
+    // Give ourselves some lines to play with right here-o
+    try stdout.print("\n" ** 12, .{});
+    try stdout.print(ansi_up, .{1});
+
+    inline for (options) |option| {
+        try stdout.print(ansi_back, .{100});
+        try stdout.print(ansi_up, .{10});
+
+        const fmt = ansi ++ "[" ++ option ++ "m {d:>3}" ++ ansi ++ "[m";
+
+        var i: u8 = 0;
+        outer: while (i < 11) : (i += 1) {
+            var j: u8 = 0;
+            while (j < 10) : (j += 1) {
+                var n = 10 * i + j;
+                if (n > 108) continue :outer;
+                try stdout.print(fmt, .{ n, n });
+            }
+            try stdout.print("\n", .{});
+            try bw.flush(); // don't forget to flush!
+        }
+        try bw.flush(); // don't forget to flush!
+    }
+
+    try stdout.print("\n", .{});
+
+    try stdout.print(bg_red ++ text_blink ++ " hello! " ++ ansi_end ++ "\n", .{});
+    try bw.flush(); // don't forget to flush!
+}
