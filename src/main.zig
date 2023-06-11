@@ -11,13 +11,108 @@ const zd = struct {
 
 const ArrayList = std.ArrayList;
 const File = std.fs.File;
+const os = std.os;
+const stdout = std.io.getStdOut().writer();
+
 const TS = zd.TextStyle;
 const htmlRenderer = zd.htmlRenderer;
 const consoleRenderer = zd.consoleRenderer;
 const Parser = zd.Parser;
 const TokenList = zd.TokenList;
 
-const os = std.os;
+fn print_usage(arg0: []const u8) !void {
+    const help_text =
+        \\Usage:
+        \\    {s} [options] [filename.md]
+        \\
+        \\Options:
+        \\ -c         Render to the console (default)
+        \\ -h         Render to HTML
+        \\ -o [file]  Direct output to a file, instead of stdout
+        \\
+    ;
+    try stdout.print(help_text, .{arg0});
+}
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var alloc = gpa.allocator();
+
+    // Get command-line arguments
+    const args = try std.process.argsAlloc(alloc);
+    defer std.process.argsFree(alloc, args);
+
+    if (args.len < 2) {
+        try print_usage(args[0]);
+        os.exit(1);
+    }
+
+    var do_console: bool = false;
+    var do_html: bool = false;
+    var filename: ?[]const u8 = null;
+    var outfile: ?[]const u8 = null;
+    var i: usize = 1;
+    while (i < args.len) : (i += 1) {
+        const arg: []const u8 = args[i];
+
+        if (std.mem.eql(u8, "-c", arg)) {
+            do_console = true;
+        } else if (std.mem.eql(u8, "-h", arg)) {
+            do_html = true;
+        } else if (std.mem.eql(u8, "-o", arg)) {
+            if (i + 1 >= args.len) {
+                std.debug.print("ERROR: File output requested but no filename given\n\n", .{});
+                try print_usage(args[0]);
+                os.exit(3);
+            }
+
+            i += 1;
+            outfile = args[i];
+        } else {
+            filename = arg;
+        }
+    }
+
+    if (filename == null) {
+        std.debug.print("ERROR: No filename provided\n\n", .{});
+        try print_usage(args[0]);
+        os.exit(2);
+    }
+
+    // Read file into memory
+    var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+    var realpath = try std.fs.realpath(filename.?, &path_buf);
+    var md_file: File = try std.fs.openFileAbsolute(realpath, .{});
+    var md_text = try md_file.readToEndAlloc(alloc, 1e9);
+    defer alloc.free(md_text);
+
+    // Parse the input text
+    var lex = zd.Lexer.init(md_text, alloc);
+    var parser = zd.Parser.init(alloc, &lex);
+    var md = try parser.parseMarkdown();
+
+    if (outfile) |outname| {
+        // TODO: check if path is absolute or relative; join relpath to cwd if relative
+        //realpath = try std.fs.realpath(outname, &path_buf);
+        //var out_file: File = try std.fs.createFileAbsolute(realpath, .{ .truncate = true });
+        var out_file: File = try std.fs.cwd().createFile(outname, .{ .truncate = true });
+        try render(out_file.writer(), md, do_console, do_html);
+    } else {
+        try render(stdout, md, do_console, do_html);
+    }
+}
+
+fn render(stream: anytype, md: zd.Markdown, do_console: bool, do_html: bool) !void {
+    if (do_html) {
+        var h_renderer = htmlRenderer(stream);
+        try h_renderer.render(md);
+    }
+
+    if (do_console or !do_html) {
+        var c_renderer = consoleRenderer(stream);
+        try c_renderer.render(md);
+    }
+}
 
 const test_data =
     \\# Header!
@@ -37,38 +132,3 @@ const test_data =
     \\  + no indents yet
     \\- bar
 ;
-
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var alloc = gpa.allocator();
-
-    // Get command-line arguments
-    const args = try std.process.argsAlloc(alloc);
-    defer std.process.argsFree(alloc, args);
-
-    if (args.len < 2) {
-        std.debug.print("Expected .png filename\n", .{});
-        os.exit(1);
-    }
-
-    // Read file into memory
-    var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
-    var realpath = try std.fs.realpath(args[1], &path_buf);
-    var md_file: File = try std.fs.openFileAbsolute(realpath, .{});
-    var md_text = try md_file.readToEndAlloc(alloc, 1e9);
-    defer alloc.free(md_text);
-
-    // Tokenize the input text
-    var lex = zd.Lexer.init(md_text, alloc);
-
-    var parser = zd.Parser.init(alloc, &lex);
-    var md = try parser.parseMarkdown();
-
-    std.debug.print("HTML Render: =======================\n", .{});
-    var h_renderer = htmlRenderer(std.io.getStdOut().writer());
-    try h_renderer.render(md);
-
-    std.debug.print("\nConsole Render: =======================\n", .{});
-    var c_renderer = consoleRenderer(std.io.getStdOut().writer());
-    try c_renderer.render(md);
-}

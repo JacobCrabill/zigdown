@@ -70,7 +70,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 self.write_n(" ", lpad);
 
             switch (h.level) {
-                1 => try printBox(text, Width, 3, cons.RoundedBox),
+                1 => try printBox(self.stream, text, Width, 3, cons.RoundedBox),
                 2 => self.print("{s}{s}{s}{s}{s}\n\n", .{ cons.bg_red, cons.fg_white, cons.text_bold, text, cons.ansi_end }),
                 3 => self.print("{s}{s}{s}{s}\n\n", .{ cons.text_italic, cons.text_underline, text, cons.ansi_end }),
                 else => self.print("{s}{s}{s}\n\n", .{ cons.text_underline, text, cons.ansi_end }),
@@ -249,13 +249,12 @@ fn print(comptime fmt: []const u8, args: anytype) void {
     stdout.print(fmt, args) catch return;
 }
 
-fn printC(c: anytype) void {
-    const stdout = std.io.getStdErr().writer();
-    stdout.print("{s}", .{c}) catch {};
+fn printC(stream: anytype, c: anytype) !void {
+    try stream.print("{s}", .{c});
 }
 
 // Print a box with a given width and height, using the given style
-pub fn printBox(str: []const u8, width: usize, height: usize, style: cons.Box) !void {
+pub fn printBox(stream: anytype, str: []const u8, width: usize, height: usize, style: cons.Box) !void {
     const len: usize = str.len;
     const w: usize = std.math.max(len + 2, width);
     const h: usize = std.math.max(height, 3);
@@ -264,46 +263,46 @@ pub fn printBox(str: []const u8, width: usize, height: usize, style: cons.Box) !
     const rpad: usize = w - len - lpad - 2;
 
     // Top row (┌─...─┐)
-    print("{s}", .{style.tl});
+    try stream.print("{s}", .{style.tl});
     var i: u8 = 0;
     while (i < w - 2) : (i += 1) {
-        print("{s}", .{style.hb});
+        try stream.print("{s}", .{style.hb});
     }
-    print("{s}", .{style.tr});
-    print("\n", .{});
+    try stream.print("{s}", .{style.tr});
+    try stream.print("\n", .{});
 
     // Print the middle rows (│  ...  │)
     var j: u8 = 0;
     const mid = (h - 2) / 2;
     while (j < h - 2) : (j += 1) {
         i = 0;
-        print("{s}", .{style.vb});
+        try stream.print("{s}", .{style.vb});
         if (j == mid) {
             var k: u8 = 0;
             while (k < lpad) : (k += 1) {
-                print(" ", .{});
+                try stream.print(" ", .{});
             }
-            print("{s}", .{str});
+            try stream.print("{s}", .{str});
             k = 0;
             while (k < rpad) : (k += 1) {
-                print(" ", .{});
+                try stream.print(" ", .{});
             }
         } else {
             while (i < w - 2) : (i += 1) {
-                print(" ", .{});
+                try stream.print(" ", .{});
             }
         }
-        print("{s}\n", .{style.vb});
+        try stream.print("{s}\n", .{style.vb});
     }
 
     // Bottom row (└─...─┘)
     i = 0;
-    printC(style.bl);
+    try printC(stream, style.bl);
     while (i < w - 2) : (i += 1) {
-        printC(style.hb);
+        try printC(stream, style.hb);
     }
-    printC(style.br);
-    print("\n", .{});
+    try printC(stream, style.br);
+    try stream.print("\n", .{});
 }
 
 // Print a box with a given width and height, using the given style

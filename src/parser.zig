@@ -206,7 +206,7 @@ pub const Parser = struct {
         defer words.deinit();
         tloop: while (!self.curTokenIs(.END)) : (self.nextToken()) {
             const token = self.curToken();
-            std.debug.print("token: {any}, {s}\n", .{ token.kind, token.text });
+            //std.debug.print("token: {any}, {s}\n", .{ token.kind, token.text });
             switch (token.kind) {
                 .WORD => {
                     try words.append(token.text);
