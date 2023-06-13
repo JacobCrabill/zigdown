@@ -78,50 +78,69 @@ pub const Lexer = struct {
 // Tests
 //////////////////////////////////////////////////////////
 
-/// Basic 'parser' of Markdown tokens
-pub fn parseTokens(tokens: TokenList) void {
-    print("--------------------\n", .{});
-    print("Tokens:\n", .{});
-    for (tokens.items) |token| {
-        print("Type: {any}, Text: '{s}'\n", .{ token.kind, token.text });
+test "test lexer" {
+    const test_input =
+        \\# Heading 1
+        \\## Heading Two
+        \\
+        \\Text _italic_ **bold** ___bold_italic___
+        \\~strikethrough~
+    ;
+
+    const expected_tokens = [_]Token{
+        .{ .kind = .HASH, .text = "#" },
+        .{ .kind = .SPACE, .text = " " },
+        .{ .kind = .WORD, .text = "Heading" },
+        .{ .kind = .SPACE, .text = " " },
+        .{ .kind = .WORD, .text = "1" },
+        .{ .kind = .BREAK, .text = "\n" },
+        .{ .kind = .HASH, .text = "#" },
+        .{ .kind = .HASH, .text = "#" },
+        .{ .kind = .SPACE, .text = " " },
+        .{ .kind = .WORD, .text = "Heading" },
+        .{ .kind = .SPACE, .text = " " },
+        .{ .kind = .WORD, .text = "Two" },
+        .{ .kind = .BREAK, .text = "\n" },
+        .{ .kind = .BREAK, .text = "\n" },
+        .{ .kind = .WORD, .text = "Text" },
+        .{ .kind = .SPACE, .text = " " },
+        .{ .kind = .USCORE, .text = "_" },
+        .{ .kind = .WORD, .text = "italic" },
+        .{ .kind = .USCORE, .text = "_" },
+        .{ .kind = .SPACE, .text = " " },
+        .{ .kind = .BOLD, .text = "**" },
+        .{ .kind = .WORD, .text = "bold" },
+        .{ .kind = .BOLD, .text = "**" },
+        .{ .kind = .SPACE, .text = " " },
+        .{ .kind = .EMBOLD, .text = "___" },
+        .{ .kind = .WORD, .text = "bold" },
+        .{ .kind = .USCORE, .text = "_" },
+        .{ .kind = .WORD, .text = "italic" },
+        .{ .kind = .EMBOLD, .text = "___" },
+        .{ .kind = .BREAK, .text = "\n" },
+        .{ .kind = .TILDE, .text = "~" },
+        .{ .kind = .WORD, .text = "underline" },
+        .{ .kind = .TILDE, .text = "~" },
+    };
+
+    var lex = Lexer.init(test_input, std.testing.allocator);
+
+    for (expected_tokens) |token| {
+        try compareTokens(token, lex.next());
     }
-    print("--------------------\n", .{});
 
-    var i: usize = 0;
-    while (i < tokens.items.len) {
-        const token = tokens.items[i];
-        switch (token.kind) {
-            TokenType.HASH => printHeader(tokens, &i),
-            TokenType.BREAK => printNewline(&i),
-            else => printWord(token.text, &i),
-        }
-    }
+    try std.testing.expectEqual(TokenType.END, lex.next().kind);
 }
 
-/// TODO: These fns should return zd.Section types
-pub fn printHeader(tokens: TokenList, idx: *usize) void {
-    idx.* += 1;
-    beginHeader();
-    while (idx.* < tokens.items.len and tokens.items[idx.*].kind == TokenType.WORD) : (idx.* += 1) {
-        print("{s} ", .{tokens.items[idx.*].text});
-    }
-    endHeader();
-}
+/// Compare an expected token to a token from the Lexer
+fn compareTokens(expected: Token, actual: Token) !void {
+    std.testing.expectEqual(expected.kind, actual.kind) catch |err| {
+        std.debug.print("Expected {any}, got {any}\n", .{ expected.kind, actual.kind });
+        return err;
+    };
 
-pub fn printWord(text: []const u8, idx: *usize) void {
-    print("{s}", .{text});
-    idx.* += 1;
-}
-
-pub fn printNewline(idx: *usize) void {
-    print("\n", .{});
-    idx.* += 1;
-}
-
-pub fn beginHeader() void {
-    print(con.text_bold, .{});
-}
-
-pub fn endHeader() void {
-    print(con.ansi_end, .{});
+    std.testing.expect(std.mem.eql(u8, expected.text, actual.text)) catch |err| {
+        std.debug.print("Expected '{s}', got '{s}'\n", .{ expected.text, actual.text });
+        return err;
+    };
 }

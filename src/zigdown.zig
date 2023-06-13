@@ -149,6 +149,7 @@ pub const TextStyle = struct {
     bold: bool = false,
     italic: bool = false,
     underline: bool = false,
+    strike: bool = false,
 };
 
 /// Section of formatted text (single style)

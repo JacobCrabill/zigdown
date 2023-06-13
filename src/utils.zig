@@ -31,6 +31,15 @@ pub fn isSpecial(c: u8) bool {
     return false;
 }
 
+/// Check for punctuation characters
+pub fn isPunctuation(c: u8) bool {
+    const special = "`~!@#$%^&*()-_=+,.<>/?;:'\"/\\[]{}|";
+    if (std.mem.indexOfScalar(u8, special, c)) |_| {
+        return true;
+    }
+    return false;
+}
+
 pub fn stdout(comptime fmt: []const u8, args: anytype) void {
     const out = std.io.getStdOut().writer();
     out.print(fmt, args) catch @panic("stdout failed!");

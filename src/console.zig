@@ -38,6 +38,10 @@ pub const text_bold = ansi ++ "[1m";
 pub const text_italic = ansi ++ "[3m";
 pub const text_underline = ansi ++ "[4m";
 pub const text_blink = ansi ++ "[5m";
+pub const text_fastblink = ansi ++ "[6m";
+pub const text_reverse = ansi ++ "[7m";
+pub const text_hide = ansi ++ "[8m";
+pub const text_strike = ansi ++ "[9m";
 
 // ====================================================
 // Assemble our suite of box-drawing Unicode characters

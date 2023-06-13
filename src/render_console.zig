@@ -73,7 +73,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             switch (h.level) {
                 1 => cons.printBox(self.stream, text, Width, 3, cons.DoubleBox, cons.text_bold ++ cons.fg_blue),
                 2 => cons.printBox(self.stream, text, Width, 3, cons.BoldBox, cons.text_bold ++ cons.fg_green),
-                //2 => self.print("{s}{s}{s}{s}{s}\n\n", .{ cons.bg_red, cons.fg_white, cons.text_bold, text, cons.ansi_end }),
                 3 => self.print("{s}{s}{s}{s}\n\n", .{ cons.text_italic, cons.text_underline, text, cons.ansi_end }),
                 else => self.print("{s}{s}{s}\n\n", .{ cons.text_underline, text, cons.ansi_end }),
             }

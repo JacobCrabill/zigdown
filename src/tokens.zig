@@ -39,40 +39,20 @@ pub const TokenList = ArrayList(Token);
 pub const EndToken = Token{ .kind = .END, .text = "" };
 pub const InvalidToken = Token{ .kind = .INVALID, .text = "" };
 
-/// Parser for one or more hash characters
-pub const HashTokenizer = struct {
-    pub fn peek(text: []const u8) ?Token {
-        var token = Token{};
-        if (text.len > 3 and std.mem.startsWith(u8, text, "####")) {
-            token.kind = TokenType.HASH4;
-            token.text = text[0..4];
-            return token;
-        } else if (text.len > 2 and std.mem.startsWith(u8, text, "###")) {
-            token.kind = TokenType.HASH3;
-            token.text = text[0..3];
-            return token;
-        } else if (text.len > 1 and std.mem.startsWith(u8, text, "##")) {
-            token.kind = TokenType.HASH2;
-            token.text = text[0..2];
-            return token;
-        } else if (text.len > 0 and std.mem.startsWith(u8, text, "#")) {
-            token.kind = TokenType.HASH1;
-            token.text = text[0..1];
-            return token;
-        }
-
-        return null;
-    }
-};
-
 /// Parser for a line break
 pub const BreakTokenizer = struct {
     pub fn peek(text: []const u8) ?Token {
-        // TODO: Handle \r\n
-        if (text.len > 0 and text[0] == '\n') {
+        if (std.mem.startsWith(u8, text, "\n")) {
             return Token{
                 .kind = TokenType.BREAK,
                 .text = text[0..1],
+            };
+        }
+
+        if (std.mem.startsWith(u8, text, "\r\n")) {
+            return Token{
+                .kind = TokenType.BREAK,
+                .text = text[0..2],
             };
         }
 
@@ -138,10 +118,10 @@ pub fn LiteralTokenizer(comptime delim: []const u8, comptime kind: TokenType) ty
 /// Parser for an indent (tab)
 pub const IndentTokenizer = struct {
     pub fn peek(text: []const u8) ?Token {
-        if (std.mem.startsWith(u8, text, "    ")) {
+        if (std.mem.startsWith(u8, text, "  ")) {
             return Token{
                 .kind = TokenType.INDENT,
-                .text = text[0..4],
+                .text = text[0..2],
             };
         }
 
@@ -161,7 +141,7 @@ pub const WordTokenizer = struct {
     pub fn peek(text: []const u8) ?Token {
         var end = text.len;
         for (text, 0..) |c, i| {
-            if (!std.ascii.isASCII(c) or std.ascii.isWhitespace(c) or zd.isSpecial(c)) {
+            if (!std.ascii.isASCII(c) or std.ascii.isWhitespace(c) or zd.isPunctuation(c)) {
                 end = i;
                 break;
             }

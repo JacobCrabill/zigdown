@@ -1,7 +1,7 @@
 # Heading 1
 
 Plain text
-...with **bold** and _italic_ styles (and **_bold italic_**)
+...with **bold** and _italic_ styles (and **_bold_italic_**)
 ...and no line breaks  
 unless the previous line ends with '  ' (tbd)
 

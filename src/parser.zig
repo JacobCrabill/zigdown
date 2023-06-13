@@ -111,16 +111,13 @@ pub const Parser = struct {
 
         var words = ArrayList([]const u8).init(self.alloc);
         defer words.deinit();
-        while (!self.curTokenIs(.END)) : (self.nextToken()) {
+        while (!(self.curTokenIs(.BREAK) or self.curTokenIs(.END))) : (self.nextToken()) {
             const token = self.curToken();
-            if (self.curTokenIs(.BREAK) or self.curTokenIs(.END)) {
-                // Consume the token and finish the header
-                self.nextToken();
-                break;
-            }
-
             try words.append(token.text);
         }
+
+        if (self.curTokenIs(.BREAK))
+            self.nextToken();
 
         // Append text up to next line break
         // Return Section of type Heading
