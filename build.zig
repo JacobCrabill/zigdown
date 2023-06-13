@@ -29,7 +29,7 @@ pub fn build(b: *std.build.Builder) void {
     }
 
     // Add a run step to run the executable
-    const run_step = b.step("run", "Run the app");
+    const run_step = b.step("run", "Run the app (use `-- <args` to supply arguments)");
     run_step.dependOn(&app.step);
 
     // Add unit tests
