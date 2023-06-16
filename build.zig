@@ -21,6 +21,9 @@ pub fn build(b: *std.build.Builder) void {
     });
     b.installArtifact(exe);
 
+    const app_step = b.step("app", "Build the app ('zigdown' executable)");
+    app_step.dependOn(&exe.step);
+
     // Configure how the main executable should be run
     const app = b.addRunArtifact(exe);
     app.step.dependOn(b.getInstallStep());
@@ -29,8 +32,20 @@ pub fn build(b: *std.build.Builder) void {
     }
 
     // Add a run step to run the executable
-    const run_step = b.step("run", "Run the app (use `-- <args` to supply arguments)");
+    const run_step = b.step("run", "Run the app (use `-- <args>` to supply arguments)");
     run_step.dependOn(&app.step);
+
+    // Build HTML library documentation
+    const lib = b.addSharedLibrary(.{
+        .name = "libzigdown",
+        .root_source_file = .{ .path = "src/zigdown.zig" },
+        .optimize = optimize,
+        .target = target,
+    });
+    lib.emit_docs = .emit;
+    b.installArtifact(lib);
+    const lib_step = b.step("lib", "Build Zigdown as a shared library (and also build HTML docs)");
+    lib_step.dependOn(&lib.step);
 
     // Add unit tests
     addTest(b, "test-lexer", "Run Lexer unit tests", "src/lexer.zig", optimize);

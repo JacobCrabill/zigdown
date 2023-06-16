@@ -1,13 +1,6 @@
 const std = @import("std");
 
-const zd = struct {
-    usingnamespace @import("lexer.zig");
-    usingnamespace @import("render.zig");
-    usingnamespace @import("parser.zig");
-    usingnamespace @import("tokens.zig");
-    usingnamespace @import("utils.zig");
-    usingnamespace @import("zigdown.zig");
-};
+const zd = @import("zigdown.zig");
 
 const ArrayList = std.ArrayList;
 const File = std.fs.File;
@@ -87,7 +80,7 @@ pub fn main() !void {
     defer alloc.free(md_text);
 
     // Parse the input text
-    var parser = zd.Parser.init(alloc, md_text);
+    var parser = try zd.Parser.init(alloc, md_text, .{});
     var md = try parser.parseMarkdown();
 
     if (outfile) |outname| {

@@ -1,10 +1,10 @@
 const std = @import("std");
 
-pub const zd = struct {
+const zd = struct {
     usingnamespace @import("utils.zig");
     usingnamespace @import("tokens.zig");
     usingnamespace @import("lexer.zig");
-    usingnamespace @import("zigdown.zig");
+    usingnamespace @import("markdown.zig");
 };
 
 const Allocator = std.mem.Allocator;
@@ -17,11 +17,20 @@ const TokenType = zd.TokenType;
 const Token = zd.Token;
 const TokenList = zd.TokenList;
 
-/// Parse a token stream into Markdown objects
+/// Options to configure the Parser
+pub const ParserOpts = struct {
+    /// Allocate a copy of the input text (Caller may free input after creating Parser)
+    copy_input: bool = false,
+};
+
+/// Parse text into a Markdown document structure
+/// Caller owns the input, unless a copy is requested via ParserOpts
 pub const Parser = struct {
     const Self = @This();
     alloc: Allocator = undefined,
+    opts: ParserOpts,
     lexer: Lexer,
+    text: []const u8,
     tokens: ArrayList(Token),
     cursor: usize = 0,
     cur_token: Token,
@@ -29,10 +38,22 @@ pub const Parser = struct {
     md: zd.Markdown,
 
     /// Create a new Parser for the given input text
-    pub fn init(alloc: Allocator, input: []const u8) Parser {
+    pub fn init(alloc: Allocator, input: []const u8, opts: ParserOpts) !Parser {
+        // Allocate copy of the input text if requested
+        var p_input: []const u8 = undefined;
+        if (opts.copy_input) {
+            var talloc: []u8 = try alloc.alloc(u8, input.len);
+            @memcpy(talloc, input);
+            p_input = talloc;
+        } else {
+            p_input = input;
+        }
+
         var parser = Parser{
             .alloc = alloc,
-            .lexer = Lexer.init(alloc, input),
+            .opts = opts,
+            .lexer = Lexer.init(alloc, p_input),
+            .text = p_input,
             .tokens = ArrayList(Token).init(alloc),
             .cursor = 0,
             .cur_token = undefined,
@@ -40,7 +61,7 @@ pub const Parser = struct {
             .md = zd.Markdown.init(alloc),
         };
 
-        parser.tokenize() catch unreachable;
+        try parser.tokenize();
 
         return parser;
     }
@@ -48,6 +69,10 @@ pub const Parser = struct {
     /// Free any heap allocations
     pub fn deinit(self: *Self) void {
         self.tokens.deinit();
+
+        if (self.opts.copy_input) {
+            self.alloc.free(self.input);
+        }
     }
 
     /// Tokenize the input, replacing current token list if it exists
@@ -601,6 +626,6 @@ test "Parse basic Markdown" {
     var alloc = std.heap.page_allocator;
 
     // Tokenize the input text
-    var parser = Parser.init(alloc, data);
+    var parser = try Parser.init(alloc, data, .{});
     _ = try parser.parseMarkdown();
 }

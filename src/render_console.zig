@@ -1,6 +1,6 @@
 const std = @import("std");
 const utils = @import("utils.zig");
-const zd = @import("zigdown.zig");
+const zd = @import("markdown.zig");
 const cons = @import("console.zig");
 
 // Render a Markdown document to the console using ANSI escape characters

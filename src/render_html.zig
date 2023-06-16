@@ -1,6 +1,6 @@
 const std = @import("std");
 const utils = @import("utils.zig");
-const zd = @import("zigdown.zig");
+const zd = @import("markdown.zig");
 
 // Render a Markdown document to HTML to the given output stream
 pub fn HtmlRenderer(comptime OutStream: type) type {

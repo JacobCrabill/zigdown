@@ -5,8 +5,8 @@ const renderers = struct {
     usingnamespace @import("render_console.zig");
 };
 
-const HtmlRenderer = renderers.HtmlRenderer;
-const ConsoleRenderer = renderers.ConsoleRenderer;
+pub const HtmlRenderer = renderers.HtmlRenderer;
+pub const ConsoleRenderer = renderers.ConsoleRenderer;
 
 // Constructor function for HtmlRenderer
 pub fn htmlRenderer(out_stream: anytype) HtmlRenderer(@TypeOf(out_stream)) {
@@ -18,19 +18,17 @@ pub fn consoleRenderer(out_stream: anytype) ConsoleRenderer(@TypeOf(out_stream))
     return ConsoleRenderer(@TypeOf(out_stream)).init(out_stream);
 }
 
-test "foo" {
-    const a: usize = 1;
-    const b: usize = 2;
-    try std.testing.expect(a + b == 3);
-    std.debug.print("hello!\n", .{});
-}
+//////////////////////////////////////////////////////////
+// Tests
+//////////////////////////////////////////////////////////
 
 test "Render to HTML" {
     const ArrayList = std.ArrayList;
+    const alloc = std.testing.allocator;
     const zd = struct {
         usingnamespace @import("tokens.zig");
         usingnamespace @import("utils.zig");
-        usingnamespace @import("zigdown.zig");
+        usingnamespace @import("markdown.zig");
     };
     const TS = zd.TextStyle;
 
@@ -39,7 +37,7 @@ test "Render to HTML" {
     //
     // > **_Quote!_**
     //
-    var md = zd.Markdown.init(std.testing.allocator);
+    var md = zd.Markdown.init(alloc);
     defer md.deinit();
 
     // Level 1 heading
@@ -53,7 +51,10 @@ test "Render to HTML" {
     var quote = zd.Section{
         .quote = zd.Quote{
             .level = 1,
-            .textblock = zd.TextBlock{ .text = ArrayList(zd.Text).init(std.testing.allocator) },
+            .textblock = zd.TextBlock{
+                .alloc = alloc,
+                .text = ArrayList(zd.Text).init(alloc),
+            },
         },
     };
 
@@ -87,9 +88,6 @@ test "Render to HTML" {
     defer infile.close();
     var buffer = try infile.readToEndAlloc(std.testing.allocator, 1e8);
     defer std.testing.allocator.free(buffer);
-
-    std.debug.print("Expected Output:\n'{s}'\n\n", .{expected_output});
-    std.debug.print("Actual Output:\n'{s}'\n\n", .{buffer});
 
     var res = std.mem.eql(u8, buffer, expected_output);
     try std.testing.expect(res == true);
