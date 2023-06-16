@@ -87,8 +87,7 @@ pub fn main() !void {
     defer alloc.free(md_text);
 
     // Parse the input text
-    var lex = zd.Lexer.init(md_text, alloc);
-    var parser = zd.Parser.init(alloc, &lex);
+    var parser = zd.Parser.init(alloc, md_text);
     var md = try parser.parseMarkdown();
 
     if (outfile) |outname| {

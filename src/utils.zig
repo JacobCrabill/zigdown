@@ -109,9 +109,6 @@ test "AutoHashMap set test" {
     try set.put(50);
     try set.put(8);
 
-    std.debug.print("count: {d}\n", .{set.count()});
-    std.debug.print("capacity: {d}\n", .{set.capacity()});
-
     try std.testing.expect(set.count() == 3);
     try std.testing.expect(set.capacity() == 8);
     try std.testing.expect(set.contains(8));

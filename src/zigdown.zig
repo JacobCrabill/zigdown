@@ -162,13 +162,24 @@ pub const Text = struct {
 /// Block of multiple sections of formatted text
 /// Example: "plain and **bold** text together"
 pub const TextBlock = struct {
+    alloc: Allocator,
     text: ArrayList(Text),
 
+    /// Instantiate a TextBlock
     pub fn init(alloc: std.mem.Allocator) TextBlock {
-        return TextBlock{ .text = ArrayList(Text).init(alloc) };
+        return TextBlock{
+            .alloc = alloc,
+            .text = ArrayList(Text).init(alloc),
+        };
     }
 
+    /// Free allocated memory
     pub fn deinit(self: *TextBlock) void {
         self.text.deinit();
+    }
+
+    /// Append the elements of 'other' to this TextBlock
+    pub fn join(self: *TextBlock, other: *TextBlock) void {
+        try self.text.appendSlice(other.items);
     }
 };

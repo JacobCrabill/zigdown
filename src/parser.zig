@@ -21,20 +21,73 @@ const TokenList = zd.TokenList;
 pub const Parser = struct {
     const Self = @This();
     alloc: Allocator = undefined,
-    lexer: *Lexer,
+    lexer: Lexer,
+    tokens: ArrayList(Token),
+    cursor: usize = 0,
     cur_token: Token,
     next_token: Token,
-    //cursor: usize = 0,
     md: zd.Markdown,
 
-    pub fn init(alloc: Allocator, lexer: *Lexer) Parser {
-        return .{
+    /// Create a new Parser for the given input text
+    pub fn init(alloc: Allocator, input: []const u8) Parser {
+        var parser = Parser{
             .alloc = alloc,
-            .lexer = lexer,
-            .cur_token = lexer.next(),
-            .next_token = lexer.next(),
+            .lexer = Lexer.init(alloc, input),
+            .tokens = ArrayList(Token).init(alloc),
+            .cursor = 0,
+            .cur_token = undefined,
+            .next_token = undefined,
             .md = zd.Markdown.init(alloc),
         };
+
+        parser.tokenize() catch unreachable;
+
+        return parser;
+    }
+
+    /// Free any heap allocations
+    pub fn deinit(self: *Self) void {
+        self.tokens.deinit();
+    }
+
+    /// Tokenize the input, replacing current token list if it exists
+    fn tokenize(self: *Self) !void {
+        self.tokens.clearRetainingCapacity();
+
+        var token = self.lexer.next();
+        try self.tokens.append(token);
+        while (token.kind != .EOF) {
+            token = self.lexer.next();
+            try self.tokens.append(token);
+        }
+
+        // Initialize current and next tokens
+        self.cur_token = zd.Eof;
+        self.next_token = zd.Eof;
+
+        if (self.tokens.items.len > 0)
+            self.cur_token = self.tokens.items[0];
+
+        if (self.tokens.items.len > 1)
+            self.next_token = self.tokens.items[1];
+    }
+
+    /// Set the cursor value and update current and next tokens
+    fn setCursor(self: *Self, cursor: usize) void {
+        if (cursor >= self.tokens.items.len) {
+            self.cursor = self.tokens.items.len;
+            self.cur_token = zd.Eof;
+            self.next_token = zd.Eof;
+            return;
+        }
+
+        self.cursor = cursor;
+        self.cur_token = self.tokens.items[cursor];
+        if (cursor + 1 >= self.tokens.items.len) {
+            self.next_token = zd.Eof;
+        } else {
+            self.next_token = self.tokens.items[cursor + 1];
+        }
     }
 
     /// Get the current Token
@@ -57,15 +110,19 @@ pub const Parser = struct {
         return self.next_token.kind == kind;
     }
 
+    /// Check if the current token is the end of a line, or EOF
+    fn curTokenIsBreakOrEnd(self: Self) bool {
+        return self.curTokenIs(.BREAK) or self.curTokenIs(.EOF);
+    }
+
     /// Advance the tokens by one
     fn nextToken(self: *Self) void {
-        self.cur_token = self.next_token;
-        self.next_token = self.lexer.next();
+        self.setCursor(self.cursor + 1);
     }
 
     /// Parse the Markdown tokens
     pub fn parseMarkdown(self: *Self) !zd.Markdown {
-        while (!self.curTokenIs(.END)) {
+        while (!self.curTokenIs(.EOF)) {
             const token = self.curToken();
             switch (token.kind) {
                 .HASH => {
@@ -103,6 +160,7 @@ pub const Parser = struct {
     /// Parse a header line from the token list
     pub fn parseHeader(self: *Self) !void {
         // check what level of heading
+        // TODO: Max CommonMark heading level == 6
         var level: u8 = 0;
         while (self.curTokenIs(.HASH)) {
             self.nextToken();
@@ -111,7 +169,7 @@ pub const Parser = struct {
 
         var words = ArrayList([]const u8).init(self.alloc);
         defer words.deinit();
-        while (!(self.curTokenIs(.BREAK) or self.curTokenIs(.END))) : (self.nextToken()) {
+        while (!(self.curTokenIs(.BREAK) or self.curTokenIs(.EOF))) : (self.nextToken()) {
             const token = self.curToken();
             try words.append(token.text);
         }
@@ -143,7 +201,7 @@ pub const Parser = struct {
         while (self.curTokenIs(.SPACE))
             self.nextToken();
 
-        tloop: while (!self.curTokenIs(.END)) : (self.nextToken()) {
+        tloop: while (!self.curTokenIs(.EOF)) : (self.nextToken()) {
             const token = self.curToken();
             switch (token.kind) {
                 .WORD => {
@@ -201,7 +259,7 @@ pub const Parser = struct {
         // Concatenate the tokens up to the end of the line
         var words = ArrayList([]const u8).init(self.alloc);
         defer words.deinit();
-        tloop: while (!self.curTokenIs(.END)) : (self.nextToken()) {
+        tloop: while (!self.curTokenIs(.EOF)) : (self.nextToken()) {
             const token = self.curToken();
             //std.debug.print("token: {any}, {s}\n", .{ token.kind, token.text });
             switch (token.kind) {
@@ -214,7 +272,7 @@ pub const Parser = struct {
                     style = zd.TextStyle{};
 
                     // Check if the next line is a list item or not
-                    if (!self.peekTokenIs(.END)) {
+                    if (!self.peekTokenIs(.EOF)) {
                         const next_kind = self.peekToken().kind;
                         switch (next_kind) {
                             .PLUS, .MINUS => {
@@ -284,13 +342,15 @@ pub const Parser = struct {
         // Concatenate the tokens up to the end of the line
         var words = ArrayList([]const u8).init(self.alloc);
         defer words.deinit();
-        tloop: while (!self.curTokenIs(.END)) : (self.nextToken()) {
+        tloop: while (!self.curTokenIs(.EOF)) : (self.nextToken()) {
             const token = self.curToken();
             switch (token.kind) {
                 .WORD => {
                     try words.append(token.text);
                 },
-                .SPACE => {},
+                .SPACE => {
+                    try words.append(token.text);
+                },
                 .BREAK => {
                     if (self.peekTokenIs(.BREAK)) {
                         // Double line break; end the block
@@ -356,62 +416,64 @@ pub const Parser = struct {
     }
 
     /// Parse a generic line of text (up to BREAK or EOF)
-    //pub fn parseLine(self: *Self, line: []Token) !zd.TextBlock {
-    //    var block = zd.TextBlock.init(self.alloc);
-    //    var style = zd.TextStyle{};
+    pub fn parseLine(self: *Self, line: []Token) !zd.TextBlock {
+        var block = zd.TextBlock.init(self.alloc);
+        var style = zd.TextStyle{};
 
-    //    // Concatenate the tokens up to the end of the line
-    //    var words = ArrayList([]const u8).init(self.alloc);
-    //    defer words.deinit();
+        // Concatenate the tokens up to the end of the line
+        var words = ArrayList([]const u8).init(self.alloc);
+        defer words.deinit();
 
-    //    var prev_type: TokenType = .INVALID;
+        var prev_type: TokenType = .INVALID;
 
-    //    // Loop over the tokens, excluding the final BREAK or END tag
-    //    var i: usize = 0;
-    //    while (i < line.len - 1) : (i += 1) {
-    //        const token = line[i];
-    //        // const next = line[i + 1];
-    //        switch (token.kind) {
-    //            .WORD => {
-    //                try words.append(token.text);
-    //            },
-    //            .EMBOLD => {
-    //                try self.appendWord(&block, &words, style);
-    //                style.bold = !style.bold;
-    //                style.italic = !style.italic;
-    //            },
-    //            .STAR, .BOLD => {
-    //                // Actually need to handle case of 1, 2, or 3 '*'s... complicated!
-    //                // Maybe first scan through line and count number of '*' and '_' tokens
-    //                // then, use the known totals to toggle styles on/off at the right counts
-    //                // if (next.kind == TokenType.STAR) {
-    //                //     // If italic
-    //                //     // If bold is not active, activate BOLD style
-    //                //     // Otherwise, deactivate BOLD style
-    //                // } else {
-    //                //     // If italic is not active, activate ITALIC style
-    //                // }
-    //                try self.appendWord(&block, &words, style);
-    //                style.bold = !style.bold;
-    //            },
-    //            .USCORE => {
-    //                try self.appendWord(&block, &words, style);
-    //                style.italic = !style.italic;
-    //            },
-    //            .TILDE => {
-    //                try self.appendWord(&block, &words, style);
-    //                style.underline = !style.underline;
-    //            },
-    //            else => {},
-    //        }
+        // Loop over the tokens, excluding the final BREAK or EOF tag
+        var i: usize = 0;
+        while (i < line.len - 1) : (i += 1) {
+            const token = line[i];
+            // const next = line[i + 1];
+            switch (token.kind) {
+                .WORD => {
+                    try words.append(token.text);
+                },
+                .EMBOLD => {
+                    try self.appendWord(&block, &words, style);
+                    style.bold = !style.bold;
+                    style.italic = !style.italic;
+                },
+                .STAR, .BOLD => {
+                    // Actually need to handle case of 1, 2, or 3 '*'s... complicated!
+                    // Maybe first scan through line and count number of '*' and '_' tokens
+                    // then, use the known totals to toggle styles on/off at the right counts
+                    // if (next.kind == TokenType.STAR) {
+                    //     // If italic
+                    //     // If bold is not active, activate BOLD style
+                    //     // Otherwise, deactivate BOLD style
+                    // } else {
+                    //     // If italic is not active, activate ITALIC style
+                    // }
+                    try self.appendWord(&block, &words, style);
+                    style.bold = !style.bold;
+                },
+                .USCORE => {
+                    try self.appendWord(&block, &words, style);
+                    style.italic = !style.italic;
+                },
+                .TILDE => {
+                    try self.appendWord(&block, &words, style);
+                    style.underline = !style.underline;
+                },
+                else => {
+                    try words.append(token.text);
+                },
+            }
 
-    //        prev_type = token.kind;
-    //    }
+            prev_type = token.kind;
+        }
 
-    //    try self.appendWord(&block, &words, style);
+        try self.appendWord(&block, &words, style);
 
-    //    return block;
-    //}
+        return block;
+    }
 
     /// Find the index of the next token of any of type 'kind' at or beyond 'idx'
     //fn findFirstOf(self: *Self, idx: usize, kinds: []TokenType) usize {
@@ -445,10 +507,12 @@ pub const Parser = struct {
 
     fn appendWord(self: *Self, block: *zd.TextBlock, words: *ArrayList([]const u8), style: zd.TextStyle) !void {
         if (words.items.len > 0) {
+            mergeConsecutiveWhitespace(words);
+
             // End the current Text object with the current style
             var text = zd.Text{
                 .style = style,
-                .text = try std.mem.join(self.alloc, " ", words.items),
+                .text = try std.mem.concat(self.alloc, u8, words.items),
             };
             try block.text.append(text);
             words.clearRetainingCapacity();
@@ -456,11 +520,48 @@ pub const Parser = struct {
     }
 };
 
-test "foo" {
-    std.debug.print("Starting test foo...\n", .{});
-    const a: i32 = 1;
-    const b: i32 = 1;
-    try std.testing.expect(a + b == 2);
+/// Scan the list of words and remove consecutive whitespace entries
+fn mergeConsecutiveWhitespace(words: *ArrayList([]const u8)) void {
+    var i: usize = 0;
+    var is_ws: bool = false;
+    while (i < words.items.len) : (i += 1) {
+        if (std.mem.eql(u8, " ", words.items[i])) {
+            if (is_ws) {
+                // Extra whitespace to be removed
+                _ = words.orderedRemove(i);
+                i -= 1;
+            }
+            is_ws = true;
+        } else {
+            is_ws = false;
+        }
+    }
+}
+
+//////////////////////////////////////////////////////////
+// Tests
+//////////////////////////////////////////////////////////
+
+test "mergeConsecutiveWhitespace" {
+    var alloc = std.testing.allocator;
+    var words = ArrayList([]const u8).init(alloc);
+    defer words.deinit();
+
+    try words.append("foo");
+    try words.append(" ");
+    try words.append(" ");
+    try words.append("bar");
+
+    // Original value
+    const raw_concat = try std.mem.concat(alloc, u8, words.items);
+    defer alloc.free(raw_concat);
+    try std.testing.expect(std.mem.eql(u8, "foo  bar", raw_concat));
+
+    // Merged value
+    mergeConsecutiveWhitespace(&words);
+    const merged = try std.mem.concat(alloc, u8, words.items);
+    defer alloc.free(merged);
+    try std.testing.expect(std.mem.eql(u8, "foo bar", merged));
 }
 
 test "Parse basic Markdown" {
@@ -500,17 +601,6 @@ test "Parse basic Markdown" {
     var alloc = std.heap.page_allocator;
 
     // Tokenize the input text
-    var lex: Lexer = Lexer.init(data, alloc);
-    var parser = Parser.init(alloc, &lex);
+    var parser = Parser.init(alloc, data);
     _ = try parser.parseMarkdown();
-
-    // std.debug.print("\n------- HTML Output --------\n", .{});
-    // var h_renderer = htmlRenderer(std.io.getStdErr().writer());
-    // try h_renderer.render(md);
-    // std.debug.print("\n----------------------------\n", .{});
-
-    // std.debug.print("\n------ Console Output ------\n", .{});
-    // var c_renderer = consoleRenderer(std.io.getStdErr().writer());
-    // try c_renderer.render(md);
-    // std.debug.print("\n----------------------------\n", .{});
 }

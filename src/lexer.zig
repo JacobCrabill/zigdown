@@ -13,7 +13,6 @@ const zd = struct {
 
 const Allocator = std.mem.Allocator;
 const GPA = std.heap.GeneralPurposeAllocator;
-const print = std.debug.print;
 
 /// Common types from the Zigdown namespace
 const TokenType = zd.TokenType;
@@ -22,16 +21,16 @@ const TokenList = zd.TokenList;
 
 /// Convert Markdown text into a stream of tokens
 pub const Lexer = struct {
+    alloc: Allocator = undefined,
     data: []const u8 = undefined,
     cursor: usize = 0,
-    alloc: Allocator = undefined,
 
     /// Create a new Lexer from the text of a document
-    pub fn init(text: []const u8, alloc: Allocator) Lexer {
+    pub fn init(alloc: Allocator, text: []const u8) Lexer {
         return Lexer{
+            .alloc = alloc,
             .data = text,
             .cursor = 0,
-            .alloc = alloc,
         };
     }
 
@@ -55,10 +54,10 @@ pub const Lexer = struct {
     /// Consume the next token in the text
     pub fn next(self: *Lexer) Token {
         if (self.cursor > self.data.len) {
-            return zd.EndToken;
+            return zd.Eof;
         } else if (self.cursor == self.data.len) {
             self.cursor += 1;
-            return Token{ .kind = TokenType.END, .text = "" };
+            return zd.Eof;
         }
 
         // Apply each of our tokenizers to the current text
@@ -70,7 +69,13 @@ pub const Lexer = struct {
             }
         }
 
-        return Token{ .kind = TokenType.INVALID };
+        // If all else fails, return UNKNOWN
+        const token = Token{
+            .kind = .UNKNOWN,
+            .text = self.data[self.cursor .. self.cursor + 1],
+        };
+        self.cursor += 1;
+        return token;
     }
 };
 
@@ -84,7 +89,7 @@ test "test lexer" {
         \\## Heading Two
         \\
         \\Text _italic_ **bold** ___bold_italic___
-        \\~strikethrough~
+        \\~underline~
     ;
 
     const expected_tokens = [_]Token{
@@ -123,13 +128,13 @@ test "test lexer" {
         .{ .kind = .TILDE, .text = "~" },
     };
 
-    var lex = Lexer.init(test_input, std.testing.allocator);
+    var lex = Lexer.init(std.testing.allocator, test_input);
 
     for (expected_tokens) |token| {
         try compareTokens(token, lex.next());
     }
 
-    try std.testing.expectEqual(TokenType.END, lex.next().kind);
+    try std.testing.expectEqual(TokenType.EOF, lex.next().kind);
 }
 
 /// Compare an expected token to a token from the Lexer

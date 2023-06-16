@@ -10,8 +10,7 @@ const zd = struct {
 };
 
 pub const TokenType = enum {
-    INVALID,
-    END,
+    EOF,
     WORD,
     INDENT,
     SPACE,
@@ -25,19 +24,42 @@ pub const TokenType = enum {
     STAR,
     USCORE,
     TILDE,
+    PERIOD,
+    COMMA,
+    EQUAL,
+    BANG,
+    QUERY,
+    AT,
+    DOLLAR,
+    PERCENT,
+    CARET,
+    AND,
+    LT,
+    GT,
+    LPAREN,
+    RPAREN,
+    LBRACK,
+    RBRACK,
+    LCURLY,
+    RCURLY,
+    SLASH,
+    BSLASH,
+
+    PIPE,
     BOLD,
+
     EMBOLD,
+    UNKNOWN,
 };
 
 pub const Token = struct {
-    kind: TokenType = TokenType.END,
+    kind: TokenType = TokenType.EOF,
     text: []const u8 = undefined,
 };
 
 pub const TokenList = ArrayList(Token);
 
-pub const EndToken = Token{ .kind = .END, .text = "" };
-pub const InvalidToken = Token{ .kind = .INVALID, .text = "" };
+pub const Eof = Token{ .kind = .EOF, .text = "" };
 
 /// Parser for a line break
 pub const BreakTokenizer = struct {
@@ -166,7 +188,7 @@ pub const Tokenizers = .{
     SingularTokenizer('#', TokenType.HASH),
     BreakTokenizer,
     CodeTokenizer,
-    LiteralTokenizer("    ", TokenType.INDENT),
+    LiteralTokenizer("  ", TokenType.INDENT),
     SingularTokenizer('\t', TokenType.QUOTE),
     SingularTokenizer(' ', TokenType.SPACE),
     SingularTokenizer('>', TokenType.QUOTE),
@@ -183,5 +205,28 @@ pub const Tokenizers = .{
     SingularTokenizer('~', TokenType.TILDE),
     SingularTokenizer('+', TokenType.PLUS),
     SingularTokenizer('-', TokenType.MINUS),
+
     WordTokenizer,
+
+    SingularTokenizer('<', TokenType.LT),
+    SingularTokenizer('>', TokenType.GT),
+    SingularTokenizer('.', TokenType.PERIOD),
+    SingularTokenizer(',', TokenType.MINUS),
+    SingularTokenizer('=', TokenType.MINUS),
+    SingularTokenizer('!', TokenType.MINUS),
+    SingularTokenizer('?', TokenType.MINUS),
+    SingularTokenizer('@', TokenType.MINUS),
+    SingularTokenizer('$', TokenType.MINUS),
+    SingularTokenizer('%', TokenType.MINUS),
+    SingularTokenizer('^', TokenType.MINUS),
+    SingularTokenizer('&', TokenType.MINUS),
+    SingularTokenizer('(', TokenType.LPAREN),
+    SingularTokenizer(')', TokenType.RPAREN),
+    SingularTokenizer('[', TokenType.LBRACK),
+    SingularTokenizer(']', TokenType.RBRACK),
+    SingularTokenizer('{', TokenType.LCURLY),
+    SingularTokenizer('}', TokenType.RCURLY),
+    SingularTokenizer('/', TokenType.SLASH),
+    SingularTokenizer('\\', TokenType.BSLASH),
+    SingularTokenizer('|', TokenType.PIPE),
 };
