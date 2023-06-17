@@ -54,22 +54,10 @@ pub const Section = union(SectionType) {
 
     pub fn deinit(self: *Section) void {
         switch (self.*) {
-            .heading => {},
-            .code => {},
-            .list => {
-                self.list.deinit();
+            .list, .numlist, .quote, .textblock => |*b| {
+                b.deinit();
             },
-            .numlist => {
-                self.numlist.deinit();
-            },
-            .quote => {
-                self.quote.deinit();
-            },
-            .textblock => {
-                self.textblock.deinit();
-            },
-            .plaintext => {},
-            .linebreak => {},
+            inline else => {},
         }
     }
 };

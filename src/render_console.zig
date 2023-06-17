@@ -80,8 +80,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         fn render_quote(self: *Self, q: zd.Quote) void {
             // TODO: use q.level
+            self.print("┃ ", .{}); // TODO
             self.render_textblock(q.textblock, 4);
-            self.render_break();
+            //self.render_break();
         }
 
         fn render_code(self: *Self, c: zd.Code) void {
@@ -132,7 +133,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             // TODO: Take in current column
             self.write_wrap(text.text, indent);
 
-            self.print("{s} ", .{cons.ansi_end});
+            self.print("{s}", .{cons.ansi_end});
             self.column += 1;
         }
 
@@ -143,11 +144,11 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         fn render_textblock(self: *Self, block: zd.TextBlock, indent: usize) void {
             // Reset column to 0 to start a new paragraph
-            self.render_break();
+            //self.render_break();
             for (block.text.items) |text| {
                 self.render_text(text, indent);
             }
-            self.render_break();
+            //self.render_break();
         }
 
         fn write_n(self: *Self, text: []const u8, count: usize) void {
