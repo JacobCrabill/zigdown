@@ -78,21 +78,23 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         fn render_list(self: *Self, list: zd.List) !void {
             try self.stream.print("<ul>\n", .{});
             for (list.lines.items) |line| {
+                // TODO: use line.level
                 try self.stream.print("<li>\n", .{});
-                try self.render_textblock(line);
+                try self.render_textblock(line.text);
                 try self.stream.print("</li>\n", .{});
             }
             try self.stream.print("</ul>\n", .{});
         }
 
         fn render_numlist(self: *Self, list: zd.NumList) !void {
-            try self.stream.print("<ul>\n", .{});
+            try self.stream.print("<ol>\n", .{});
             for (list.lines.items) |line| {
+                // TODO: Number
                 try self.stream.print("<li>", .{});
-                try self.render_textblock(line);
+                try self.render_textblock(line.text);
                 try self.stream.print("</li>\n", .{});
             }
-            try self.stream.print("</ul>\n", .{});
+            try self.stream.print("</ol>\n", .{});
         }
 
         fn render_text(self: *Self, text: zd.Text) !void {

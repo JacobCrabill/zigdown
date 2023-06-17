@@ -73,8 +73,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             switch (h.level) {
                 1 => cons.printBox(self.stream, text, Width, 3, cons.DoubleBox, cons.text_bold ++ cons.fg_blue),
                 2 => cons.printBox(self.stream, text, Width, 3, cons.BoldBox, cons.text_bold ++ cons.fg_green),
-                3 => self.print("{s}{s}{s}{s}\n\n", .{ cons.text_italic, cons.text_underline, text, cons.ansi_end }),
-                else => self.print("{s}{s}{s}\n\n", .{ cons.text_underline, text, cons.ansi_end }),
+                3 => self.print("{s}{s}{s}{s}\n", .{ cons.text_italic, cons.text_underline, text, cons.ansi_end }),
+                else => self.print("{s}{s}{s}\n", .{ cons.text_underline, text, cons.ansi_end }),
             }
         }
 
@@ -94,12 +94,16 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             if (self.column > 0)
                 self.render_break();
 
-            for (list.lines.items) |line| {
-                self.write("  * ");
-                for (line.text.items) |text| {
+            for (list.lines.items) |item| {
+                // indent
+                self.write_n("  ", item.level);
+                // marker
+                self.write(cons.fg_blue ++ " * " ++ cons.ansi_end);
+                // item
+                for (item.text.text.items) |text| {
                     self.render_text(text, 4);
-                    self.render_break();
                 }
+                self.render_break();
             }
         }
 
@@ -107,15 +111,14 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             if (self.column > 0)
                 self.render_break();
 
-            var i: i32 = 1;
-            for (list.lines.items) |line| {
-                self.print("{d}. ", .{i});
+            for (list.lines.items, 1..) |item, i| {
+                // TODO: level
+                self.print(cons.fg_blue ++ " {d}. " ++ cons.ansi_end, .{i});
                 self.column += 4;
-                i += 1;
-                for (line.text.items) |text| {
+                for (item.text.text.items) |text| {
                     self.render_text(text, 4);
-                    self.render_break();
                 }
+                self.render_break();
             }
         }
 

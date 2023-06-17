@@ -10,7 +10,6 @@ const zd = struct {
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const startsWith = std.mem.startsWith;
-const print = std.debug.print;
 
 const Lexer = zd.Lexer;
 const TokenType = zd.TokenType;
@@ -24,6 +23,7 @@ pub const ParserOpts = struct {
 };
 
 /// Parse text into a Markdown document structure
+///
 /// Caller owns the input, unless a copy is requested via ParserOpts
 pub const Parser = struct {
     const Self = @This();
@@ -83,7 +83,6 @@ pub const Parser = struct {
         try self.tokens.append(token);
         while (token.kind != .EOF) {
             token = self.lexer.next();
-            std.debug.print("{any}: {s}\n", .{ token.kind, token.text });
             try self.tokens.append(token);
         }
 
@@ -146,7 +145,7 @@ pub const Parser = struct {
         self.setCursor(self.cursor + 1);
     }
 
-    /// Parse the Markdown tokens
+    /// Parse the document and return a Markdown document as an abstract syntax tree
     pub fn parseMarkdown(self: *Self) !zd.Markdown {
         while (!self.curTokenIs(.EOF)) {
             const token = self.curToken();
@@ -154,12 +153,14 @@ pub const Parser = struct {
                 .HASH => {
                     try self.parseHeader();
                 },
-                // TODO: Get rid of QUOTE and just use GT, INDENT?
-                .QUOTE, .GT, .INDENT => {
+                .GT => {
                     try self.parseQuoteBlock();
                 },
                 .MINUS, .PLUS => {
-                    try self.parseList();
+                    try self.parseList(0);
+                },
+                .DIGIT => {
+                    try self.parseNumberedList(0);
                 },
                 .CODE_BLOCK => {
                     try self.parseCodeBlock();
@@ -167,15 +168,21 @@ pub const Parser = struct {
                 .WORD => {
                     try self.parseTextBlock();
                 },
+                // TODO: .BANG => try parseImage(),
+                // TODO: .LBRACK => try parseLink(),
                 .BREAK => {
                     // Merge consecutive line breaks
-                    const len = self.md.sections.items.len;
-                    if (len > 0 and self.md.sections.items[len - 1] != zd.SectionType.linebreak) {
-                        try self.md.append(zd.Section{ .linebreak = zd.Break{} });
-                    }
+                    //const len = self.md.sections.items.len;
+                    //if (len > 0 and self.md.sections.items[len - 1] != zd.SectionType.linebreak) {
+                    try self.md.append(zd.SecBreak);
+                    //}
                     self.nextToken();
                 },
+                .INDENT => {
+                    try self.handleIndent();
+                },
                 else => {
+                    std.debug.print("Skipping token of type: {any}\n", .{token.kind});
                     self.nextToken();
                 },
             }
@@ -215,13 +222,12 @@ pub const Parser = struct {
     /// Parse a quote line from the token stream
     pub fn parseQuoteBlock(self: *Self) !void {
         // Keep adding lines to the TextBlock as long as they start with possible plain text
-        var kinds = [_]TokenType{ TokenType.QUOTE, TokenType.GT };
+        var kinds = [_]TokenType{TokenType.GT};
 
         loop: while (self.getLine()) |line| {
-            if (line.len < 1 or !self.isOneOf(kinds[0..], line[0].kind))
+            if (line.len < 1 or !isOneOf(kinds[0..], line[0].kind))
                 break :loop;
 
-            std.debug.print("quote line: {any}\n", .{line[1..]});
             // Skip the '>' when parsing the line
             var block = try self.parseLine(line[1..]);
 
@@ -234,98 +240,60 @@ pub const Parser = struct {
     }
 
     /// Parse a list from the token stream
-    pub fn parseList(self: *Self) !void {
+    pub fn parseList(self: *Self, start_level: u8) !void {
         // Keep adding lines until we find one which does not start with "[indent]*[+-*]"
         var kinds = [_]TokenType{ TokenType.INDENT, TokenType.MINUS, TokenType.PLUS, TokenType.STAR };
 
         var list = zd.List.init(self.alloc);
         loop: while (self.getLine()) |line| {
-            if (line.len < 1 or !self.isOneOf(kinds[0..], line[0].kind))
+            if (line.len < 1 or !isOneOf(kinds[0..], line[0].kind))
                 break :loop;
 
-            var block = try self.parseLine(line[1..]);
-            var list_line = try list.addLine();
-            list_line.* = block;
+            // Find indent level
+            var start: usize = 0;
+            std.debug.print("line item start tok: {any}\n", .{line[1]});
+            while (start < line.len and line[start].kind == .INDENT) : (start += 1) {}
+            const level: u8 = @min(std.math.maxInt(u8), start) + start_level;
+
+            // Remove leading whitespace
+            var block: zd.TextBlock = undefined;
+            if (start + 1 < line.len) {
+                var stripped_line = stripLeadingWhitespace(line[start + 1 ..]);
+
+                block = try self.parseLine(stripped_line);
+            } else {
+                // Create empty block for list item
+                block = zd.TextBlock.init(self.alloc);
+            }
+            try list.addLine(level, block);
+
+            // Advance to the next line
+            if (self.curTokenIs(.BREAK))
+                self.nextToken();
         }
         try self.md.append(zd.Section{ .list = list });
+    }
 
-        //// consume the '-' or '+' token
-        //self.nextToken();
+    /// Parse a numbered list from the token stream
+    pub fn parseNumberedList(self: *Self, start_level: u8) !void {
+        // Keep adding lines until we find one which does not start with "[indent]*[+-*]"
+        var kinds = [_]TokenType{.DIGIT};
 
-        //var list = zd.List.init(self.alloc);
-        //var block = try list.addLine();
-        //var style = zd.TextStyle{};
+        var list = zd.NumList.init(self.alloc);
+        loop: while (self.getLine()) |line| {
+            var level: u8 = start_level;
+            if (line.len < 1 or !isOneOf(kinds[0..], line[0].kind))
+                break :loop;
 
-        //// Concatenate the tokens up to the end of the line
-        //var words = ArrayList([]const u8).init(self.alloc);
-        //defer words.deinit();
-        //tloop: while (!self.curTokenIs(.EOF)) : (self.nextToken()) {
-        //    const token = self.curToken();
-        //    //std.debug.print("token: {any}, {s}\n", .{ token.kind, token.text });
-        //    switch (token.kind) {
-        //        .WORD => {
-        //            try words.append(token.text);
-        //        },
-        //        .BREAK => {
-        //            // End the current list item
-        //            try self.appendWord(block, &words, style);
-        //            style = zd.TextStyle{};
+            // Find indent level
+            var block = try self.parseLine(line[1..]);
+            try list.addLine(level, block);
 
-        //            // Check if the next line is a list item or not
-        //            if (!self.peekTokenIs(.EOF)) {
-        //                const next_kind = self.peekToken().kind;
-        //                switch (next_kind) {
-        //                    .PLUS, .MINUS => {
-        //                        self.nextToken();
-        //                        continue :tloop;
-        //                    },
-        //                    // TODO: increment list indent!
-        //                    .INDENT, .SPACE => continue :tloop,
-        //                    else => {},
-        //                }
-        //            }
-
-        //            break :tloop;
-        //        },
-        //        // TODO: INDENT, check for list identifier (+,-,*)
-        //        .EMBOLD => {
-        //            try self.appendWord(block, &words, style);
-        //            style.bold = !style.bold;
-        //            style.italic = !style.italic;
-        //        },
-        //        .STAR, .BOLD => {
-        //            try self.appendWord(block, &words, style);
-        //            style.bold = !style.bold;
-        //        },
-        //        .USCORE => {
-        //            try self.appendWord(block, &words, style);
-        //            style.italic = !style.italic;
-        //        },
-        //        .TILDE => {
-        //            try self.appendWord(block, &words, style);
-        //            style.underline = !style.underline;
-        //        },
-        //        .MINUS, .PLUS => {
-        //            try self.appendWord(block, &words, style);
-        //            style = zd.TextStyle{};
-
-        //            //if (self.cursor > 0) {
-        //            //    const prev_kind = self.tokens[self.cursor - 1].kind;
-        //            //    switch (prev_kind) {
-        //            //        // New list item - keep going
-        //            //        .BREAK, .INDENT => continue :tloop,
-        //            //        // End the list
-        //            //        else => break :tloop,
-        //            //    }
-        //            //    continue :tloop;
-        //            //}
-        //        },
-        //        else => {},
-        //    }
-        //}
-
-        //try self.appendWord(block, &words, style);
-        //try self.md.append(zd.Section{ .list = list });
+            // Advance to the next line
+            if (self.curTokenIs(.BREAK))
+                self.nextToken();
+        }
+        try self.md.append(zd.Section{ .numlist = list });
     }
 
     /// Parse a quote line from the token stream
@@ -335,7 +303,7 @@ pub const Parser = struct {
         var kinds = [_]TokenType{ TokenType.WORD, TokenType.STAR, TokenType.USCORE };
 
         loop: while (self.getLine()) |line| {
-            if (line.len < 1 or !self.isOneOf(kinds[0..], line[0].kind))
+            if (line.len < 1 or !isOneOf(kinds[0..], line[0].kind))
                 break :loop;
 
             var block = try self.parseLine(line);
@@ -345,13 +313,22 @@ pub const Parser = struct {
 
     /// Parse a code block from the token stream
     pub fn parseCodeBlock(self: *Self) !void {
+        var end: usize = self.cursor + 1;
+        if (self.findFirstOf(self.cursor + 1, &.{TokenType.CODE_BLOCK})) |idx| {
+            end = idx;
+        } else {
+            // There is no closing tag for the code block, so fall back to a text block
+            try self.parseTextBlock();
+            return;
+        }
+
         // consume the quote token
         self.nextToken();
 
         // Concatenate the tokens up to the next codeblock tag
         var words = ArrayList([]const u8).init(self.alloc);
         defer words.deinit();
-        while (!self.curTokenIs(.CODE_BLOCK)) : (self.nextToken()) {
+        while (self.cursor < end) : (self.nextToken()) {
             try words.append(self.curToken().text);
         }
 
@@ -359,7 +336,6 @@ pub const Parser = struct {
         self.nextToken();
 
         // Consume the following line break, if it exists
-        // TODO: expectPeek(.BREAK)
         if (self.curTokenIs(.BREAK))
             self.nextToken();
 
@@ -422,7 +398,6 @@ pub const Parser = struct {
                     break :tloop;
                 },
                 else => {
-                    std.debug.print("apend: {any},{s}\n", .{ token.kind, token.text });
                     try words.append(token.text);
                 },
             }
@@ -437,20 +412,31 @@ pub const Parser = struct {
         return block;
     }
 
-    fn isOneOf(self: Self, kinds: []TokenType, tok: TokenType) bool {
-        _ = self;
-        return std.mem.count(TokenType, kinds, &.{tok}) > 0;
+    /// Could be a few differnt types of sections
+    fn handleIndent(self: *Self) !void {
+        var i: u8 = 0;
+        while (self.curTokenIs(.INDENT)) : (i += 1) {
+            self.nextToken();
+        }
+
+        // See what we have now...
+        switch (self.cur_token.kind) {
+            .MINUS, .PLUS, .STAR => try self.parseList(i),
+            .DIGIT => try self.parseNumberedList(i),
+            // TODO - any other sections which can be indented...
+            else => try self.parseTextBlock(),
+        }
     }
 
     /// Find the index of the next token of any of type 'kind' at or beyond 'idx'
-    fn findFirstOf(self: *Self, idx: usize, kinds: []TokenType) usize {
+    fn findFirstOf(self: Self, idx: usize, kinds: []const TokenType) ?usize {
         var i: usize = idx;
         while (i < self.tokens.items.len) : (i += 1) {
-            if (std.mem.indexOf(TokenType, kinds, self.tokens.items[i].kind)) |_| {
-                break;
+            if (std.mem.indexOfScalar(TokenType, kinds, self.tokens.items[i].kind)) |_| {
+                return i;
             }
         }
-        return i;
+        return null;
     }
 
     /// Return the index of the next BREAK token, or EOF
@@ -482,7 +468,6 @@ pub const Parser = struct {
                 .style = style,
                 .text = try std.mem.concat(self.alloc, u8, words.items),
             };
-            std.debug.print("Combined words: '{s}'\n", .{text.text});
             try block.text.append(text);
             words.clearRetainingCapacity();
         }
@@ -505,6 +490,24 @@ fn mergeConsecutiveWhitespace(words: *ArrayList([]const u8)) void {
             is_ws = false;
         }
     }
+}
+
+/// Remove leading whitespace from token list
+fn stripLeadingWhitespace(tokens: []Token) []Token {
+    var i: usize = 0;
+    while (i < tokens.len) : (i += 1) {
+        if (tokens[i].kind != .SPACE)
+            break;
+    }
+    return tokens[i..];
+}
+
+/// Check if the token is one of the expected types
+fn isOneOf(kinds: []TokenType, tok: TokenType) bool {
+    if (std.mem.indexOfScalar(TokenType, kinds, tok)) |_| {
+        return true;
+    }
+    return false;
 }
 
 //////////////////////////////////////////////////////////

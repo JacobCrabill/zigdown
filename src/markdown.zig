@@ -50,7 +50,7 @@ pub const Section = union(SectionType) {
     quote: Quote,
     plaintext: Text,
     textblock: TextBlock,
-    linebreak: Break,
+    linebreak: void,
 
     pub fn deinit(self: *Section) void {
         switch (self.*) {
@@ -76,21 +76,38 @@ pub const Code = struct {
     text: []const u8,
 };
 
-/// Bulleted (unordered) list
-pub const List = struct {
-    alloc: Allocator,
+/// A single list item in a numbered or unordered list
+pub const ListItem = struct {
+    const Self = @This();
     level: u8,
-    lines: ArrayList(TextBlock),
+    text: TextBlock,
 
-    pub fn init(alloc: Allocator) List {
-        return .{
-            .alloc = alloc,
-            .level = 0,
-            .lines = ArrayList(TextBlock).init(alloc),
+    pub fn init(level: u8, block: TextBlock) Self {
+        return Self{
+            .level = level,
+            .text = block,
         };
     }
 
-    pub fn deinit(self: *List) void {
+    pub fn deinit(self: *Self) void {
+        self.text.deinit();
+    }
+};
+
+/// Bulleted (unordered) list
+pub const List = struct {
+    const Self = @This();
+    alloc: Allocator,
+    lines: ArrayList(ListItem),
+
+    pub fn init(alloc: Allocator) Self {
+        return .{
+            .alloc = alloc,
+            .lines = ArrayList(ListItem).init(alloc),
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
         for (self.lines.items, 0..) |_, i| {
             self.lines.items[i].deinit();
         }
@@ -98,24 +115,34 @@ pub const List = struct {
         self.lines.deinit();
     }
 
-    pub fn addLine(self: *List) !*TextBlock {
-        var tb = try self.lines.addOne();
-        tb.text = ArrayList(Text).init(self.alloc);
-        return tb;
+    pub fn addLine(self: *Self, level: u8, block: TextBlock) !void {
+        try self.lines.append(ListItem.init(level, block));
     }
 };
 
 /// Numbered list
 pub const NumList = struct {
-    level: u8,
-    lines: ArrayList(TextBlock),
+    const Self = @This();
+    alloc: Allocator,
+    lines: ArrayList(ListItem),
 
-    pub fn deinit(self: *NumList) void {
+    pub fn init(alloc: Allocator) Self {
+        return .{
+            .alloc = alloc,
+            .lines = ArrayList(ListItem).init(alloc),
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
         for (self.lines.items, 0..) |_, i| {
             self.lines.items[i].deinit();
         }
 
         self.lines.deinit();
+    }
+
+    pub fn addLine(self: *Self, level: u8, block: TextBlock) !void {
+        try self.lines.append(ListItem.init(level, block));
     }
 };
 
@@ -130,8 +157,8 @@ pub const Quote = struct {
     }
 };
 
-/// Single line/paragragh break
-pub const Break = struct {};
+/// Sction Break as a constant value
+pub const SecBreak: Section = Section{ .linebreak = undefined };
 
 pub const TextStyle = struct {
     bold: bool = false,

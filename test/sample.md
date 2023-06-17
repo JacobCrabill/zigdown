@@ -2,20 +2,25 @@
 
 Plain text
 ...with **bold** and _italic_ styles (and **_bold_italic_**)
-...and no line breaks  
+...and no line breaks
+
 unless the previous line ends with '  ' (tbd)
 
 - Unordered list
+  - nested list
+-
+- ^ Empty list item
 - with **formatting**!
 
-1. Ordered list  
-2. Item 2  
-2. Item 3
+1. Ordered list
+1. Item 2
+1. Item 3
 
 ## Quotes
 
-> Quote Block  
-> With embedded `code`? (embedded code not allowed)  
+> Quote Block
+>
+> With embedded `code`? (embedded code not allowed)\
 > **_Fin_**.
 
 A C++ code block.

@@ -12,13 +12,13 @@ const zd = struct {
 pub const TokenType = enum {
     EOF,
     WORD,
+    DIGIT,
     INDENT,
     SPACE,
     BREAK,
     HASH,
     CODE_BLOCK,
     CODE_INLINE,
-    QUOTE,
     PLUS,
     MINUS,
     STAR,
@@ -61,49 +61,23 @@ pub const TokenList = ArrayList(Token);
 
 pub const Eof = Token{ .kind = .EOF, .text = "" };
 
-/// Parser for a line break
-pub const BreakTokenizer = struct {
-    pub fn peek(text: []const u8) ?Token {
-        if (std.mem.startsWith(u8, text, "\n")) {
-            return Token{
-                .kind = TokenType.BREAK,
-                .text = text[0..1],
-            };
+/// Generic parser for a single-character token from a list of possible characters
+pub fn AnyOfTokenizer(comptime chars: []const u8, comptime kind: TokenType) type {
+    return struct {
+        pub fn peek(text: []const u8) ?Token {
+            if (text.len == 0)
+                return null;
+
+            if (std.mem.indexOfScalar(u8, chars, text[0])) |_| {
+                return Token{
+                    .kind = kind,
+                    .text = text[0..1],
+                };
+            }
+            return null;
         }
-
-        if (std.mem.startsWith(u8, text, "\r\n")) {
-            return Token{
-                .kind = TokenType.BREAK,
-                .text = text[0..2],
-            };
-        }
-
-        return null;
-    }
-};
-
-/// Parser for a code tag (block or inline)
-pub const CodeTokenizer = struct {
-    pub fn peek(text: []const u8) ?Token {
-        if (std.mem.startsWith(u8, text, "```")) {
-            const token = Token{
-                .kind = TokenType.CODE_BLOCK,
-                .text = text[0..3],
-            };
-            return token;
-        }
-
-        if (std.mem.startsWith(u8, text, "`")) {
-            const token = Token{
-                .kind = TokenType.CODE_INLINE,
-                .text = text[0..1],
-            };
-            return token;
-        }
-
-        return null;
-    }
-};
+    };
+}
 
 /// Generic parser for single-character tokens
 /// Parse the u8 'char' as token type 'kind'
@@ -137,27 +111,6 @@ pub fn LiteralTokenizer(comptime delim: []const u8, comptime kind: TokenType) ty
     };
 }
 
-/// Parser for an indent (tab)
-pub const IndentTokenizer = struct {
-    pub fn peek(text: []const u8) ?Token {
-        if (std.mem.startsWith(u8, text, "  ")) {
-            return Token{
-                .kind = TokenType.INDENT,
-                .text = text[0..2],
-            };
-        }
-
-        if (std.mem.startsWith(u8, text, "\t")) {
-            return Token{
-                .kind = TokenType.INDENT,
-                .text = text[0..1],
-            };
-        }
-
-        return null;
-    }
-};
-
 /// Parser for a generic word
 pub const WordTokenizer = struct {
     pub fn peek(text: []const u8) ?Token {
@@ -182,16 +135,10 @@ pub const WordTokenizer = struct {
 
 /// Collect all available tokenizers
 pub const Tokenizers = .{
-    //LiteralTokenizer(">", TokenType.QUOTE),
-    LiteralTokenizer("\n+", TokenType.PLUS),
-    LiteralTokenizer("\n-", TokenType.MINUS),
-    SingularTokenizer('#', TokenType.HASH),
-    BreakTokenizer,
-    CodeTokenizer,
+    LiteralTokenizer("\r\n", TokenType.BREAK),
+    LiteralTokenizer("\n", TokenType.BREAK),
     LiteralTokenizer("  ", TokenType.INDENT),
-    SingularTokenizer('\t', TokenType.QUOTE),
-    SingularTokenizer(' ', TokenType.SPACE),
-    SingularTokenizer('>', TokenType.GT),
+    LiteralTokenizer("\t", TokenType.INDENT),
     LiteralTokenizer("***", TokenType.EMBOLD),
     LiteralTokenizer("_**", TokenType.EMBOLD),
     LiteralTokenizer("**_", TokenType.EMBOLD),
@@ -200,16 +147,17 @@ pub const Tokenizers = .{
     LiteralTokenizer("___", TokenType.EMBOLD),
     LiteralTokenizer("**", TokenType.BOLD),
     LiteralTokenizer("__", TokenType.BOLD),
+    LiteralTokenizer("```", TokenType.CODE_BLOCK),
+    SingularTokenizer('`', TokenType.CODE_INLINE),
+    SingularTokenizer(' ', TokenType.SPACE),
+    SingularTokenizer('#', TokenType.HASH),
     SingularTokenizer('*', TokenType.STAR),
     SingularTokenizer('_', TokenType.USCORE),
     SingularTokenizer('~', TokenType.TILDE),
     SingularTokenizer('+', TokenType.PLUS),
     SingularTokenizer('-', TokenType.MINUS),
-
-    WordTokenizer,
-
     SingularTokenizer('<', TokenType.LT),
-    //SingularTokenizer('>', TokenType.GT),
+    SingularTokenizer('>', TokenType.GT),
     SingularTokenizer('.', TokenType.PERIOD),
     SingularTokenizer(',', TokenType.COMMA),
     SingularTokenizer('=', TokenType.EQUAL),
@@ -229,4 +177,6 @@ pub const Tokenizers = .{
     SingularTokenizer('/', TokenType.SLASH),
     SingularTokenizer('\\', TokenType.BSLASH),
     SingularTokenizer('|', TokenType.PIPE),
+    AnyOfTokenizer("0123456789", TokenType.DIGIT),
+    WordTokenizer,
 };
