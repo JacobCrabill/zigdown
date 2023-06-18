@@ -190,16 +190,16 @@ pub const Parser = struct {
                     try self.handleIndent();
                 },
                 else => {
-                    std.debug.print("Skipping token of type: {any}\n", .{token.kind});
+                    //std.debug.print("Skipping token of type: {any}\n", .{token.kind});
                     self.nextToken();
                 },
             }
         }
 
-        std.debug.print("------------------- AST ----------------\n", .{});
-        for (self.md.sections.items) |sec| {
-            std.debug.print("{any}\n", .{sec});
-        }
+        //std.debug.print("------------------- AST ----------------\n", .{});
+        //for (self.md.sections.items) |sec| {
+        //    std.debug.print("{any}\n", .{sec});
+        //}
 
         return self.md;
     }
@@ -258,22 +258,12 @@ pub const Parser = struct {
         var kinds = [_]TokenType{ .INDENT, .SPACE, .MINUS, .PLUS, .STAR };
         var bullet_kinds = [_]TokenType{ .MINUS, .PLUS, .STAR };
 
-        std.debug.print("parseList\n", .{});
         var list = zd.List.init(self.alloc);
         loop: while (self.getLine()) |line| {
-            //std.debug.print("\n>> Line: ", .{});
-            zd.printTypes(line);
-
             if (line.len < 1 or !isOneOf(kinds[0..], line[0].kind))
                 break :loop;
 
-            // // Find indent level
-            // var start: usize = 0;
-            // while (start < line.len and line[start].kind == .INDENT) : (start += 1) {}
-            // const level: u8 = @min(std.math.maxInt(u8), start);
-            // if (start > 0)
-            //     self.setCursor(self.cursor + start);
-
+            // Find indent level
             var start: usize = 0;
             var level: u8 = 0;
             while (start < line.len and !isOneOf(bullet_kinds[0..], line[start].kind)) {
@@ -281,29 +271,17 @@ pub const Parser = struct {
                     level += 1;
                 start += 1;
             }
-            //std.debug.print("[indent] {d} | ", .{level});
-            //zd.printTypes(&[_]Token{ self.curToken(), self.peekToken() });
-            //std.debug.print("[line] ", .{});
-            //zd.printTypes(line[start .. start + 2]);
 
             // Remove leading whitespace
             var block: zd.TextBlock = undefined;
             if (start + 1 < line.len) {
                 var stripped_line = stripLeadingWhitespace(line[start + 1 ..]);
                 self.setCursor(self.cursor + line.len - stripped_line.len);
-
-                //std.debug.print("[strip] ", .{});
-                //zd.printTypes(&[_]Token{ self.cur_token, self.next_token });
-
                 block = try self.parseLine(stripped_line);
-
-                //std.debug.print("[post] ", .{});
-                //zd.printTypes(&[_]Token{ self.cur_token, self.next_token });
             } else {
                 // Create empty block for list item
                 block = zd.TextBlock.init(self.alloc);
                 self.setCursor(self.cursor + line.len - 1);
-                //std.debug.print("[empty] {any}:{any}\n", .{ self.cur_token.kind, self.next_token.kind });
             }
             try list.addLine(level, block);
         }
@@ -313,21 +291,38 @@ pub const Parser = struct {
     /// Parse a numbered list from the token stream
     pub fn parseNumberedList(self: *Self) !void {
         // Keep adding lines until we find one which does not start with "[indent]*[+-*]"
-        var kinds = [_]TokenType{.DIGIT};
+        var kinds = [_]TokenType{ .INDENT, .SPACE, .DIGIT };
+        var bullet_kinds = [_]TokenType{.DIGIT};
 
         var list = zd.NumList.init(self.alloc);
         loop: while (self.getLine()) |line| {
-            var level: u8 = 0;
             if (line.len < 1 or !isOneOf(kinds[0..], line[0].kind))
                 break :loop;
 
             // Find indent level
-            var block = try self.parseLine(line[1..]);
-            try list.addLine(level, block);
+            var start: usize = 0;
+            var level: u8 = 0;
+            while (start < line.len and !isOneOf(bullet_kinds[0..], line[start].kind)) {
+                if (line[start].kind == .INDENT)
+                    level += 1;
+                start += 1;
+            }
+            if (line[start + 1].kind == .PERIOD) {
+                start += 1;
+            }
 
-            // Advance to the next line
-            //if (self.curTokenIs(.BREAK))
-            //    self.nextToken();
+            // Remove leading whitespace
+            var block: zd.TextBlock = undefined;
+            if (start + 1 < line.len) {
+                var stripped_line = stripLeadingWhitespace(line[start + 1 ..]);
+                self.setCursor(self.cursor + line.len - stripped_line.len);
+                block = try self.parseLine(stripped_line);
+            } else {
+                // Create empty block for list item
+                block = zd.TextBlock.init(self.alloc);
+                self.setCursor(self.cursor + line.len - 1);
+            }
+            try list.addLine(level, block);
         }
         try self.md.append(zd.Section{ .numlist = list });
     }
@@ -446,7 +441,6 @@ pub const Parser = struct {
 
         // Set cursor to the token following this line
         self.setCursor(self.cursor + line.len);
-        std.debug.print("cur_token after line: {any}: '{s}'\n", .{ self.cur_token.kind, self.cur_token.text });
 
         return block;
     }
@@ -456,7 +450,7 @@ pub const Parser = struct {
         var i: u8 = 0;
         while (self.peekAheadType(i) == .INDENT or self.peekAheadType(i) == .SPACE) : (i += 1) {}
 
-        std.debug.print("handleIndent {any}\n", .{self.peekAheadType(i)});
+        //std.debug.print("handleIndent {any}\n", .{self.peekAheadType(i)});
         // See what we have now...
         switch (self.peekAheadType(i)) {
             .MINUS, .PLUS, .STAR => try self.parseList(),
