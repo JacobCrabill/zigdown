@@ -61,6 +61,15 @@ pub const TokenList = ArrayList(Token);
 
 pub const Eof = Token{ .kind = .EOF, .text = "" };
 
+/// For future use with parsing obscure syntax in links
+const Precedence = enum(u8) {
+    LOWEST,
+    EMPHASIS,
+    BRACKET,
+    TICK,
+    BSLASH,
+};
+
 /// Generic parser for a single-character token from a list of possible characters
 pub fn AnyOfTokenizer(comptime chars: []const u8, comptime kind: TokenType) type {
     return struct {

@@ -177,7 +177,7 @@ pub const Parser = struct {
                     try self.parseTextBlock();
                 },
                 // TODO: .BANG => try parseImage(),
-                // TODO: .LBRACK => try parseLink(),
+                .LBRACK => try self.parseLink(),
                 .BREAK => {
                     // Merge consecutive line breaks
                     //const len = self.md.sections.items.len;
@@ -290,7 +290,7 @@ pub const Parser = struct {
 
     /// Parse a numbered list from the token stream
     pub fn parseNumberedList(self: *Self) !void {
-        // Keep adding lines until we find one which does not start with "[indent]*[+-*]"
+        // Keep adding lines until we find one which does not start with "[indent]*[d]"
         var kinds = [_]TokenType{ .INDENT, .SPACE, .DIGIT };
         var bullet_kinds = [_]TokenType{.DIGIT};
 
@@ -345,6 +345,12 @@ pub const Parser = struct {
 
     /// Parse a code block from the token stream
     pub fn parseCodeBlock(self: *Self) !void {
+        self.nextToken();
+        var tag: []const u8 = undefined;
+        // Check the language or directive tag
+        if (try self.parseDirectiveTag()) |dtag| {
+            tag = dtag;
+        }
         var end: usize = self.cursor + 1;
         if (self.findFirstOf(self.cursor + 1, &.{TokenType.CODE_BLOCK})) |idx| {
             end = idx;
@@ -354,8 +360,8 @@ pub const Parser = struct {
             return;
         }
 
-        // consume the quote token
-        self.nextToken();
+        // consume the end token?
+        //self.nextToken();
 
         // Concatenate the tokens up to the next codeblock tag
         var words = ArrayList([]const u8).init(self.alloc);
@@ -372,9 +378,23 @@ pub const Parser = struct {
             self.nextToken();
 
         try self.md.append(zd.Section{ .code = zd.Code{
-            .language = "",
+            .language = tag,
             .text = try std.mem.concat(self.alloc, u8, words.items),
         } });
+    }
+
+    fn parseDirectiveTag(self: *Self) !?[]const u8 {
+        var tag: ?[]const u8 = null;
+        var words = ArrayList([]const u8).init(self.alloc);
+        defer words.deinit();
+
+        while (!self.curTokenIs(.BREAK)) {
+            try words.append(self.curToken().text);
+            self.nextToken();
+        }
+        tag = try std.mem.concat(self.alloc, u8, words.items);
+
+        return tag;
     }
 
     /// Parse a generic line of text (up to BREAK or EOF)
@@ -444,6 +464,82 @@ pub const Parser = struct {
 
         return block;
     }
+
+    /// Parse an image tag
+    fn parseImage(self: *Self) !void {
+        var line: []Token = self.getLine();
+
+        if (!validateLink(line[1..])) {
+            self.parseTextBlock();
+            return;
+        }
+        // TODO
+    }
+
+    /// Parse a hyperlink
+    fn parseLink(self: *Self) !void {
+        // Validate link syntax
+        var line: []Token = self.getLine().?;
+        zd.printTypes(line);
+
+        if (!validateLink(line)) {
+            try self.parseTextBlock();
+            return;
+        }
+
+        // Skip the '[', find the ']'
+        self.nextToken();
+        var i = self.findFirstOf(self.cursor, &.{.RBRACK}).?;
+        line = self.tokens.items[self.cursor..i];
+        var link_text_block = try self.parseLine(line);
+        self.nextToken(); // skip the ']'
+
+        // Skip '(', advance to the next ')'
+        self.nextToken();
+        var words = ArrayList([]const u8).init(self.alloc);
+        defer words.deinit();
+        while (!self.curTokenIs(.RPAREN)) {
+            try words.append(self.curToken().text);
+            self.nextToken();
+        }
+        self.nextToken();
+
+        try self.md.sections.append(.{ .link = zd.Link{
+            .text = link_text_block,
+            .url = try std.mem.concat(self.alloc, u8, words.items),
+        } });
+    }
+
+    fn validateLink(line: []const Token) bool {
+        var i: usize = 0;
+        var have_rbrack: bool = false;
+        var have_lparen: bool = false;
+        var have_rparen: bool = false;
+        while (i < line.len) : (i += 1) {
+            if (line[i].kind == .RBRACK) {
+                have_rbrack = true;
+                break;
+            }
+        }
+        while (i < line.len) : (i += 1) {
+            if (line[i].kind == .LPAREN) {
+                have_lparen = true;
+                break;
+            }
+        }
+        while (i < line.len) : (i += 1) {
+            if (line[i].kind == .RPAREN) {
+                have_rparen = true;
+                break;
+            }
+        }
+
+        return have_rbrack and have_lparen and have_rparen;
+    }
+
+    ///////////////////////////////////////////////////////
+    // Utility Functions
+    ///////////////////////////////////////////////////////
 
     /// Could be a few differnt types of sections
     fn handleIndent(self: *Self) !void {

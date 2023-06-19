@@ -39,6 +39,8 @@ pub const SectionType = enum {
     plaintext,
     textblock,
     linebreak,
+    //image,
+    link,
 };
 
 //pub const Section = union(enum) {
@@ -51,6 +53,7 @@ pub const Section = union(SectionType) {
     plaintext: Text,
     textblock: TextBlock,
     linebreak: void,
+    link: Link,
 
     pub fn deinit(self: *Section) void {
         switch (self.*) {
@@ -197,4 +200,16 @@ pub const TextBlock = struct {
     pub fn join(self: *TextBlock, other: *TextBlock) void {
         try self.text.appendSlice(other.items);
     }
+};
+
+/// Image
+pub const Image = struct {
+    file: []const u8,
+    alt_text: TextBlock,
+};
+
+/// Hyperlink
+pub const Link = struct {
+    url: []const u8,
+    text: TextBlock,
 };

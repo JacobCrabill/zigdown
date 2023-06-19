@@ -35,6 +35,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
                     .quote => |q| self.render_quote(q),
                     .plaintext => |t| self.render_text(t),
                     .textblock => |t| self.render_textblock(t),
+                    .link => |l| self.render_link(l),
                     .linebreak => self.render_break(),
                 };
             }
@@ -97,9 +98,12 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             try self.stream.print("</ol>\n", .{});
         }
 
-        fn render_text(self: *Self, text: zd.Text) !void {
-            try self.stream.print(" ", .{});
+        fn render_link(self: *Self, link: zd.Link) !void {
+            _ = link;
+            _ = self;
+        }
 
+        fn render_text(self: *Self, text: zd.Text) !void {
             // for style in style => add style tag
             if (text.style.bold)
                 try self.stream.print("<b>", .{});

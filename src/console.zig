@@ -43,6 +43,9 @@ pub const text_reverse = ansi ++ "[7m";
 pub const text_hide = ansi ++ "[8m";
 pub const text_strike = ansi ++ "[9m";
 
+pub const hyperlink = ansi ++ "]8;;";
+pub const link_end = ansi ++ "\\";
+
 // ====================================================
 // Assemble our suite of box-drawing Unicode characters
 // ----------------------------------------------------

@@ -20,12 +20,19 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             };
         }
 
-        // Write an array of bytes to the underlying writer
+        // Write an array of bytes to the underlying writer, and update the current column
         pub fn write(self: *Self, bytes: []const u8) void {
             self.stream.writeAll(bytes) catch |err| {
                 std.debug.print("[ERROR] Unable to write! {s}\n", .{@errorName(err)});
             };
             self.column += bytes.len;
+        }
+
+        // Write an array of bytes to the underlying writer, without updating the current column
+        pub fn writeno(self: *Self, bytes: []const u8) void {
+            self.stream.writeAll(bytes) catch |err| {
+                std.debug.print("[ERROR] Unable to write! {s}\n", .{@errorName(err)});
+            };
         }
 
         pub fn print(self: *Self, comptime fmt: []const u8, args: anytype) void {
@@ -45,8 +52,12 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     .numlist => |l| self.render_numlist(l),
                     .quote => |q| self.render_quote(q),
                     .plaintext => |t| self.render_text(t, 0),
-                    .textblock => |t| self.render_textblock(t, 0),
+                    .textblock => |t| {
+                        self.render_textblock(t, 0);
+                        self.render_break();
+                    },
                     .linebreak => self.render_break(),
+                    .link => |l| self.render_link(l),
                 };
             }
             try self.render_end();
@@ -86,8 +97,14 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         fn render_code(self: *Self, c: zd.Code) void {
-            //const text = std.mem.trimLeft(u8, c.text, " \t");
+            self.print(cons.text_bold ++ cons.fg_yellow, .{});
+            self.print("━━━━━━━━━━━━━━━━━━━━ <{s}>", .{c.language});
+            self.print(cons.ansi_end, .{});
             self.write_wrap(c.text, 4);
+            self.print(cons.text_bold ++ cons.fg_yellow, .{});
+            self.print("━━━━━━━━━━━━━━━━━━━━", .{});
+            self.print(cons.ansi_end, .{});
+            self.render_break();
         }
 
         fn render_list(self: *Self, list: zd.List) void {
@@ -133,11 +150,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             if (text.style.underline)
                 self.print("{s}", .{cons.text_underline});
 
-            // TODO: Take in current column
             self.write_wrap(text.text, indent);
 
             self.print("{s}", .{cons.ansi_end});
-            self.column += 1;
         }
 
         fn render_break(self: *Self) void {
@@ -152,6 +167,16 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 self.render_text(text, indent);
             }
             //self.render_break();
+        }
+
+        fn render_link(self: *Self, link: zd.Link) void {
+            // \e]8;; + URL + \e\\ + Text + \e]8;; + \e\\
+            self.writeno(cons.hyperlink);
+            self.print("{s}", .{link.url});
+            self.writeno(cons.link_end);
+            self.render_textblock(link.text, 0);
+            self.writeno(cons.hyperlink);
+            self.writeno(cons.link_end);
         }
 
         fn write_n(self: *Self, text: []const u8, count: usize) void {
@@ -171,24 +196,25 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             const len = text.len;
             if (len == 0) return;
 
-            if (self.column > Width) {
-                self.write("\n");
-                self.column = 0;
-                self.write_n("@", indent);
+            if (std.mem.startsWith(u8, text, " ")) {
+                self.write(" ");
             }
 
-            var cursor: usize = 0;
-            while (cursor < len) {
-                const count = Width - self.column;
-                const next = @min(cursor + count, len);
-                self.write(text[cursor..next]);
-                cursor = next;
-
-                if (self.column + 1 > Width) {
+            var words = std.mem.tokenizeAny(u8, text, " ");
+            while (words.next()) |word| {
+                if (self.column + word.len > Width) {
                     self.write("\n");
                     self.column = 0;
-                    self.write_n("@", indent);
+                    self.write_n(" ", indent);
                 }
+                self.write(word);
+                self.write(" ");
+            }
+
+            // backup over the trailing " " if the text didn't have one
+            if (!std.mem.endsWith(u8, text, " ")) {
+                self.print(cons.ansi_back, .{1});
+                self.column -= 1 + cons.ansi_back.len;
             }
         }
     };
