@@ -444,6 +444,9 @@ pub const Parser = struct {
                     try self.appendWord(&block, &words, style);
                     style.underline = !style.underline;
                 },
+                // TODO: links can go within inline text!
+                // Need to refactor TextBlock / Text; create InlineText union
+                // for link, emphasis, bold, code, etc.
                 .BREAK => {
                     // End of line; append last word
                     try self.appendWord(&block, &words, style);
@@ -480,7 +483,7 @@ pub const Parser = struct {
     fn parseLink(self: *Self) !void {
         // Validate link syntax
         var line: []Token = self.getLine().?;
-        zd.printTypes(line);
+        //zd.printTypes(line); // DEBUG
 
         if (!validateLink(line)) {
             try self.parseTextBlock();
@@ -510,6 +513,8 @@ pub const Parser = struct {
         } });
     }
 
+    /// Check if the token slice contains a valid link of the form: [text](url)
+    /// It is assumed that the previous token is the '['
     fn validateLink(line: []const Token) bool {
         var i: usize = 0;
         var have_rbrack: bool = false;

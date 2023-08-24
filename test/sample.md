@@ -1,10 +1,9 @@
 # Heading 1
 
-Plain text
-...with **bold** and _italic_ styles (and **_bold_italic_**)
-...and no line breaks
+Plain text with **bold** and _italic_ styles (and **_bold_italic_**) and no line breaks unless the
+previous line is...
 
-unless the previous line ends with '  ' (tbd)
+...blank like above
 
 - Unordered list
   - nested list
@@ -13,6 +12,7 @@ unless the previous line ends with '  ' (tbd)
 - with **formatting**!
 
 1. Ordered list
+1.
 1. Item 2
 1. Item 3
 
@@ -20,8 +20,7 @@ unless the previous line ends with '  ' (tbd)
 
 > Quote Block
 >
-> With embedded `code`? (embedded code not allowed)\
-> **_Fin_**.
+> > With line breaks and **_Formatting_**.
 
 A C++ code block.
 
@@ -33,8 +32,8 @@ int main() {
 
 # Images
 
-![I Love Zig!](zig-zero.png)
+![Link Text](zig-zero.png)
 
-Note: hologram.nvim somehow renders this properly(ish) within the NeoVim buffer,
-but mdcat and image_cat don't (even though they work in plain terminal).
-What's the difference between how Hologram does it vs. sending the raw graphics protocol data?
+Note: hologram.nvim somehow renders this properly(ish) within the NeoVim buffer, but mdcat and
+image_cat don't (even though they work in plain terminal). What's the difference between how
+Hologram does it vs. sending the raw graphics protocol data?

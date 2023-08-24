@@ -42,7 +42,7 @@ pub fn build(b: *std.build.Builder) void {
         .optimize = optimize,
         .target = target,
     });
-    lib.emit_docs = .emit;
+    // lib.emit_docs = .emit;
     b.installArtifact(lib);
     const lib_step = b.step("lib", "Build Zigdown as a shared library (and also build HTML docs)");
     lib_step.dependOn(&lib.step);

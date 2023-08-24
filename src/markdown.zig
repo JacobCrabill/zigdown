@@ -4,6 +4,27 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
+// TODO:
+// Refactor from Sections to Blocks and Inlines
+// See: https://spec.commonmark.org/0.30/#blocks-and-inlines
+// Blocks: Container or Leaf
+//   Leaf Blocks:
+//     - Breaks
+//     - Headings
+//     - Code blocks
+//     - Link reference definition (e.g. [foo]: url "title")
+//     - Paragraph ('Text')
+//   Container Blocks:
+//     - Quote
+//     - List (ordered or bullet)
+// Inlines:
+//   - Emphasis, strong
+//   - Code span
+//   - Links
+//   - Images
+//   - Autolnks (e.g. <google.com>)
+//   - Line breaks
+
 pub const Markdown = struct {
     sections: ArrayList(Section) = undefined,
     alloc: Allocator = undefined,

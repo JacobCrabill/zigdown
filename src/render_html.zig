@@ -99,8 +99,9 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         fn render_link(self: *Self, link: zd.Link) !void {
-            _ = link;
-            _ = self;
+            try self.stream.print("<a href=\"{s}\">", .{link.url});
+            try self.render_textblock(link.text);
+            try self.stream.print("</a>", .{});
         }
 
         fn render_text(self: *Self, text: zd.Text) !void {

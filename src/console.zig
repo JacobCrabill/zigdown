@@ -164,8 +164,8 @@ fn printC(stream: anytype, c: anytype) void {
 /// Print a box with a given width and height, using the given style
 pub fn printBox(stream: anytype, str: []const u8, width: usize, height: usize, style: Box, text_style: []const u8) void {
     const len: usize = str.len;
-    const w: usize = std.math.max(len + 2, width);
-    const h: usize = std.math.max(height, 3);
+    const w: usize = @max(len + 2, width);
+    const h: usize = @max(height, 3);
 
     const lpad: usize = (w - len - 2) / 2;
     const rpad: usize = w - len - lpad - 2;

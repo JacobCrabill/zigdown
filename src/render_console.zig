@@ -12,6 +12,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         box_style: cons.Box = cons.BoldBox,
 
         // Width of the console
+        // TODO: add to a "ConsoleRenderConfig" struct and take in via cli
         const Width: usize = 80;
 
         pub fn init(stream: OutStream) Self {
@@ -51,9 +52,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     .list => |l| self.render_list(l),
                     .numlist => |l| self.render_numlist(l),
                     .quote => |q| self.render_quote(q),
-                    .plaintext => |t| self.render_text(t, 0),
+                    .plaintext => |t| self.render_text(t, 0, ""),
                     .textblock => |t| {
-                        self.render_textblock(t, 0);
+                        self.render_textblock(t, 0, "");
                         self.render_break();
                     },
                     .linebreak => self.render_break(),
@@ -90,17 +91,15 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         fn render_quote(self: *Self, q: zd.Quote) void {
-            // TODO: use q.level
-            self.print("┃ ", .{}); // TODO
-            self.render_textblock(q.textblock, 4);
-            //self.render_break();
+            // TODO: *parse* q.level
+            self.render_textblock(q.textblock, q.level, "┃ ");
         }
 
         fn render_code(self: *Self, c: zd.Code) void {
             self.print(cons.text_bold ++ cons.fg_yellow, .{});
             self.print("━━━━━━━━━━━━━━━━━━━━ <{s}>", .{c.language});
             self.print(cons.ansi_end, .{});
-            self.write_wrap(c.text, 4);
+            self.write_wrap(c.text, 1, "    ");
             self.print(cons.text_bold ++ cons.fg_yellow, .{});
             self.print("━━━━━━━━━━━━━━━━━━━━", .{});
             self.print(cons.ansi_end, .{});
@@ -118,7 +117,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 self.write(cons.fg_blue ++ " * " ++ cons.ansi_end);
                 // item
                 for (item.text.text.items) |text| {
-                    self.render_text(text, 4);
+                    self.render_text(text, 1, "    ");
                 }
                 self.render_break();
             }
@@ -133,13 +132,13 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 self.print(cons.fg_blue ++ " {d}. " ++ cons.ansi_end, .{i});
                 self.column += 4;
                 for (item.text.text.items) |text| {
-                    self.render_text(text, 4);
+                    self.render_text(text, 1, "    ");
                 }
                 self.render_break();
             }
         }
 
-        fn render_text(self: *Self, text: zd.Text, indent: usize) void {
+        fn render_text(self: *Self, text: zd.Text, indent: usize, leader: []const u8) void {
             // for style in style => add style tag
             if (text.style.bold)
                 self.print("{s}", .{cons.text_bold});
@@ -150,7 +149,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             if (text.style.underline)
                 self.print("{s}", .{cons.text_underline});
 
-            self.write_wrap(text.text, indent);
+            self.write_wrap(text.text, indent, leader);
 
             self.print("{s}", .{cons.ansi_end});
         }
@@ -160,23 +159,26 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.column = 0;
         }
 
-        fn render_textblock(self: *Self, block: zd.TextBlock, indent: usize) void {
+        fn render_textblock(self: *Self, block: zd.TextBlock, indent: usize, leader: []const u8) void {
             // Reset column to 0 to start a new paragraph
             //self.render_break();
             for (block.text.items) |text| {
-                self.render_text(text, indent);
+                self.render_text(text, indent, leader);
             }
             //self.render_break();
         }
 
         fn render_link(self: *Self, link: zd.Link) void {
             // \e]8;; + URL + \e\\ + Text + \e]8;; + \e\\
+            self.writeno(cons.fg_cyan);
             self.writeno(cons.hyperlink);
             self.print("{s}", .{link.url});
             self.writeno(cons.link_end);
-            self.render_textblock(link.text, 0);
+            self.render_textblock(link.text, 0, "");
             self.writeno(cons.hyperlink);
             self.writeno(cons.link_end);
+            self.writeno(cons.ansi_end);
+            self.print(" ", .{});
         }
 
         fn write_n(self: *Self, text: []const u8, count: usize) void {
@@ -192,7 +194,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Write the text, with an indent, wrapping at 'width' characters
-        fn write_wrap(self: *Self, text: []const u8, indent: usize) void {
+        fn write_wrap(self: *Self, text: []const u8, indent: usize, leader: []const u8) void {
             const len = text.len;
             if (len == 0) return;
 
@@ -205,7 +207,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 if (self.column + word.len > Width) {
                     self.write("\n");
                     self.column = 0;
-                    self.write_n(" ", indent);
+                    self.write_n(leader, indent);
                 }
                 self.write(word);
                 self.write(" ");
