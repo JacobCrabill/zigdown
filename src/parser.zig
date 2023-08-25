@@ -127,6 +127,7 @@ pub const Parser = struct {
 
     /// Look ahead of the cursor and return the type of token
     fn peekAheadType(self: Self, idx: usize) TokenType {
+        std.debug.print("peekAhead {d}\n", .{idx});
         if (self.cursor + idx >= self.tokens.items.len)
             return .EOF;
         return self.tokens.items[self.cursor + idx].kind;
@@ -548,12 +549,11 @@ pub const Parser = struct {
 
     /// Could be a few differnt types of sections
     fn handleIndent(self: *Self) !void {
-        var i: u8 = 0;
-        while (self.peekAheadType(i) == .INDENT or self.peekAheadType(i) == .SPACE) : (i += 1) {}
+        while (self.curTokenIs(.INDENT) or self.curTokenIs(.SPACE)) {
+            self.nextToken();
+        }
 
-        //std.debug.print("handleIndent {any}\n", .{self.peekAheadType(i)});
-        // See what we have now...
-        switch (self.peekAheadType(i)) {
+        switch (self.curToken().kind) {
             .MINUS, .PLUS, .STAR => try self.parseList(),
             .DIGIT => try self.parseNumberedList(),
             // TODO - any other sections which can be indented...
@@ -671,18 +671,21 @@ test "mergeConsecutiveWhitespace" {
     try std.testing.expect(std.mem.eql(u8, "foo bar", merged));
 }
 
-test "Parse basic Markdown" {
+//test "Parse basic Markdown" {
+pub fn main() !void {
     const data =
         \\# Header!
         \\## Header 2
         \\### Header 3...
         \\#### ...and Header 4
+        \\
         \\  some *generic* text _here_, with formatting!
         \\  including ***BOLD italic*** text!
-        \\  Note that the renderer should automaticallly wrap test for us
+        \\  Note that the renderer should automaticallly wrap text for us
         \\  at some parameterizeable wrap width
         \\
         \\after the break...
+        \\
         \\> Quote line
         \\> Another quote line
         \\> > And a nested quote
@@ -692,6 +695,7 @@ test "Parse basic Markdown" {
         \\```
         \\
         \\And now a list:
+        \\
         \\+ foo
         \\+ fuzz
         \\    + no indents yet

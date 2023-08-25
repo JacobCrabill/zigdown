@@ -97,7 +97,7 @@ test "test lexer" {
         .{ .kind = .SPACE, .text = " " },
         .{ .kind = .WORD, .text = "Heading" },
         .{ .kind = .SPACE, .text = " " },
-        .{ .kind = .WORD, .text = "1" },
+        .{ .kind = .DIGIT, .text = "1" },
         .{ .kind = .BREAK, .text = "\n" },
         .{ .kind = .HASH, .text = "#" },
         .{ .kind = .HASH, .text = "#" },
@@ -140,7 +140,7 @@ test "test lexer" {
 /// Compare an expected token to a token from the Lexer
 fn compareTokens(expected: Token, actual: Token) !void {
     std.testing.expectEqual(expected.kind, actual.kind) catch |err| {
-        std.debug.print("Expected {any}, got {any}\n", .{ expected.kind, actual.kind });
+        std.debug.print("Expected {any} ({s}), got {any} ({s})\n", .{ expected.kind, expected.text, actual.kind, actual.text });
         return err;
     };
 

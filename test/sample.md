@@ -5,6 +5,9 @@ previous line is...
 
 ...blank like above
 
+  Indented text should also work
+  a 2-space indent should have no effect
+
 - Unordered list
   - nested list
 -
