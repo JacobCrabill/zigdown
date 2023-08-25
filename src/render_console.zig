@@ -59,6 +59,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     },
                     .linebreak => self.render_break(),
                     .link => |l| self.render_link(l),
+                    .image => |i| self.render_image(i),
                 };
             }
             try self.render_end();
@@ -175,6 +176,20 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.print("{s}", .{link.url});
             self.writeno(cons.link_end);
             self.render_textblock(link.text, 0, "");
+            self.writeno(cons.hyperlink);
+            self.writeno(cons.link_end);
+            self.writeno(cons.ansi_end);
+            self.print(" ", .{});
+        }
+
+        /// TODO
+        fn render_image(self: *Self, image: zd.Image) void {
+            // \e]8;; + URL + \e\\ + Text + \e]8;; + \e\\
+            self.writeno(cons.fg_magenta);
+            self.writeno(cons.hyperlink);
+            self.print("{s}", .{image.src});
+            self.writeno(cons.link_end);
+            self.render_textblock(image.alt, 0, "");
             self.writeno(cons.hyperlink);
             self.writeno(cons.link_end);
             self.writeno(cons.ansi_end);

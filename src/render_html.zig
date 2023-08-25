@@ -36,6 +36,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
                     .plaintext => |t| self.render_text(t),
                     .textblock => |t| self.render_textblock(t),
                     .link => |l| self.render_link(l),
+                    .image => |i| self.render_image(i),
                     .linebreak => self.render_break(),
                 };
             }
@@ -102,6 +103,12 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             try self.stream.print("<a href=\"{s}\">", .{link.url});
             try self.render_textblock(link.text);
             try self.stream.print("</a>", .{});
+        }
+
+        fn render_image(self: *Self, image: zd.Image) !void {
+            try self.stream.print("<img src=\"{s}\" alt=\"", .{image.src});
+            try self.render_textblock(image.alt);
+            try self.stream.print("\"/>", .{});
         }
 
         fn render_text(self: *Self, text: zd.Text) !void {

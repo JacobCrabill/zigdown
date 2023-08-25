@@ -18,12 +18,80 @@ const ArrayList = std.ArrayList;
 //     - Quote
 //     - List (ordered or bullet)
 // Inlines:
-//   - Emphasis, strong
+//   - Italic
+//   - Bold
+//   - Underline
 //   - Code span
 //   - Links
 //   - Images
 //   - Autolnks (e.g. <google.com>)
 //   - Line breaks
+
+pub const ContainerBlockType = enum(u8) {
+    Heading,
+    Break,
+    Code,
+    Reference,
+    Paragraph,
+    Quote,
+    List,
+};
+
+pub const LeafBlockType = enum(u8) {
+    Break,
+    Heading,
+    Code,
+    Reference,
+    Paragraph,
+};
+
+pub const InlineType = enum(u8) {
+    text,
+    codespan,
+    image,
+    link,
+    autolink,
+    linebreak,
+};
+
+pub const Inline = union(InlineType) {
+    text: Text,
+    codespan: Code,
+    image: Image,
+    link: Link,
+    autolink: Autolink,
+    linebreak: void,
+};
+
+// A Block may be a Container or a Leaf
+pub const Block = union(enum(u8)) {
+    leaf = LeafBlock,
+    container = ContainerBlock,
+};
+
+/// Common data used by all Block types
+pub const BlockConfig = struct {
+    start: usize, // Starting character (or token?) index in the document
+    end: usize, // Ending character index in the document
+    closed: bool = false, // Whether the block is "closed" or not
+    alloc: Allocator,
+};
+
+/// A ContainerBlock can contain one or more Blocks (Container OR Leaf)
+pub const ContainerBlock = struct {
+    kind: ContainerBlockType,
+    config: BlockConfig,
+    children: ArrayList(Block),
+};
+
+/// A LeafBlock contains only Inlines
+pub const LeafBlock = struct {
+    kind: LeafBlockType,
+    config: BlockConfig,
+    inlines: ArrayList(Inline),
+};
+
+//////////////////////////////////////////////////////////////////////
 
 pub const Markdown = struct {
     sections: ArrayList(Section) = undefined,
@@ -51,7 +119,7 @@ pub const Markdown = struct {
     }
 };
 
-pub const SectionType = enum {
+pub const SectionType = enum(u8) {
     heading,
     code,
     list,
@@ -60,11 +128,10 @@ pub const SectionType = enum {
     plaintext,
     textblock,
     linebreak,
-    //image,
     link,
+    image,
 };
 
-//pub const Section = union(enum) {
 pub const Section = union(SectionType) {
     heading: Heading,
     code: Code,
@@ -75,6 +142,7 @@ pub const Section = union(SectionType) {
     textblock: TextBlock,
     linebreak: void,
     link: Link,
+    image: Image,
 
     pub fn deinit(self: *Section) void {
         switch (self.*) {
@@ -225,12 +293,17 @@ pub const TextBlock = struct {
 
 /// Image
 pub const Image = struct {
-    file: []const u8,
-    alt_text: TextBlock,
+    src: []const u8,
+    alt: TextBlock,
 };
 
 /// Hyperlink
 pub const Link = struct {
     url: []const u8,
     text: TextBlock,
+};
+
+/// Auto-link
+pub const Autolink = struct {
+    url: []const u8,
 };

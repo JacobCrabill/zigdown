@@ -177,8 +177,8 @@ pub const Parser = struct {
                 .WORD => {
                     try self.parseTextBlock();
                 },
-                // TODO: .BANG => try parseImage(),
-                .LBRACK => try self.parseLink(),
+                .BANG => try self.parseLinkOrImage(true),
+                .LBRACK => try self.parseLinkOrImage(false),
                 .BREAK => {
                     // Merge consecutive line breaks
                     //const len = self.md.sections.items.len;
@@ -445,6 +445,10 @@ pub const Parser = struct {
                     try self.appendWord(&block, &words, style);
                     style.underline = !style.underline;
                 },
+                //.BANG, .LBRACK => {
+                //    // TODO: we need this link/image _inside_ the text block...
+                //    try self.parseLinkOrImage(self.curTokenIs(.BANG));
+                //},
                 // TODO: links can go within inline text!
                 // Need to refactor TextBlock / Text; create InlineText union
                 // for link, emphasis, bold, code, etc.
@@ -481,10 +485,14 @@ pub const Parser = struct {
     }
 
     /// Parse a hyperlink
-    fn parseLink(self: *Self) !void {
+    fn parseLinkOrImage(self: *Self, bang: bool) Allocator.Error!void {
+        if (bang) {
+            // skip the '!'; the rest should be a valid link
+            self.nextToken();
+        }
+
         // Validate link syntax
         var line: []Token = self.getLine().?;
-        //zd.printTypes(line); // DEBUG
 
         if (!validateLink(line)) {
             try self.parseTextBlock();
@@ -508,10 +516,17 @@ pub const Parser = struct {
         }
         self.nextToken();
 
-        try self.md.sections.append(.{ .link = zd.Link{
-            .text = link_text_block,
-            .url = try std.mem.concat(self.alloc, u8, words.items),
-        } });
+        if (bang) {
+            try self.md.sections.append(.{ .image = zd.Image{
+                .alt = link_text_block,
+                .src = try std.mem.concat(self.alloc, u8, words.items),
+            } });
+        } else {
+            try self.md.sections.append(.{ .link = zd.Link{
+                .text = link_text_block,
+                .url = try std.mem.concat(self.alloc, u8, words.items),
+            } });
+        }
     }
 
     /// Check if the token slice contains a valid link of the form: [text](url)
@@ -594,7 +609,7 @@ pub const Parser = struct {
     }
 
     /// Append a list of words to the given TextBlock as a Text
-    fn appendWord(self: *Self, block: *zd.TextBlock, words: *ArrayList([]const u8), style: zd.TextStyle) !void {
+    fn appendWord(self: *Self, block: *zd.TextBlock, words: *ArrayList([]const u8), style: zd.TextStyle) Allocator.Error!void {
         if (words.items.len > 0) {
             mergeConsecutiveWhitespace(words);
 
