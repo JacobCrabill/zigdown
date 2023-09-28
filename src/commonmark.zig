@@ -46,11 +46,12 @@ pub const BlockType = enum(u8) {
 
 // A Block may be a Container or a Leaf
 pub const Block = union(BlockType) {
+    const Self = @This();
     container: ContainerBlock,
     leaf: LeafBlock,
 
-    pub fn handleLine(self: *Block, line: []const Token) bool {
-        return switch (self) {
+    pub fn handleLine(self: *Self, line: []const Token) bool {
+        return switch (self.*) {
             inline else => |*b| b.handleLine(line),
         };
     }
@@ -110,9 +111,12 @@ pub const ContainerBlock = union(ContainerBlockType) {
     List: zd.List,
 
     pub fn handleLine(self: *Self, line: []const Token) bool {
-        return switch (self) {
-            inline else => |*b| b.handleLine(line),
-        };
+        _ = line;
+        _ = self;
+        //return switch (self) {
+        //    inline else => |*b| b.handleLine(line),
+        //};
+        return true;
     }
 };
 
@@ -124,11 +128,18 @@ pub const LeafBlockOld = struct {
 };
 
 pub const LeafBlock = union(LeafBlockType) {
+    const Self = @This();
     Heading: zd.Heading, // todo
     Code: zd.Code,
     Reference: Reference, // todo
     Paragraph: zd.TextBlock, // todo
     Break: Break, // todo
+
+    pub fn handleLine(self: *Self, line: []const Token) bool {
+        _ = line;
+        _ = self;
+        return true;
+    }
 };
 
 pub const Document = struct {
@@ -146,15 +157,20 @@ pub const Document = struct {
     pub fn handleLine(self: *Self, line: []const Token) !void {
         if (self.blocks.items.len > 0) {
             // Get open node (last block in list)
-            var open_block = self.blocks.back();
+            var open_block = self.blocks.getLast();
             if (open_block.handleLine(line)) {
                 return;
             }
         }
+
         // Open block did not accept line, or no blocks yet
         // Parse line into new block; append to blocks
+        var new_block: *Block = try self.alloc.create(Block);
+        new_block.* = try parseNewBlock(line);
+        try self.blocks.append(new_block);
     }
 };
+
 pub const Reference = struct {};
 pub const Break = struct {};
 
@@ -336,6 +352,12 @@ pub const Parser = struct {
         return self.tokens.items[self.cursor..end];
     }
 };
+
+/// Parse a single line of Markdown into the start of a new Block
+fn parseNewBlock(line: []const Token) !Block {
+    _ = line;
+    return Block{ .leaf = .{ .Break = Break{} } };
+}
 
 test "Parse basic Markdown" {
     const data =
