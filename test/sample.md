@@ -35,7 +35,8 @@ int main() {
 
 # Images
 
-![Link Text](zig-zero.png)
+![Image Alt](zig-zero.png)
+[Link Text](www.google.com)
 
 Note: hologram.nvim somehow renders this properly(ish) within the NeoVim buffer, but mdcat and
 image_cat don't (even though they work in plain terminal). What's the difference between how
