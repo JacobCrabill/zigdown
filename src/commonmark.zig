@@ -55,6 +55,10 @@ pub const Block = union(BlockType) {
             inline else => |*b| b.handleLine(line),
         };
     }
+
+    pub fn close(self: *Self) void {
+        _ = self;
+    }
 };
 
 pub const ContainerBlockType = enum(u8) {
@@ -98,13 +102,71 @@ pub const BlockConfig = struct {
 };
 
 /// A ContainerBlock can contain one or more Blocks (Container OR Leaf)
-pub const ContainerBlockOld = struct {
+pub const ContainerBlock = struct {
+    const Self = @This();
     kind: ContainerBlockType,
     config: BlockConfig,
     children: ArrayList(*Block),
+
+    pub fn handleLine(self: *Self, line: []const Token) bool {
+        // First, check if the line is valid for our block type, as a
+        // continuation line of our open child, or as the start of a new child
+        // block
+
+        // If the line is a valid continuation line for our type, trim the continuation
+        // marker(s) off and pass it on to our last child
+        // e.g.:  line         = "   > foo bar";
+        //        trimmed_line = "foo bar"
+        var trimmed_line = line;
+        if (self.isContinuationLine(line))
+            trimmed_line = self.trimContinuationMarkers(line);
+
+        // Next, check if the trimmed line
+        if (!self.isLazyContinuationLine(trimmed_line))
+            return false;
+
+        if (self.children.getLastOrNull()) |*child| {
+            if (child.handleLine(trimmed_line)) {
+                return true;
+            } else {
+                // child.close(); // TODO
+            }
+        }
+        // Child did not accept this line (or no children yet)
+        // Determine which kind of Block this line should be
+
+        // TODO
+
+        // If the returned type is not a valid child type, return false to
+        // indicate that our parent should handle it
+        return false;
+    }
+
+    pub fn isContinuationLine(line: []Token) bool {
+        _ = line;
+        return true;
+    }
+
+    fn trimContinuationMarkers(self: *Self, line: []const Token) []const Token {
+        return switch (self.kind) {
+            .Quote => self.trimContinuationMarkersQuote(line),
+            else => line,
+        };
+    }
+
+    fn trimContinuationMarkersQuote(line: []const Token) []const Token {
+        var start: usize = 0;
+        for (line, 0..) |tok, i| {
+            if (!(tok.kind == .GT or tok.kind == .SPACE or tok.kind == .INDENT)) {
+                start = i;
+                break;
+            }
+        }
+        return line[start..line.len];
+    }
 };
 
-pub const ContainerBlock = union(ContainerBlockType) {
+pub const ContainerBlockNew = union(ContainerBlockType) {
     const Self = @This();
     Document: Document,
     Quote: zd.Quote,
@@ -121,13 +183,20 @@ pub const ContainerBlock = union(ContainerBlockType) {
 };
 
 /// A LeafBlock contains only Inlines
-pub const LeafBlockOld = struct {
+pub const LeafBlock = struct {
+    const Self = @This();
     kind: LeafBlockType,
     config: BlockConfig,
     inlines: ArrayList(Inline),
+
+    pub fn handleLine(self: *Self, line: []const Token) bool {
+        _ = line;
+        _ = self;
+        return true;
+    }
 };
 
-pub const LeafBlock = union(LeafBlockType) {
+pub const LeafBlockNew = union(LeafBlockType) {
     const Self = @This();
     Heading: zd.Heading, // todo
     Code: zd.Code,
@@ -137,8 +206,10 @@ pub const LeafBlock = union(LeafBlockType) {
 
     pub fn handleLine(self: *Self, line: []const Token) bool {
         _ = line;
-        _ = self;
-        return true;
+        return switch (self.*) {
+            //.Code => |*c| c.handleLine(line),
+            inline else => true,
+        };
     }
 };
 
@@ -224,12 +295,7 @@ pub const Parser = struct {
     fn tokenize(self: *Self) !void {
         self.tokens.clearRetainingCapacity();
 
-        var token = self.lexer.next();
-        try self.tokens.append(token);
-        while (token.kind != .EOF) {
-            token = self.lexer.next();
-            try self.tokens.append(token);
-        }
+        self.tokens = try self.lexer.tokenize();
 
         // Initialize current and next tokens
         self.cur_token = zd.Eof;
@@ -401,4 +467,152 @@ test "Parse basic Markdown" {
     // Tokenize the input text
     var parser = try Parser.init(alloc, data);
     try parser.parseMarkdown();
+}
+
+//////////////////////////////////////////////////////////////////////////
+
+test "CommonMark strategy" {
+    // Setup
+    const text: []const u8 = "# Heading";
+    var alloc = std.testing.allocator;
+    var lexer = Lexer.init(alloc, text);
+    var tokens_array = try lexer.tokenize();
+    var tokens: []Token = tokens_array.items;
+    var cursor: usize = 0;
+
+    // Create empty document; parse first line into the start of a new Block
+    var document = Document.init(alloc);
+    const first_line = getLine(tokens, cursor);
+    if (first_line == null) {
+        // empty document?
+        return;
+    }
+    cursor += first_line.?.len;
+
+    var open_block: *Block = try alloc.create(Block);
+    open_block.* = try parseBlockFromLine(first_line.?);
+    try document.blocks.append(open_block);
+
+    if (first_line.?.len == tokens.len) // Only one line in the text
+        return;
+
+    while (getLine(tokens, cursor)) |line| {
+        // First see if the current open block of the document can accept this line
+        if (!open_block.handleLine(line)) {
+            // This line cannot continue the current open block; close and continue
+            // Close the current open block (child of the Document)
+            open_block.close();
+
+            // Append a new Block to the document
+            open_block = try alloc.create(Block);
+            open_block.* = try parseBlockFromLine(line);
+            try document.blocks.append(open_block);
+        }
+
+        // This line has been handled, one way or another; continue to the next line
+        cursor += line.len;
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////
+
+/// Return the index of the next BREAK token, or EOF
+fn nextBreak(tokens: []Token, idx: usize) usize {
+    if (idx >= tokens.len)
+        return tokens.len;
+
+    for (tokens[idx..], idx..) |tok, i| {
+        if (tok.kind == .BREAK)
+            return i;
+    }
+
+    return tokens.len;
+}
+
+// Return a slice of the tokens from the cursor to the next line break (or EOF)
+fn getLine(tokens: []Token, cursor: usize) ?[]Token {
+    if (cursor >= tokens.len) return null;
+    const end = @min(nextBreak(tokens, cursor) + 1, tokens.len);
+    return tokens[cursor..end];
+}
+
+/// Given a raw line of Tokens, determine what kind of Block should be created
+fn parseBlockFromLine(line: []Token) !Block {
+    _ = line;
+    //return .{ .leaf = .{ .break = zd.Break{}, }, };
+    return error.Unimplemented;
+}
+
+fn isContinuationLineQuote(line: []Token) bool {
+    // if the line follows the pattern: [ ]{0,1,2,3}[>]+
+    //    (0 to 3 leading spaces followed by at least one '>')
+    // then it can be part of the current Quote block.
+    //
+    // Otherwise, if it is Paragraph lazy continuation line,
+    // it can also be a part of the Quote block
+    var leading_ws: u8 = 0;
+    for (line) |tok| {
+        switch (tok.kind) {
+            .SPACE => leading_ws += 1,
+            .INDENT => leading_ws += 2,
+            .GT => return true,
+            .WORD => return true,
+            else => return false,
+        }
+
+        if (leading_ws > 3)
+            return false;
+    }
+
+    return false;
+}
+
+test "Quote block continuation lines" {
+    const data =
+        \\# Header!
+        \\## Header 2
+        \\### Header 3...
+        \\#### ...and Header 4
+        \\
+        \\  some *generic* text _here_, with formatting!
+        \\  including ***BOLD italic*** text!
+        \\  Note that the renderer should automaticallly wrap text for us
+        \\  at some parameterizeable wrap width
+        \\
+        \\after the break...
+        \\
+        \\> Quote line
+        \\> Another quote line
+        \\> > And a nested quote
+        \\
+        \\```
+        \\code
+        \\```
+        \\
+        \\And now a list:
+        \\
+        \\+ foo
+        \\+ fuzz
+        \\    + no indents yet
+        \\- bar
+        \\
+        \\
+        \\1. Numbered lists, too!
+        \\2. 2nd item
+        \\2. not the 2nd item
+    ;
+
+    var alloc = std.testing.allocator;
+    var lexer = Lexer.init(alloc, data);
+    var tokens = try lexer.tokenize();
+    defer tokens.deinit();
+
+    // Now process every line!
+    var cursor: usize = 0;
+    while (getLine(tokens.items, cursor)) |line| {
+        zd.printTypes(line);
+        const continues: bool = isContinuationLineQuote(line);
+        std.debug.print(" -- Continues a Quote block? {}\n", .{continues});
+        cursor += line.len;
+    }
 }

@@ -79,12 +79,7 @@ pub const Parser = struct {
     fn tokenize(self: *Self) !void {
         self.tokens.clearRetainingCapacity();
 
-        var token = self.lexer.next();
-        try self.tokens.append(token);
-        while (token.kind != .EOF) {
-            token = self.lexer.next();
-            try self.tokens.append(token);
-        }
+        self.tokens = try self.lexer.tokenize();
 
         // Initialize current and next tokens
         self.cur_token = zd.Eof;
