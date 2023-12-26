@@ -1,5 +1,8 @@
 *~
 *.swp
+*.o
+*.so
+*.a
 zig-cache/
 zig-out/
 docs/

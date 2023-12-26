@@ -287,7 +287,7 @@ pub const TextBlock = struct {
 
     /// Append the elements of 'other' to this TextBlock
     pub fn join(self: *TextBlock, other: *TextBlock) void {
-        try self.text.appendSlice(other.items);
+        try self.text.appendSlice(other.text.items);
     }
 };
 

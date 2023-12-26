@@ -11,6 +11,15 @@ pub fn build(b: *std.build.Builder) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const optimize = b.standardOptimizeOption(.{});
 
+    const std_build_opts = .{
+        .target = target,
+        .optimize = optimize,
+    };
+
+    // Dependencies from build.zig.zon
+    const stbi = b.dependency("stbi", std_build_opts);
+    const stb_lib = stbi.artifact("stb-image");
+
     // Compile the main executable
     const exe = b.addExecutable(.{
         .name = "zigdown",
@@ -19,6 +28,11 @@ pub fn build(b: *std.build.Builder) void {
         .optimize = optimize,
         .target = target,
     });
+
+    exe.addModule("stb_image", stbi.module("stb_image"));
+    // The STB Image package requires linking to the stb_image lib it produces
+    exe.linkLibrary(stb_lib);
+
     b.installArtifact(exe);
 
     const app_step = b.step("app", "Build the app ('zigdown' executable)");

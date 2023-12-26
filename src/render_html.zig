@@ -1,16 +1,23 @@
 const std = @import("std");
 const utils = @import("utils.zig");
-const zd = @import("markdown.zig");
+const zd = struct {
+    usingnamespace @import("markdown.zig");
+    usingnamespace @import("commonmark.zig");
+};
+
+const Allocator = std.mem.Allocator;
 
 // Render a Markdown document to HTML to the given output stream
 pub fn HtmlRenderer(comptime OutStream: type) type {
     return struct {
         const Self = @This();
         stream: OutStream,
+        alloc: Allocator,
 
-        pub fn init(stream: OutStream) Self {
+        pub fn init(stream: OutStream, alloc: Allocator) Self {
             return Self{
                 .stream = stream,
+                .alloc = alloc,
             };
         }
 
@@ -41,6 +48,45 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
                 };
             }
             try self.render_end();
+        }
+
+        // Top-Level Block Rendering Functions
+
+        /// New CommonMark-type ContainerBlock
+        pub fn renderContainer(self: *Self, block: zd.ContainerBlock) !void {
+            switch (block.kind) {
+                .Document => self.renderDocument(block),
+                .Quote => self.renderQuote(block),
+                .List => self.renderList(block),
+                .ListItem => self.renderListItem(block),
+            }
+        }
+
+        pub fn renderLeaf(self: *Self, block: zd.LeafBlock) !void {
+            _ = block;
+            _ = self;
+        }
+
+        pub fn renderDocument(self: *Self, doc: zd.Document) !void {
+            _ = doc;
+            _ = self;
+        }
+
+        // ContainerBlock Rendering Functions
+
+        pub fn renderQuote(self: *Self, doc: zd.Quote) !void {
+            _ = doc;
+            _ = self;
+        }
+
+        pub fn renderList(self: *Self, doc: zd.List) !void {
+            _ = doc;
+            _ = self;
+        }
+
+        pub fn renderListItem(self: *Self, doc: zd.ListItem) !void {
+            _ = doc;
+            _ = self;
         }
 
         /// ----------------------------------------------

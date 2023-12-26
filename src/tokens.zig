@@ -44,10 +44,8 @@ pub const TokenType = enum {
     RCURLY,
     SLASH,
     BSLASH,
-
     PIPE,
     BOLD,
-
     EMBOLD,
     UNKNOWN,
 };

@@ -2,6 +2,10 @@ const std = @import("std");
 const utils = @import("utils.zig");
 const zd = @import("markdown.zig");
 const cons = @import("console.zig");
+const gfx = @import("image.zig");
+const stb = @import("stb_image");
+
+const Allocator = std.mem.Allocator;
 
 // Render a Markdown document to the console using ANSI escape characters
 pub fn ConsoleRenderer(comptime OutStream: type) type {
@@ -10,14 +14,16 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         stream: OutStream,
         column: usize = 0,
         box_style: cons.Box = cons.BoldBox,
+        alloc: std.mem.Allocator,
 
         // Width of the console
         // TODO: add to a "ConsoleRenderConfig" struct and take in via cli
-        const Width: usize = 80;
+        const Width: usize = 90;
 
-        pub fn init(stream: OutStream) Self {
+        pub fn init(stream: OutStream, alloc: Allocator) Self {
             return Self{
                 .stream = stream,
+                .alloc = alloc,
             };
         }
 
@@ -193,6 +199,10 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.writeno(cons.hyperlink);
             self.writeno(cons.link_end);
             self.writeno(cons.ansi_end);
+            var img_file: ?stb.Image = stb.load_image(image.src) catch null; // silently fail
+            if (img_file) |img| {
+                gfx.sendImagePNG(self.stream, self.alloc, image.src, @intCast(img.width), @intCast(img.height)) catch {};
+            }
             self.print(" ", .{});
         }
 

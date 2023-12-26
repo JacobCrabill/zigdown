@@ -96,12 +96,12 @@ pub fn main() !void {
 
 fn render(stream: anytype, md: zd.Markdown, do_console: bool, do_html: bool) !void {
     if (do_html) {
-        var h_renderer = htmlRenderer(stream);
+        var h_renderer = htmlRenderer(stream, md.alloc);
         try h_renderer.render(md);
     }
 
     if (do_console or !do_html) {
-        var c_renderer = consoleRenderer(stream);
+        var c_renderer = consoleRenderer(stream, md.alloc);
         try c_renderer.render(md);
     }
 }

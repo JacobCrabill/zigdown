@@ -31,3 +31,19 @@ zig build -l # List build options
 ```
 
 `zig build` will create a `zigdown` binary at `zig-out/bin/zigdown`.
+
+## Plan of Attack
+
+- Lay out new object heirarchy structure based on the CommonMark suggestions
+- Write tests to render a new Document type using the new types
+  * Create a simple document tree by hand, e.g.: `Document[Quote[Paragraph,List[Item]]]`
+- Write tests for the creation of the hand-rolled Document from actual Markdown
+- Along the way, add tests for each individual sub-component:
+  * Container Blocks:
+    - `isQuoteLine()`
+    - `isOrderedListItem()`
+    - `isUnorderedListItem()`
+  * Leaf Blocks:
+    - `isHeading()`
+    - `isParagraph()`
+    - `isReference()`
