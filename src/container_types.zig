@@ -312,6 +312,7 @@ test "Basic AST Construction" {
     var text1 = Inline{ .text = Text{ .text = "Hello, " } };
     var text2 = Inline{ .text = Text{ .text = "World", .style = .{ .bold = true } } };
     var text3 = Inline{ .text = Text{ .text = "!" } };
+    text3.text.style.emph = true;
 
     // Add the Text to the Paragraph
     try std.testing.expect(isLeaf(paragraph));

@@ -7,7 +7,7 @@ const zd = struct {
     usingnamespace @import("utils.zig");
     usingnamespace @import("tokens.zig");
     usingnamespace @import("lexer.zig");
-    usingnamespace @import("inline.zig");
+    usingnamespace @import("inlines.zig");
 };
 
 const Allocator = std.mem.Allocator;
@@ -18,7 +18,12 @@ const TokenType = zd.TokenType;
 const Token = zd.Token;
 const TokenList = zd.TokenList;
 
+const Inline = zd.Inline;
 const InlineType = zd.InlineType;
+
+const Text = zd.Text;
+
+const printIndent = zd.printIndent;
 
 pub const BlockType = enum(u8) {
     Container,
@@ -44,17 +49,17 @@ pub const LeafType = enum(u8) {
 // A Block may be a Container or a Leaf
 pub const Block = union(BlockType) {
     const Self = @This();
-    Container: ContainerBlock,
-    Leaf: LeafBlock,
+    Container: Container,
+    Leaf: Leaf,
 
-    /// Create a new ContainerBlock of the given type
+    /// Create a new Container of the given type
     pub fn initContainer(alloc: Allocator, kind: ContainerType) Block {
-        return .{ .Container = ContainerBlock.init(alloc, kind) };
+        return .{ .Container = Container.init(alloc, kind) };
     }
 
-    /// Create a new LeafBlock of the given type
+    /// Create a new Leaf of the given type
     pub fn initLeaf(alloc: Allocator, kind: LeafType) Block {
-        return .{ .Leaf = LeafBlock.Init(alloc, kind) };
+        return .{ .Leaf = Leaf.init(alloc, kind) };
     }
 
     pub fn deinit(self: *Block) void {
@@ -71,7 +76,7 @@ pub const Block = union(BlockType) {
 
     pub fn close(self: *Self) void {
         switch (self.*) {
-            inline else => |*b| b.close(),
+            inline else => |*b| b.*.close(),
         }
     }
 
@@ -88,36 +93,20 @@ pub const Block = union(BlockType) {
             .Leaf => |*c| try c.addInline(item),
         }
     }
-};
 
-/// Common data used by all Block types
-pub const BlockConfig = struct {
-    closed: bool = false, // Whether the block is "closed" or not
-    alloc: Allocator,
-};
-
-pub const Inline = struct {
-    const Self = @This();
-    alloc: Allocator,
-    kind: InlineType,
-    closed: bool = false,
-    contents: ArrayList([]Token), // List of Token slices comprising the block's contents
-
-    pub fn init(alloc: Allocator, kind: InlineType) !Inline {
-        return .{
-            .alloc = alloc,
-            .kind = kind,
-            .contents = try ArrayList([]Token).init(alloc),
-        };
+    pub fn print(self: Self, depth: u8) void {
+        switch (self) {
+            inline else => |b| b.print(depth),
+        }
     }
 };
 
-/// A ContainerBlock can contain one or more Blocks (Container OR Leaf)
-pub const ContainerBlock = struct {
+/// A Container can contain one or more Blocks (Container OR Leaf)
+pub const Container = struct {
     const Self = @This();
     alloc: Allocator,
     kind: ContainerType,
-    closed: bool = false,
+    open: bool = true,
     children: ArrayList(Block),
 
     pub fn init(alloc: Allocator, kind: ContainerType) Self {
@@ -129,16 +118,18 @@ pub const ContainerBlock = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        for (self.children.items) |child| {
+        for (self.children.items) |*child| {
             child.deinit();
-            // TODO: Need to free all children, or no?
-            self.alloc.destroy(child);
         }
         self.children.deinit();
     }
 
     pub fn addChild(self: *Self, child: Block) !void {
         try self.children.append(child);
+    }
+
+    pub fn close(self: *Self) void {
+        self.open = false;
     }
 
     pub fn handleLine(self: *Self, line: []const Token) bool {
@@ -158,7 +149,8 @@ pub const ContainerBlock = struct {
         if (!self.isLazyContinuationLine(trimmed_line))
             return false;
 
-        if (self.children.getLastOrNull()) |child| {
+        if (self.children.items.len > 0) {
+            var child: *Block = &self.children.items[self.children.items.len - 1];
             if (child.handleLine(trimmed_line)) {
                 return true;
             } else {
@@ -205,17 +197,31 @@ pub const ContainerBlock = struct {
         }
         return line[start..line.len];
     }
+
+    pub fn print(self: Container, depth: u8) void {
+        printIndent(depth);
+
+        std.debug.print("Container: open: {any}, type: {s} with {d} children\n", .{
+            self.open,
+            @tagName(self.kind),
+            self.children.items.len,
+        });
+
+        for (self.children.items) |child| {
+            child.print(depth + 1);
+        }
+    }
 };
 
-/// A LeafBlock contains only Inlines
-pub const LeafBlock = struct {
+/// A Leaf contains only Inlines
+pub const Leaf = struct {
     const Self = @This();
     alloc: Allocator,
     kind: LeafType,
-    closed: bool = false,
+    open: bool = true,
     inlines: ArrayList(Inline),
 
-    pub fn init(alloc: Allocator, kind: LeafType) LeafBlock {
+    pub fn init(alloc: Allocator, kind: LeafType) Leaf {
         return .{
             .alloc = alloc,
             .kind = kind,
@@ -224,7 +230,7 @@ pub const LeafBlock = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        for (self.inlines.items) |item| {
+        for (self.inlines.items) |*item| {
             item.deinit();
         }
         self.inlines.deinit();
@@ -234,43 +240,77 @@ pub const LeafBlock = struct {
         try self.inlines.append(item);
     }
 
+    pub fn close(self: *Self) void {
+        self.open = false;
+    }
+
     pub fn handleLine(self: *Self, line: []const Token) bool {
         _ = line;
         _ = self;
         return true;
     }
+
+    pub fn print(self: Leaf, depth: u8) void {
+        printIndent(depth);
+
+        std.debug.print("LeafBlock: {s} with {d} inlines\n", .{
+            @tagName(self.kind),
+            self.inlines.items.len,
+        });
+
+        for (self.inlines.items) |item| {
+            item.print(depth + 1);
+        }
+    }
 };
 
-////////////////////////////////////////////////////////////////////////////////
-// Custom data for specific subtypes
-////////////////////////////////////////////////////////////////////////////////
-
-pub const Reference = struct {};
-pub const Break = struct {};
+///////////////////////////////////////////////////////////////////////////////
+/// Container Block Implementations
+///////////////////////////////////////////////////////////////////////////////
 
 pub const Quote = struct {
-    level: u8 = 0,
-    text: Text = undefined,
-    config: BlockConfig = undefined,
+    level: u8 = 0, // TODO: This may be unnecessary
 };
 
-pub const TextStyle = struct {
-    bold: bool = false,
-    italic: bool = false,
-    underline: bool = false,
-    strike: bool = false,
+pub const List = struct {};
+pub const ListItem = struct {};
+
+///////////////////////////////////////////////////////////////////////////////
+/// Leaf Block Implementations
+///////////////////////////////////////////////////////////////////////////////
+
+pub const Break = struct {};
+pub const Reference = struct {};
+
+pub const Heading = struct {
+    level: u8 = 1,
 };
 
-/// Section of formatted text (single style)
-/// Example: "plain text" or "**bold text**"
-pub const Text = struct {
-    style: TextStyle = TextStyle{},
-    text: []const u8 = undefined,
+pub const Code = struct {
+    language: []const u8 = "",
 };
 
-////////////////////////////////////////////////////////////////////////////////
+/// Hyperlink
+pub const Link = struct {
+    url: []const u8,
+    text: Paragraph, // ?? what should this REALLY be? ArrayList(Text)?
 
-//////////////////////////////////////////////////////////////////////////
+    pub fn print(self: Link, depth: u8) void {
+        printIndent(depth);
+        std.debug.print("Link to {s}\n", .{self.url});
+    }
+};
+
+pub const Paragraph = struct {
+    /// Append the elements of 'other' to this TextBlock
+    pub fn join(self: *Paragraph, other: *Paragraph) void {
+        try self.text.appendSlice(other.text.items);
+    }
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// Tests
+///////////////////////////////////////////////////////////////////////////////
 
 test "CommonMark strategy" {
     // Setup
@@ -292,9 +332,8 @@ test "CommonMark strategy" {
     }
     cursor += first_line.?.len;
 
-    var open_block: *Block = try alloc.create(Block);
-    open_block.* = try parseBlockFromLine(first_line.?);
-    try document.blocks.append(open_block);
+    var open_block = try parseBlockFromLine(first_line.?);
+    try document.addChild(open_block);
 
     if (first_line.?.len == tokens.len) // Only one line in the text
         return;
@@ -307,9 +346,8 @@ test "CommonMark strategy" {
             open_block.close();
 
             // Append a new Block to the document
-            open_block = try alloc.create(Block);
-            open_block.* = try parseBlockFromLine(line);
-            try document.blocks.append(open_block);
+            open_block = try parseBlockFromLine(line);
+            try document.addChild(open_block);
         } else {
             // The line belongs with this block
             // TODO: Add line to block
@@ -461,3 +499,68 @@ test "Quote block continuation lines" {
 //   - Images
 //   - Autolinks (e.g. <google.com>)
 //   - Line breaks
+
+///////////////////////////////////////////////////////////////////////////////
+/// Helper Functions
+///////////////////////////////////////////////////////////////////////////////
+
+pub fn printAST(block: Block) void {
+    block.print(0);
+}
+
+pub fn isContainer(block: Block) bool {
+    return block == .Container;
+}
+
+pub fn isLeaf(block: Block) bool {
+    return block == .Leaf;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Tests
+///////////////////////////////////////////////////////////////////////////////
+
+test "Basic AST Construction" {
+    std.debug.print("\n", .{});
+
+    var alloc = std.testing.allocator;
+
+    // Create the Document root
+    var root = Block.initContainer(alloc, .Document);
+    defer root.deinit();
+
+    // Create a List container
+    var list = Block.initContainer(alloc, .List);
+
+    // Create a ListItem
+    var list_item = Block.initContainer(alloc, .ListItem);
+
+    // Create a Paragraph
+    var paragraph = Block.initLeaf(alloc, .Paragraph);
+
+    // Create some Text
+    var text1 = Inline.initWithContent(alloc, .{ .text = Text{ .text = "Hello, " } });
+    var text2 = Inline.initWithContent(alloc, .{ .text = Text{ .text = "World", .style = .{ .bold = true } } });
+    var text3 = Inline.initWithContent(alloc, .{ .text = Text{ .text = "!" } });
+    text3.content.text.style.bold = true;
+    text3.content.text.style.italic = true;
+
+    // Add the Text to the Paragraph
+    try std.testing.expect(isLeaf(paragraph));
+    try paragraph.addInline(text1);
+    try paragraph.addInline(text2);
+    try paragraph.addInline(text3);
+
+    // Add the Paragraph to the ListItem
+    try std.testing.expect(isContainer(list_item));
+    try list_item.addChild(paragraph);
+
+    // Add the ListItem to the List
+    try std.testing.expect(isContainer(list));
+    try list.addChild(list_item);
+
+    // Add the List to the Document
+    try root.addChild(list);
+
+    root.print(0);
+}

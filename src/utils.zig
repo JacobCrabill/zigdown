@@ -2,6 +2,13 @@
 /// Common utilities.
 const std = @import("std");
 
+pub fn printIndent(depth: u8) void {
+    var i: u8 = 0;
+    while (i < depth) : (i += 1) {
+        std.debug.print("  ", .{});
+    }
+}
+
 /// Check if the character is a whitespace character
 pub fn isWhitespace(c: u8) bool {
     const ws_chars = " \t\r";
