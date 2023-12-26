@@ -25,14 +25,15 @@ pub const BlockType = enum(u8) {
     Leaf,
 };
 
-pub const ContainerBlockType = enum(u8) {
+/// Generic Block type. The AST is contructed from this type.
+pub const ContainerType = enum(u8) {
     Document, // The Document is the root container
     Quote,
     List, // Can only contain ListItems
     ListItem, // Can only be contained by a List
 };
 
-pub const LeafBlockType = enum(u8) {
+pub const LeafType = enum(u8) {
     Break,
     Code,
     Heading,
@@ -46,14 +47,14 @@ pub const Block = union(BlockType) {
     Container: ContainerBlock,
     Leaf: LeafBlock,
 
-    /// Convert the given ContainerBlock to a new Block
-    pub fn initContainer(alloc: Allocator, kind: ContainerBlockType) Block {
+    /// Create a new ContainerBlock of the given type
+    pub fn initContainer(alloc: Allocator, kind: ContainerType) Block {
         return .{ .Container = ContainerBlock.init(alloc, kind) };
     }
 
-    /// Convert the given LeafBlock to a new Block
-    pub fn initLeaf(leaf: LeafBlock) Block {
-        return .{ .Leaf = leaf };
+    /// Create a new LeafBlock of the given type
+    pub fn initLeaf(alloc: Allocator, kind: LeafType) Block {
+        return .{ .Leaf = LeafBlock.Init(alloc, kind) };
     }
 
     pub fn deinit(self: *Block) void {
@@ -115,11 +116,11 @@ pub const Inline = struct {
 pub const ContainerBlock = struct {
     const Self = @This();
     alloc: Allocator,
-    kind: ContainerBlockType,
+    kind: ContainerType,
     closed: bool = false,
     children: ArrayList(Block),
 
-    pub fn init(alloc: Allocator, kind: ContainerBlockType) Self {
+    pub fn init(alloc: Allocator, kind: ContainerType) Self {
         return .{
             .alloc = alloc,
             .kind = kind,
@@ -210,11 +211,11 @@ pub const ContainerBlock = struct {
 pub const LeafBlock = struct {
     const Self = @This();
     alloc: Allocator,
-    kind: LeafBlockType,
+    kind: LeafType,
     closed: bool = false,
     inlines: ArrayList(Inline),
 
-    pub fn init(alloc: Allocator, kind: LeafBlockType) LeafBlock {
+    pub fn init(alloc: Allocator, kind: LeafType) LeafBlock {
         return .{
             .alloc = alloc,
             .kind = kind,

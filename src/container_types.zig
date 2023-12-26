@@ -7,10 +7,25 @@ const Allocator = std.mem.Allocator;
 /// High-Level Block Types
 ///////////////////////////////////////////////////////////////////////////////
 
+pub const BlockType = enum(u8) {
+    Container,
+    Leaf,
+};
+
 /// Generic Block type. The AST is contructed from this type.
 pub const Block = union(enum(u8)) {
     leaf: LeafBlock,
     container: ContainerBlock,
+
+    /// Convert the given ContainerBlock to a new Block
+    pub fn initContainer(alloc: Allocator, kind: ContainerType) Block {
+        return .{ .container = ContainerBlock.init(alloc, kind) };
+    }
+
+    /// Convert the given LeafBlock to a new Block
+    pub fn initLeaf(alloc: Allocator, kind: LeafType) Block {
+        return .{ .leaf = LeafBlock.Init(alloc, kind) };
+    }
 
     pub fn deinit(self: *Block) void {
         switch (self.*) {
@@ -39,8 +54,19 @@ pub const Block = union(enum(u8)) {
     }
 };
 
-/// A LeafBlock is a Block which contains no child Blocks
-pub const LeafType = union(enum(u8)) {
+pub const LeafType = enum(u8) {
+    line_break,
+    heading,
+    para,
+    code,
+    //     - Breaks
+    //     - Headings
+    //     - Code blocks
+    //     - Link reference definition (e.g. [foo]: url "title")
+    //     - Paragraph ('Text')
+};
+
+pub const LeafData = union(LeafType) {
     line_break: LineBreak,
     heading: Heading,
     para: Paragraph,
@@ -55,10 +81,10 @@ pub const LeafType = union(enum(u8)) {
 /// A LeafBlock is a Block which contains no child Blocks
 pub const LeafBlock = struct {
     alloc: Allocator,
-    content: LeafType = undefined,
+    content: LeafData = undefined,
     inlines: ArrayList(Inline),
 
-    pub fn init(alloc: Allocator, content: LeafType) LeafBlock {
+    pub fn init(alloc: Allocator, content: LeafData) LeafBlock {
         return .{
             .alloc = alloc,
             .content = content,
@@ -66,7 +92,7 @@ pub const LeafBlock = struct {
         };
     }
 
-    pub fn initBlock(alloc: Allocator, content: LeafType) Block {
+    pub fn initBlock(alloc: Allocator, content: LeafData) Block {
         return .{
             .leaf = LeafBlock.init(alloc, content),
         };
@@ -201,7 +227,7 @@ pub const Text = struct {
 
     pub fn print(self: *const Text, depth: usize) void {
         printIndent(depth);
-        std.debug.print("Text: {s}\n", .{self.text});
+        std.debug.print("Text: {s} [Style: {any}]\n", .{ self.text, self.style });
     }
 };
 
@@ -280,14 +306,18 @@ test "Basic AST Construction" {
     var list_item = ContainerBlock.initBlock(alloc, .{ .list_item = ListItem{} });
 
     // Create a Paragraph
-    var paragraph = LeafBlock.initBlock(alloc, LeafType{ .para = Paragraph{} });
+    var paragraph = LeafBlock.initBlock(alloc, LeafData{ .para = Paragraph{} });
 
     // Create some Text
-    var text = Inline{ .text = Text{ .text = "Hello, World!" } };
+    var text1 = Inline{ .text = Text{ .text = "Hello, " } };
+    var text2 = Inline{ .text = Text{ .text = "World", .style = .{ .bold = true } } };
+    var text3 = Inline{ .text = Text{ .text = "!" } };
 
     // Add the Text to the Paragraph
     try std.testing.expect(isLeaf(paragraph));
-    try paragraph.addInline(text);
+    try paragraph.addInline(text1);
+    try paragraph.addInline(text2);
+    try paragraph.addInline(text3);
 
     // Add the Paragraph to the ListItem
     try std.testing.expect(isContainer(list_item));
