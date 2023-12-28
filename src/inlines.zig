@@ -12,6 +12,17 @@ const Allocator = std.mem.Allocator;
 const Token = zd.Token;
 const printIndent = zd.printIndent;
 
+/// Phrasing content represents the text in a document, and its markup
+pub const PhrasingContent = union(enum(u8)) {
+    // autolink: Autolink,
+    codespan: Codespan,
+    link: Link,
+    image: Image,
+    newline: void,
+    // reference: Reference,
+    text: Text,
+};
+
 pub const InlineType = enum(u8) {
     autolink,
     codespan,
@@ -43,11 +54,12 @@ pub const InlineData = union(InlineType) {
     pub fn deinit(_: InlineData) void {}
 
     pub fn print(self: InlineData, depth: u8) void {
-        printIndent(depth);
-        std.debug.print("Inline {s}: ", .{@tagName(self)});
         switch (self) {
-            .codespan, .linebreak => {},
-            inline else => |item| item.print(0),
+            .codespan, .linebreak => {
+                printIndent(depth);
+                std.debug.print("Inline {s}\n", .{@tagName(self)});
+            },
+            inline else => |item| item.print(depth),
         }
     }
 };
@@ -96,7 +108,7 @@ pub const Text = struct {
 
     pub fn print(self: Text, depth: u8) void {
         printIndent(depth);
-        std.debug.print("Text: {s} [Style: ", .{self.text});
+        std.debug.print("Text: '{s}' [Style: ", .{self.text});
         inline for (@typeInfo(Style).Struct.fields) |field| {
             if (@field(self.style, field.name)) {
                 std.debug.print("{s}, ", .{field.name});
@@ -106,45 +118,32 @@ pub const Text = struct {
     }
 };
 
-/// Block of multiple sections of formatted text
-/// Example: "plain and **bold** text together"
-pub const TextBlock = struct {
+pub const Break = struct {};
+
+/// Hyperlink
+pub const Link = struct {
     alloc: Allocator,
+    url: []const u8,
     text: ArrayList(Text),
 
-    /// Instantiate a TextBlock
-    pub fn init(alloc: std.mem.Allocator) TextBlock {
-        return TextBlock{
+    pub fn init(alloc: Allocator) Link {
+        return .{
             .alloc = alloc,
+            .url = undefined,
             .text = ArrayList(Text).init(alloc),
         };
     }
 
-    /// Free allocated memory
-    pub fn deinit(self: *TextBlock) void {
+    pub fn deinit(self: *Link) void {
         self.text.deinit();
     }
-
-    /// Append the elements of 'other' to this TextBlock
-    pub fn join(self: *TextBlock, other: *TextBlock) void {
-        try self.text.appendSlice(other.text.items);
-    }
-};
-
-/// Image
-// pub const Image = struct {
-//     src: []const u8,
-//     alt: TextBlock,
-// };
-
-/// Hyperlink
-pub const Link = struct {
-    url: []const u8,
-    text: ArrayList(Text),
 
     pub fn print(self: Link, depth: u8) void {
         printIndent(depth);
         std.debug.print("Link to {s}\n", .{self.url});
+        for (self.text.items) |text| {
+            text.print(depth + 1);
+        }
     }
 };
 

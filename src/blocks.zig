@@ -22,28 +22,15 @@ const Inline = zd.Inline;
 const InlineType = zd.InlineType;
 
 const Text = zd.Text;
+const Link = zd.Link;
+// const Image = zd.Image;
 
 const printIndent = zd.printIndent;
 
+/// Generic Block type. The AST is contructed from this type.
 pub const BlockType = enum(u8) {
     Container,
     Leaf,
-};
-
-/// Generic Block type. The AST is contructed from this type.
-pub const ContainerType = enum(u8) {
-    Document, // The Document is the root container
-    Quote,
-    List, // Can only contain ListItems
-    ListItem, // Can only be contained by a List
-};
-
-pub const LeafType = enum(u8) {
-    Break,
-    Code,
-    Heading,
-    Paragraph,
-    Reference,
 };
 
 // A Block may be a Container or a Leaf
@@ -101,7 +88,33 @@ pub const Block = union(BlockType) {
     }
 };
 
-/// A Container can contain one or more Blocks (Container OR Leaf)
+///////////////////////////////////////////////////////////////////////////////
+/// Container Block Implementations
+///////////////////////////////////////////////////////////////////////////////
+
+/// Containers are Blocks which contain other Blocks
+pub const ContainerType = enum(u8) {
+    Document, // The Document is the root container
+    Quote,
+    List, // Can only contain ListItems
+    ListItem, // Can only be contained by a List
+};
+
+pub const Quote = struct {
+    level: u8 = 0, // TODO: This may be unnecessary
+};
+
+/// List blocks conatin only ListItems
+pub const List = struct {
+    ordered: bool = false,
+    start: usize = 1, // Starting number, if ordered list
+    // items: ArrayList(ListItem),
+};
+
+/// A ListItem may contain other Containers
+pub const ListItem = struct {};
+
+/// A Container can contain one or more Blocks
 pub const Container = struct {
     const Self = @This();
     alloc: Allocator,
@@ -213,32 +226,160 @@ pub const Container = struct {
     }
 };
 
-/// A Leaf contains only Inlines
-pub const Leaf = struct {
+///////////////////////////////////////////////////////////////////////////////
+/// Leaf Block Implementations
+///////////////////////////////////////////////////////////////////////////////
+
+/// All types of Leaf blocks that can be contained in Container blocks
+pub const LeafType = enum(u8) {
+    Break,
+    Code,
+    Heading,
+    Paragraph,
+    // Reference,
+};
+
+/// The type-specific content of a Leaf block
+pub const LeafData = union(LeafType) {
+    Break: Break,
+    Code: Code,
+    Heading: Heading,
+    Paragraph: Paragraph,
+    // Reference: Reference,
+
+    pub fn deinit(self: *LeafData) void {
+        switch (self.*) {
+            .Paragraph => |*p| p.deinit(),
+            inline else => {},
+        }
+    }
+
+    pub fn print(self: LeafData, depth: u8) void {
+        switch (self) {
+            .Paragraph => |p| p.print(depth),
+            inline else => {},
+        }
+    }
+};
+
+/// A single hard line break
+pub const Break = struct {};
+
+/// A heading with associated level
+pub const Heading = struct {
+    level: u8 = 1,
+    text: Text = undefined,
+};
+
+/// Raw code or other preformatted content
+pub const Code = struct {
+    language: ?[]const u8 = null,
+    text: []const u8 = "",
+};
+
+/// Block of multiple sections of formatted text
+/// Example: "plain and **bold** text together"
+/// May also include links, images, and inline code
+pub const Paragraph = struct {
     const Self = @This();
     alloc: Allocator,
-    kind: LeafType,
-    open: bool = true,
-    inlines: ArrayList(Inline),
+    content: ArrayList(zd.Inline),
 
-    pub fn init(alloc: Allocator, kind: LeafType) Leaf {
+    /// Instantiate a Paragraph
+    pub fn init(alloc: std.mem.Allocator) Paragraph {
         return .{
             .alloc = alloc,
-            .kind = kind,
-            .inlines = ArrayList(Inline).init(alloc),
+            .content = ArrayList(zd.Inline).init(alloc),
         };
     }
 
+    /// Free allocated memory
     pub fn deinit(self: *Self) void {
-        for (self.inlines.items) |*item| {
+        for (self.content.items) |*item| {
             item.deinit();
         }
-        self.inlines.deinit();
+        self.content.deinit();
     }
 
-    pub fn addInline(self: *Self, item: Inline) !void {
-        try self.inlines.append(item);
+    /// Append a chunk of Text to the contents of the Paragraph
+    pub fn addText(self: *Self, text: Text) !void {
+        try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .text = text }));
     }
+
+    /// Append a Link to the contents Paragraph
+    pub fn addLink(self: *Self, link: Link) !void {
+        try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .link = link }));
+    }
+
+    /// Append an Image to the contents Paragraph
+    pub fn addImage(self: *Self, image: zd.Image) !void {
+        try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .image = image }));
+    }
+
+    /// Append an inline code span to the contents Paragraph
+    pub fn addCode(self: *Self, code: zd.Codespan) !void {
+        try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .codespan = code }));
+    }
+
+    /// Append a line break to the contents Paragraph
+    pub fn addBreak(self: *Self) !void {
+        try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .newline = {} }));
+    }
+
+    /// Append the elements of 'other' to this Paragraph
+    pub fn join(self: *Self, other: *Self) void {
+        try self.text.appendSlice(other.text.items);
+        other.text.deinit();
+    }
+
+    /// Pretty-print the Paragraph's contents
+    pub fn print(self: Self, depth: u8) void {
+        for (self.content.items) |item| {
+            item.print(depth);
+        }
+    }
+};
+
+pub const Reference = struct {};
+
+/// A Leaf contains only Inline content
+pub const Leaf = struct {
+    const Self = @This();
+    alloc: Allocator,
+    content: LeafData,
+    open: bool = true,
+    // inlines: ArrayList(Inline),
+
+    pub fn init(alloc: Allocator, kind: LeafType) Leaf {
+        var leaf = Leaf{
+            .alloc = alloc,
+            .content = undefined,
+            // .inlines = ArrayList(Inline).init(alloc),
+        };
+
+        leaf.content = blk: {
+            switch (kind) {
+                .Break => break :blk .{ .Break = Break{} },
+                .Code => break :blk .{ .Code = Code{} },
+                .Heading => break :blk .{ .Heading = Heading{} },
+                .Paragraph => break :blk .{ .Paragraph = Paragraph.init(alloc) },
+            }
+        };
+
+        return leaf;
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.content.deinit();
+        // for (self.inlines.items) |*item| {
+        //     item.deinit();
+        // }
+        // self.inlines.deinit();
+    }
+
+    // pub fn addInline(self: *Self, item: Inline) !void {
+    //     try self.inlines.append(item);
+    // }
 
     pub fn close(self: *Self) void {
         self.open = false;
@@ -253,58 +394,12 @@ pub const Leaf = struct {
     pub fn print(self: Leaf, depth: u8) void {
         printIndent(depth);
 
-        std.debug.print("LeafBlock: {s} with {d} inlines\n", .{
-            @tagName(self.kind),
-            self.inlines.items.len,
+        std.debug.print("Leaf: {s}\n", .{
+            @tagName(self.content),
+            //self.inlines.items.len,
         });
 
-        for (self.inlines.items) |item| {
-            item.print(depth + 1);
-        }
-    }
-};
-
-///////////////////////////////////////////////////////////////////////////////
-/// Container Block Implementations
-///////////////////////////////////////////////////////////////////////////////
-
-pub const Quote = struct {
-    level: u8 = 0, // TODO: This may be unnecessary
-};
-
-pub const List = struct {};
-pub const ListItem = struct {};
-
-///////////////////////////////////////////////////////////////////////////////
-/// Leaf Block Implementations
-///////////////////////////////////////////////////////////////////////////////
-
-pub const Break = struct {};
-pub const Reference = struct {};
-
-pub const Heading = struct {
-    level: u8 = 1,
-};
-
-pub const Code = struct {
-    language: []const u8 = "",
-};
-
-/// Hyperlink
-pub const Link = struct {
-    url: []const u8,
-    text: Paragraph, // ?? what should this REALLY be? ArrayList(Text)?
-
-    pub fn print(self: Link, depth: u8) void {
-        printIndent(depth);
-        std.debug.print("Link to {s}\n", .{self.url});
-    }
-};
-
-pub const Paragraph = struct {
-    /// Append the elements of 'other' to this TextBlock
-    pub fn join(self: *Paragraph, other: *Paragraph) void {
-        try self.text.appendSlice(other.text.items);
+        self.content.print(depth + 1);
     }
 };
 
@@ -312,51 +407,51 @@ pub const Paragraph = struct {
 // Tests
 ///////////////////////////////////////////////////////////////////////////////
 
-test "CommonMark strategy" {
-    // Setup
-    const text: []const u8 = "# Heading";
-    var alloc = std.testing.allocator;
-    var lexer = Lexer.init(alloc, text);
-    var tokens_array = try lexer.tokenize();
-    defer tokens_array.deinit();
-    var tokens: []Token = tokens_array.items;
-    var cursor: usize = 0;
-
-    // Create empty document; parse first line into the start of a new Block
-    var document = Block.initContainer(alloc, .Document);
-    // defer document.deinit();
-    const first_line = getLine(tokens, cursor);
-    if (first_line == null) {
-        // empty document?
-        return;
-    }
-    cursor += first_line.?.len;
-
-    var open_block = try parseBlockFromLine(first_line.?);
-    try document.addChild(open_block);
-
-    if (first_line.?.len == tokens.len) // Only one line in the text
-        return;
-
-    while (getLine(tokens, cursor)) |line| {
-        // First see if the current open block of the document can accept this line
-        if (!open_block.handleLine(line)) {
-            // This line cannot continue the current open block; close and continue
-            // Close the current open block (child of the Document)
-            open_block.close();
-
-            // Append a new Block to the document
-            open_block = try parseBlockFromLine(line);
-            try document.addChild(open_block);
-        } else {
-            // The line belongs with this block
-            // TODO: Add line to block
-        }
-
-        // This line has been handled, one way or another; continue to the next line
-        cursor += line.len;
-    }
-}
+// test "CommonMark strategy" {
+//     // Setup
+//     const text: []const u8 = "# Heading";
+//     var alloc = std.testing.allocator;
+//     var lexer = Lexer.init(alloc, text);
+//     var tokens_array = try lexer.tokenize();
+//     defer tokens_array.deinit();
+//     var tokens: []Token = tokens_array.items;
+//     var cursor: usize = 0;
+//
+//     // Create empty document; parse first line into the start of a new Block
+//     var document = Block.initContainer(alloc, .Document);
+//     // defer document.deinit();
+//     const first_line = getLine(tokens, cursor);
+//     if (first_line == null) {
+//         // empty document?
+//         return;
+//     }
+//     cursor += first_line.?.len;
+//
+//     var open_block = try parseBlockFromLine(first_line.?);
+//     try document.addChild(open_block);
+//
+//     if (first_line.?.len == tokens.len) // Only one line in the text
+//         return;
+//
+//     while (getLine(tokens, cursor)) |line| {
+//         // First see if the current open block of the document can accept this line
+//         if (!open_block.handleLine(line)) {
+//             // This line cannot continue the current open block; close and continue
+//             // Close the current open block (child of the Document)
+//             open_block.close();
+//
+//             // Append a new Block to the document
+//             open_block = try parseBlockFromLine(line);
+//             try document.addChild(open_block);
+//         } else {
+//             // The line belongs with this block
+//             // TODO: Add line to block
+//         }
+//
+//         // This line has been handled, one way or another; continue to the next line
+//         cursor += line.len;
+//     }
+// }
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -469,22 +564,27 @@ test "Quote block continuation lines" {
     var cursor: usize = 0;
     while (getLine(tokens.items, cursor)) |line| {
         zd.printTypes(line);
-        const continues: bool = isContinuationLineQuote(line);
-        std.debug.print(" ^-- Could continue a Quote block? {}\n", .{continues});
+        const continues_quote: bool = isContinuationLineQuote(line);
+        std.debug.print(" ^-- Could continue a Quote block? {}\n", .{continues_quote});
         cursor += line.len;
     }
 }
 
 // TODO:
 // Refactor from Sections to Blocks and Inlines
-// See: https://spec.commonmark.org/0.30/#blocks-and-inlines
+//   See: https://spec.commonmark.org/0.30/#blocks-and-inlines
 // Blocks: Container or Leaf
 //   Leaf Blocks:
 //     - Breaks
+//       - Contains nothing
 //     - Code blocks
+//       - Contains raw text + a language/meta tag
 //     - Headings
+//       - Contains a level and text
 //     - Paragraph ('Text')
+//       - Contains text
 //     - Link reference definition (e.g. [foo]: url "title")
+//      - Contains a destination (raw string), alt (text), and title (text)
 //   Container Blocks:
 //     - Quote
 //     - List (ordered or bullet)
@@ -499,6 +599,33 @@ test "Quote block continuation lines" {
 //   - Images
 //   - Autolinks (e.g. <google.com>)
 //   - Line breaks
+//
+// ----------------------------------------------------------------------------
+// A better, more detailed content model:
+//   https://github.com/syntax-tree/mdast?tab=readme-ov-file#content-model
+//
+// type MdastContent    = FlowContent | ListContent | PhrasingContent
+// type Content         = Definition | Paragraph
+// type FlowContent     = Blockquote | Code | Heading | Html | List | ThematicBreak | Content
+// type ListContent     = ListItem
+// type PhrasingContent = Break | Emphasis | Html | Image | ImageReference
+//                      | InlineCode | Link | LinkReference | Strong | Text
+//
+// Node Type: SelfType > ChildType
+//   Paragraph:  Content > PhrasingContent
+//   Definition: Content > None
+//   Blockquote: FlowContent > FlowContent
+//   Code:       FlowContent > None
+//   Heading:    FlowContent > PhrasingContent
+//   List:       FlowContent > ListContent
+//   ListItem:   ListContent > FlowContent
+//   Link:       PhrasingContent > PhrasingContent
+//   Image:      PhrasingContent > None
+//   Break:      PhrasingContent > None
+//   Text*:      PhrasingContent > None
+//
+// *My implementation of Text covers Bold, Strong, Emphasis, etc.
+// ----------------------------------------------------------------------------
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Helper Functions
@@ -539,17 +666,31 @@ test "Basic AST Construction" {
     var paragraph = Block.initLeaf(alloc, .Paragraph);
 
     // Create some Text
-    var text1 = Inline.initWithContent(alloc, .{ .text = Text{ .text = "Hello, " } });
-    var text2 = Inline.initWithContent(alloc, .{ .text = Text{ .text = "World", .style = .{ .bold = true } } });
-    var text3 = Inline.initWithContent(alloc, .{ .text = Text{ .text = "!" } });
-    text3.content.text.style.bold = true;
-    text3.content.text.style.italic = true;
+    // var text1 = Inline.initWithContent(alloc, .{ .text = Text{ .text = "Hello, " } });
+    // var text2 = Inline.initWithContent(alloc, .{ .text = Text{ .text = "World", .style = .{ .bold = true } } });
+    // var text3 = Inline.initWithContent(alloc, .{ .text = Text{ .text = "!" } });
+    // text3.content.text.style.bold = true;
+    // text3.content.text.style.italic = true;
+    var text1 = Text{ .text = "Hello, " };
+    var text2 = Text{ .text = "World", .style = .{ .bold = true } };
+    var text3 = Text{ .text = "!" };
+    text3.style.bold = true;
+    text3.style.italic = true;
+
+    var link = zd.Link.init(alloc);
+    defer link.deinit();
+    link.url = "www.google.com";
+    try link.text.append(Text{ .text = "Google", .style = .{ .underline = true } });
 
     // Add the Text to the Paragraph
     try std.testing.expect(isLeaf(paragraph));
-    try paragraph.addInline(text1);
-    try paragraph.addInline(text2);
-    try paragraph.addInline(text3);
+    // try paragraph.addInline(text1);
+    // try paragraph.addInline(text2);
+    // try paragraph.addInline(text3);
+    try paragraph.Leaf.content.Paragraph.addText(text1);
+    try paragraph.Leaf.content.Paragraph.addText(text2);
+    try paragraph.Leaf.content.Paragraph.addText(text3);
+    try paragraph.Leaf.content.Paragraph.addLink(link);
 
     // Add the Paragraph to the ListItem
     try std.testing.expect(isContainer(list_item));
