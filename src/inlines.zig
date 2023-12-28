@@ -36,7 +36,7 @@ pub const InlineData = union(InlineType) {
     text: Text,
     link: Link,
     image: Image,
-    codespan: void,
+    codespan: Codespan,
     autolink: Autolink,
     linebreak: void,
 
@@ -51,7 +51,13 @@ pub const InlineData = union(InlineType) {
         }
     }
 
-    pub fn deinit(_: InlineData) void {}
+    pub fn deinit(self: *InlineData) void {
+        switch (self.*) {
+            .link => |*l| l.deinit(),
+            .image => |*i| i.deinit(),
+            else => {},
+        }
+    }
 
     pub fn print(self: InlineData, depth: u8) void {
         switch (self) {
@@ -154,13 +160,26 @@ pub const Link = struct {
 
 /// Raw text codespan
 pub const Codespan = struct {
-    text: []const u8,
+    text: []const u8 = "",
 };
 
 /// Image Link
 pub const Image = struct {
-    src: []const u8,
+    alloc: Allocator,
+    src: []const u8 = undefined,
     alt: ArrayList(Text),
+
+    pub fn init(alloc: Allocator) Image {
+        return .{
+            .alloc = alloc,
+            .src = "",
+            .alt = ArrayList(Text).init(alloc),
+        };
+    }
+
+    pub fn deinit(self: *Image) void {
+        self.alt.deinit();
+    }
 
     pub fn print(self: Image, depth: u8) void {
         printIndent(depth);

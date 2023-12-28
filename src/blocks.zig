@@ -104,7 +104,10 @@ pub const Quote = struct {
     level: u8 = 0, // TODO: This may be unnecessary
 };
 
-/// List blocks conatin only ListItems
+/// List blocks contain only ListItems
+/// However, we will use the base Container type's 'children' field to
+/// store the list items for simplicity, as the ListItems are Container blocks
+/// which can hold any kind of Block.
 pub const List = struct {
     ordered: bool = false,
     start: usize = 1, // Starting number, if ordered list
@@ -114,20 +117,36 @@ pub const List = struct {
 /// A ListItem may contain other Containers
 pub const ListItem = struct {};
 
+pub const ContainerData = union(ContainerType) {
+    Document: void,
+    Quote: Quote,
+    List: List,
+    ListItem: void,
+};
+
 /// A Container can contain one or more Blocks
 pub const Container = struct {
     const Self = @This();
     alloc: Allocator,
-    kind: ContainerType,
+    content: ContainerData,
     open: bool = true,
     children: ArrayList(Block),
 
     pub fn init(alloc: Allocator, kind: ContainerType) Self {
-        return .{
+        var block = Container{
             .alloc = alloc,
-            .kind = kind,
+            .content = undefined,
             .children = ArrayList(Block).init(alloc),
         };
+
+        block.content = switch (kind) {
+            .Document => ContainerData{ .Document = {} },
+            .Quote => ContainerData{ .Quote = Quote{} },
+            .List => ContainerData{ .List = List{} },
+            .ListItem => ContainerData{ .ListItem = {} },
+        };
+
+        return block;
     }
 
     pub fn deinit(self: *Self) void {
@@ -216,7 +235,7 @@ pub const Container = struct {
 
         std.debug.print("Container: open: {any}, type: {s} with {d} children\n", .{
             self.open,
-            @tagName(self.kind),
+            @tagName(self.content),
             self.children.items.len,
         });
 
@@ -268,7 +287,7 @@ pub const Break = struct {};
 /// A heading with associated level
 pub const Heading = struct {
     level: u8 = 1,
-    text: Text = undefined,
+    text: []const u8 = undefined,
 };
 
 /// Raw code or other preformatted content
@@ -278,8 +297,8 @@ pub const Code = struct {
 };
 
 /// Block of multiple sections of formatted text
-/// Example: "plain and **bold** text together"
-/// May also include links, images, and inline code
+/// Example:
+///   plain and **bold** text, as well as [links](example.com) and `code`
 pub const Paragraph = struct {
     const Self = @This();
     alloc: Allocator,
@@ -394,9 +413,9 @@ pub const Leaf = struct {
     pub fn print(self: Leaf, depth: u8) void {
         printIndent(depth);
 
-        std.debug.print("Leaf: {s}\n", .{
+        std.debug.print("Leaf: open: {any}, type: {s}\n", .{
+            self.open,
             @tagName(self.content),
-            //self.inlines.items.len,
         });
 
         self.content.print(depth + 1);
@@ -570,36 +589,6 @@ test "Quote block continuation lines" {
     }
 }
 
-// TODO:
-// Refactor from Sections to Blocks and Inlines
-//   See: https://spec.commonmark.org/0.30/#blocks-and-inlines
-// Blocks: Container or Leaf
-//   Leaf Blocks:
-//     - Breaks
-//       - Contains nothing
-//     - Code blocks
-//       - Contains raw text + a language/meta tag
-//     - Headings
-//       - Contains a level and text
-//     - Paragraph ('Text')
-//       - Contains text
-//     - Link reference definition (e.g. [foo]: url "title")
-//      - Contains a destination (raw string), alt (text), and title (text)
-//   Container Blocks:
-//     - Quote
-//     - List (ordered or bullet)
-//     - List items
-// Inlines:
-//   - Styled text:
-//     - Italic
-//     - Bold
-//     - Underline
-//   - Code span
-//   - Links (e.g. [text](url))
-//   - Images
-//   - Autolinks (e.g. <google.com>)
-//   - Line breaks
-//
 // ----------------------------------------------------------------------------
 // A better, more detailed content model:
 //   https://github.com/syntax-tree/mdast?tab=readme-ov-file#content-model
@@ -613,14 +602,17 @@ test "Quote block continuation lines" {
 //
 // Node Type: SelfType > ChildType
 //   Paragraph:  Content > PhrasingContent
-//   Definition: Content > None
+//   Definition: Content > None                     |  [link_A]: https://example.com "Example link"
 //   Blockquote: FlowContent > FlowContent
 //   Code:       FlowContent > None
 //   Heading:    FlowContent > PhrasingContent
 //   List:       FlowContent > ListContent
 //   ListItem:   ListContent > FlowContent
-//   Link:       PhrasingContent > PhrasingContent
-//   Image:      PhrasingContent > None
+//   Link:       PhrasingContent > PhrasingContent  |  [Clickme](example.com)
+//   LinkRef:    PhrasingContent > None             |  [See Here][link_A]
+//   Image:      PhrasingContent > None             |  ![Picture](file.png)
+//   ImageRef:   PhrasingContent > None             |  ![Picture][figure_A]
+//   InlineCode: PhrasingContent > None             |  `foo()`
 //   Break:      PhrasingContent > None
 //   Text*:      PhrasingContent > None
 //
@@ -647,14 +639,9 @@ pub fn isLeaf(block: Block) bool {
 // Tests
 ///////////////////////////////////////////////////////////////////////////////
 
-test "Basic AST Construction" {
-    std.debug.print("\n", .{});
-
-    var alloc = std.testing.allocator;
-
+fn createTestAst(alloc: Allocator) !Block {
     // Create the Document root
     var root = Block.initContainer(alloc, .Document);
-    defer root.deinit();
 
     // Create a List container
     var list = Block.initContainer(alloc, .List);
@@ -666,27 +653,19 @@ test "Basic AST Construction" {
     var paragraph = Block.initLeaf(alloc, .Paragraph);
 
     // Create some Text
-    // var text1 = Inline.initWithContent(alloc, .{ .text = Text{ .text = "Hello, " } });
-    // var text2 = Inline.initWithContent(alloc, .{ .text = Text{ .text = "World", .style = .{ .bold = true } } });
-    // var text3 = Inline.initWithContent(alloc, .{ .text = Text{ .text = "!" } });
-    // text3.content.text.style.bold = true;
-    // text3.content.text.style.italic = true;
     var text1 = Text{ .text = "Hello, " };
     var text2 = Text{ .text = "World", .style = .{ .bold = true } };
     var text3 = Text{ .text = "!" };
     text3.style.bold = true;
     text3.style.italic = true;
 
+    // Create a Link
     var link = zd.Link.init(alloc);
-    defer link.deinit();
     link.url = "www.google.com";
     try link.text.append(Text{ .text = "Google", .style = .{ .underline = true } });
 
-    // Add the Text to the Paragraph
+    // Add the Text and the Link to the Paragraph
     try std.testing.expect(isLeaf(paragraph));
-    // try paragraph.addInline(text1);
-    // try paragraph.addInline(text2);
-    // try paragraph.addInline(text3);
     try paragraph.Leaf.content.Paragraph.addText(text1);
     try paragraph.Leaf.content.Paragraph.addText(text2);
     try paragraph.Leaf.content.Paragraph.addText(text3);
@@ -703,5 +682,44 @@ test "Basic AST Construction" {
     // Add the List to the Document
     try root.addChild(list);
 
+    return root;
+}
+
+test "Basic AST Construction" {
+    std.debug.print("\n", .{});
+
+    var alloc = std.testing.allocator;
+
+    var root = try createTestAst(alloc);
+    defer root.deinit();
+}
+
+test "Print basic AST" {
+    std.debug.print("\n", .{});
+
+    var alloc = std.testing.allocator;
+
+    var root = try createTestAst(alloc);
+    defer root.deinit();
+
     root.print(0);
+}
+
+test "Render basic AST" {
+    std.debug.print("\n", .{});
+    var alloc = std.testing.allocator;
+
+    const stderr = std.io.getStdErr().writer();
+    var renderer = htmlRenderer(stderr, alloc);
+
+    var root = try createTestAst(alloc);
+    defer root.deinit();
+
+    try renderer.renderBlock(root);
+}
+
+const html = @import("render_html.zig");
+
+pub fn htmlRenderer(out_stream: anytype, alloc: Allocator) html.HtmlRenderer(@TypeOf(out_stream)) {
+    return html.HtmlRenderer(@TypeOf(out_stream)).init(out_stream, alloc);
 }
