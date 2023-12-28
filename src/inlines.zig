@@ -153,11 +153,6 @@ pub const Link = struct {
     }
 };
 
-// /// Auto-link
-// pub const Autolink = struct {
-//     url: []const u8,
-// };
-
 /// Raw text codespan
 pub const Codespan = struct {
     text: []const u8 = "",
