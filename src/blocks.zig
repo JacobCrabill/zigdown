@@ -639,6 +639,7 @@ pub fn isLeaf(block: Block) bool {
 // Tests
 ///////////////////////////////////////////////////////////////////////////////
 
+/// Manually create a useful Markdown document AST
 fn createTestAst(alloc: Allocator) !Block {
     // Create the Document root
     var root = Block.initContainer(alloc, .Document);

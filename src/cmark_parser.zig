@@ -11,7 +11,7 @@ const zd = struct {
     usingnamespace @import("tokens.zig");
     usingnamespace @import("lexer.zig");
     usingnamespace @import("inline.zig");
-    usingnamespace @import("commonmark.zig");
+    usingnamespace @import("blocks.zig");
 };
 
 const Lexer = zd.Lexer;
@@ -29,27 +29,47 @@ const Block = zd.Block;
 const ContainerBlock = zd.ContainerBlock;
 const LeafBlock = zd.LeafBlock;
 
+/// Options to configure the Parser
+pub const ParserOpts = struct {
+    /// Allocate a copy of the input text (Caller may free input after creating Parser)
+    copy_input: bool = false,
+};
+
+/// Parse text into a Markdown document structure
+///
+/// Caller owns the input, unless a copy is requested via ParserOpts
 pub const Parser = struct {
     const Self = @This();
     alloc: Allocator,
+    opts: ParserOpts,
     lexer: Lexer,
     text: []const u8,
     tokens: ArrayList(Token),
     cursor: usize = 0,
     cur_token: Token,
     next_token: Token,
-    document: ArrayList(Block), // TODO: Update Markdown struct def
+    document: Block,
 
-    pub fn init(alloc: Allocator, text: []const u8) !Self {
+    pub fn init(alloc: Allocator, text: []const u8, opts: ParserOpts) !Self {
+        // Allocate copy of the input text if requested
+        var p_text: []const u8 = undefined;
+        if (opts.copy_input) {
+            var talloc: []u8 = try alloc.alloc(u8, text.len);
+            @memcpy(talloc, text);
+            p_text = talloc;
+        } else {
+            p_text = text;
+        }
+
         var parser = Parser{
             .alloc = alloc,
-            .lexer = Lexer.init(alloc, text),
-            .text = text,
+            .lexer = Lexer.init(alloc, p_text),
+            .text = p_text,
             .tokens = ArrayList(Token).init(alloc),
             .cursor = 0,
             .cur_token = undefined,
             .next_token = undefined,
-            .document = ArrayList(Block).init(alloc),
+            .document = Block.initContainer(alloc, .Document),
         };
         try parser.tokenize();
         return parser;
@@ -66,14 +86,17 @@ pub const Parser = struct {
 
     /// Parse the document
     pub fn parseMarkdown(self: *Self) !void {
-        var document = Block.initContainer(self.alloc, .Document);
         loop: while (self.getLine()) |line| {
             zd.printTypes(line);
-            try document.handleLine(line);
+            try self.document.handleLine(line);
             self.advanceCursor(line.len);
             continue :loop;
         }
     }
+
+    ///////////////////////////////////////////////////////
+    // Token & Cursor Interactions
+    ///////////////////////////////////////////////////////
 
     /// Tokenize the input, replacing current token list if it exists
     fn tokenize(self: *Self) !void {
