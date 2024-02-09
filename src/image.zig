@@ -37,9 +37,9 @@ pub fn isPNG(data: []const u8) bool {
 pub fn sendImagePNG(stream: anytype, alloc: Allocator, file: []const u8, width: ?usize, height: ?usize) !void {
     // Read the image into memory
     var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
-    var realpath = try std.fs.realpath(file, &path_buf);
+    const realpath = try std.fs.realpath(file, &path_buf);
     var img: File = try std.fs.openFileAbsolute(realpath, .{});
-    var buffer = try img.readToEndAlloc(alloc, 1e9);
+    const buffer = try img.readToEndAlloc(alloc, 1e9);
     defer alloc.free(buffer);
 
     // TODO
@@ -52,7 +52,7 @@ pub fn sendImagePNG(stream: anytype, alloc: Allocator, file: []const u8, width: 
 
     // Encode the image data as base64
     const blen = Base64Encoder.calcSize(buffer.len);
-    var b64buf = try alloc.alloc(u8, blen);
+    const b64buf = try alloc.alloc(u8, blen);
     defer alloc.free(b64buf);
 
     const data = Base64Encoder.encode(b64buf, buffer);
@@ -97,7 +97,7 @@ test "Get window size" {
     const TIOCGWINSZ: usize = 21523;
 
     const stdout_fd: linux.fd_t = 0;
-    var res: usize = linux.ioctl(stdout_fd, TIOCGWINSZ, @intFromPtr(&wsz));
+    const res: usize = linux.ioctl(stdout_fd, TIOCGWINSZ, @intFromPtr(&wsz));
 
     std.debug.print("Window Size: {any}\n", .{wsz});
     const expected: usize = 0;
@@ -109,7 +109,7 @@ test "Get window size" {
 // I don't know why this can't be run as a test...
 // 'zig test src/image.zig' works, but 'zig build test-image' just hangs
 test "Display image" {
-    var alloc = std.testing.allocator;
+    const alloc = std.testing.allocator;
     std.debug.print("Rendering Zero the Ziguana here:\n", .{});
 
     try sendImagePNG(stdout, alloc, "test/zig-zero.png");
@@ -118,7 +118,7 @@ test "Display image" {
 }
 
 pub fn main() !void {
-    var alloc = std.heap.page_allocator;
+    const alloc = std.heap.page_allocator;
     const args = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, args);
 

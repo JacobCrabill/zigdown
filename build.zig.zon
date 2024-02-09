@@ -1,0 +1,14 @@
+.{
+    .name = "zigdown",
+    .version = "0.1.0",
+    .paths = .{
+        "src/*.zig",
+        "build.zig.*",
+    },
+    .dependencies = .{
+        .stbi = .{
+            .url = "https://github.com/JacobCrabill/zig-stb-image/archive/7eff48498437edb93ce81604824a82b7bce41d0a.tar.gz",
+            .hash = "1220a103eaa442ac108d6e678e6b9f85d34c3e06f0e939d735c055d23c08daad62fd",
+        },
+    },
+}

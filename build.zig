@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub fn build(b: *std.build.Builder) void {
+pub fn build(b: *std.Build) void {
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -18,7 +18,6 @@ pub fn build(b: *std.build.Builder) void {
 
     // Dependencies from build.zig.zon
     const stbi = b.dependency("stbi", std_build_opts);
-    const stb_lib = stbi.artifact("stb-image");
 
     // Compile the main executable
     const exe = b.addExecutable(.{
@@ -29,9 +28,7 @@ pub fn build(b: *std.build.Builder) void {
         .target = target,
     });
 
-    exe.addModule("stb_image", stbi.module("stb_image"));
-    // The STB Image package requires linking to the stb_image lib it produces
-    exe.linkLibrary(stb_lib);
+    exe.root_module.addImport("stb_image", stbi.module("stb_image"));
 
     b.installArtifact(exe);
 

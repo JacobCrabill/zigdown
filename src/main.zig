@@ -74,14 +74,14 @@ pub fn main() !void {
 
     // Read file into memory
     var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
-    var realpath = try std.fs.realpath(filename.?, &path_buf);
+    const realpath = try std.fs.realpath(filename.?, &path_buf);
     var md_file: File = try std.fs.openFileAbsolute(realpath, .{});
-    var md_text = try md_file.readToEndAlloc(alloc, 1e9);
+    const md_text = try md_file.readToEndAlloc(alloc, 1e9);
     defer alloc.free(md_text);
 
     // Parse the input text
     var parser = try zd.Parser.init(alloc, md_text, .{});
-    var md = try parser.parseMarkdown();
+    const md = try parser.parseMarkdown();
 
     if (outfile) |outname| {
         // TODO: check if path is absolute or relative; join relpath to cwd if relative
@@ -95,10 +95,10 @@ pub fn main() !void {
 }
 
 fn render(stream: anytype, md: zd.Markdown, do_console: bool, do_html: bool) !void {
-    if (do_html) {
-        var h_renderer = htmlRenderer(stream, md.alloc);
-        try h_renderer.render(md);
-    }
+    // if (do_html) {
+    //     var h_renderer = htmlRenderer(stream, md.alloc);
+    //     try h_renderer.render(md);
+    // }
 
     if (do_console or !do_html) {
         var c_renderer = consoleRenderer(stream, md.alloc);

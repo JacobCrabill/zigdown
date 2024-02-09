@@ -574,7 +574,7 @@ test "Quote block continuation lines" {
         \\2. not the 2nd item
     ;
 
-    var alloc = std.testing.allocator;
+    const alloc = std.testing.allocator;
     var lexer = Lexer.init(alloc, data);
     var tokens = try lexer.tokenize();
     defer tokens.deinit();
@@ -654,8 +654,8 @@ fn createTestAst(alloc: Allocator) !Block {
     var paragraph = Block.initLeaf(alloc, .Paragraph);
 
     // Create some Text
-    var text1 = Text{ .text = "Hello, " };
-    var text2 = Text{ .text = "World", .style = .{ .bold = true } };
+    const text1 = Text{ .text = "Hello, " };
+    const text2 = Text{ .text = "World", .style = .{ .bold = true } };
     var text3 = Text{ .text = "!" };
     text3.style.bold = true;
     text3.style.italic = true;
@@ -689,7 +689,7 @@ fn createTestAst(alloc: Allocator) !Block {
 test "Basic AST Construction" {
     std.debug.print("\n", .{});
 
-    var alloc = std.testing.allocator;
+    const alloc = std.testing.allocator;
 
     var root = try createTestAst(alloc);
     defer root.deinit();
@@ -698,7 +698,7 @@ test "Basic AST Construction" {
 test "Print basic AST" {
     std.debug.print("\n", .{});
 
-    var alloc = std.testing.allocator;
+    const alloc = std.testing.allocator;
 
     var root = try createTestAst(alloc);
     defer root.deinit();
@@ -708,7 +708,7 @@ test "Print basic AST" {
 
 test "Render basic AST" {
     std.debug.print("\n", .{});
-    var alloc = std.testing.allocator;
+    const alloc = std.testing.allocator;
 
     const stderr = std.io.getStdErr().writer();
     var renderer = htmlRenderer(stderr, alloc);

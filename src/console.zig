@@ -289,7 +289,7 @@ inline fn printANSITable() !void {
         outer: while (i < 11) : (i += 1) {
             var j: u8 = 0;
             while (j < 10) : (j += 1) {
-                var n = 10 * i + j;
+                const n = 10 * i + j;
                 if (n > 108) continue :outer;
                 try stdout.print(fmt, .{ n, n });
             }

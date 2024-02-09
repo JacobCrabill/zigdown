@@ -42,7 +42,7 @@ pub const Parser = struct {
         // Allocate copy of the input text if requested
         var p_input: []const u8 = undefined;
         if (opts.copy_input) {
-            var talloc: []u8 = try alloc.alloc(u8, input.len);
+            const talloc: []u8 = try alloc.alloc(u8, input.len);
             @memcpy(talloc, input);
             p_input = talloc;
         } else {
@@ -238,7 +238,7 @@ pub const Parser = struct {
                 break :loop;
 
             // Skip the '>' when parsing the line
-            var block = try self.parseLine(line[1..]);
+            const block = try self.parseLine(line[1..]);
 
             // TODO: Merge back-to-back Quote sections together
             try self.md.append(zd.Section{ .quote = zd.Quote{
@@ -271,7 +271,7 @@ pub const Parser = struct {
             // Remove leading whitespace
             var block: zd.TextBlock = undefined;
             if (start + 1 < line.len) {
-                var stripped_line = stripLeadingWhitespace(line[start + 1 ..]);
+                const stripped_line = stripLeadingWhitespace(line[start + 1 ..]);
                 self.setCursor(self.cursor + line.len - stripped_line.len);
                 block = try self.parseLine(stripped_line);
             } else {
@@ -310,7 +310,7 @@ pub const Parser = struct {
             // Remove leading whitespace
             var block: zd.TextBlock = undefined;
             if (start + 1 < line.len) {
-                var stripped_line = stripLeadingWhitespace(line[start + 1 ..]);
+                const stripped_line = stripLeadingWhitespace(line[start + 1 ..]);
                 self.setCursor(self.cursor + line.len - stripped_line.len);
                 block = try self.parseLine(stripped_line);
             } else {
@@ -333,7 +333,7 @@ pub const Parser = struct {
             if (line.len < 1 or !isOneOf(kinds[0..], line[0].kind))
                 break :loop;
 
-            var block = try self.parseLine(line);
+            const block = try self.parseLine(line);
             try self.md.append(zd.Section{ .textblock = block });
         }
         //std.debug.print("After parseTextBlock: {any}: {s}\n", .{ self.next_token.kind, self.next_token.text });
@@ -496,9 +496,9 @@ pub const Parser = struct {
 
         // Skip the '[', find the ']'
         self.nextToken();
-        var i = self.findFirstOf(self.cursor, &.{.RBRACK}).?;
+        const i = self.findFirstOf(self.cursor, &.{.RBRACK}).?;
         line = self.tokens.items[self.cursor..i];
-        var link_text_block = try self.parseLine(line);
+        const link_text_block = try self.parseLine(line);
         self.nextToken(); // skip the ']'
 
         // Skip '(', advance to the next ')'
@@ -609,7 +609,7 @@ pub const Parser = struct {
             mergeConsecutiveWhitespace(words);
 
             // End the current Text object with the current style
-            var text = zd.Text{
+            const text = zd.Text{
                 .style = style,
                 .text = try std.mem.concat(self.alloc, u8, words.items),
             };
@@ -719,7 +719,7 @@ pub fn main() !void {
 
     // TODO: Fix memory leaks!!
     //var alloc = std.testing.allocator;
-    var alloc = std.heap.page_allocator;
+    const alloc = std.heap.page_allocator;
 
     // Tokenize the input text
     var parser = try Parser.init(alloc, data, .{});

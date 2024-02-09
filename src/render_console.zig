@@ -199,7 +199,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.writeno(cons.hyperlink);
             self.writeno(cons.link_end);
             self.writeno(cons.ansi_end);
-            var img_file: ?stb.Image = stb.load_image(image.src) catch null; // silently fail
+            const img_file: ?stb.Image = stb.load_image(image.src) catch null; // silently fail
             if (img_file) |img| {
                 gfx.sendImagePNG(self.stream, self.alloc, image.src, @intCast(img.width), @intCast(img.height)) catch {};
             }

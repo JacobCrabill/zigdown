@@ -43,7 +43,7 @@ test "Render to HTML" {
     defer md.deinit();
 
     // Level 1 heading
-    var s_h1 = zd.Section{ .heading = zd.Heading{
+    const s_h1 = zd.Section{ .heading = zd.Heading{
         .level = 1,
         .text = "Hello!",
     } };
@@ -88,9 +88,9 @@ test "Render to HTML" {
     // Read test output
     var infile: std.fs.File = try cwd.openFile("test/out.html", .{});
     defer infile.close();
-    var buffer = try infile.readToEndAlloc(std.testing.allocator, 1e8);
+    const buffer = try infile.readToEndAlloc(std.testing.allocator, 1e8);
     defer std.testing.allocator.free(buffer);
 
-    var res = std.mem.eql(u8, buffer, expected_output);
+    const res = std.mem.eql(u8, buffer, expected_output);
     try std.testing.expect(res == true);
 }
