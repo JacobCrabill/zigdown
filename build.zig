@@ -64,6 +64,8 @@ pub fn build(b: *std.Build) void {
     addTest(b, "test-render", "Run renderer unit tests", "src/render.zig", optimize);
     addTest(b, "test-image", "Run the image rendering tests", "src/image.zig", optimize);
 
+    addTest(b, "test-parser-new", "Run the new paresr tests", "src/cmark_parser.zig", optimize);
+
     addTest(b, "test-all", "Run all unit tests", "src/test.zig", optimize);
 }
 

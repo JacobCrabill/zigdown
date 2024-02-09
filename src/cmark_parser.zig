@@ -10,7 +10,7 @@ const zd = struct {
     usingnamespace @import("utils.zig");
     usingnamespace @import("tokens.zig");
     usingnamespace @import("lexer.zig");
-    usingnamespace @import("inline.zig");
+    usingnamespace @import("inlines.zig");
     usingnamespace @import("blocks.zig");
 };
 
@@ -54,7 +54,7 @@ pub const Parser = struct {
         // Allocate copy of the input text if requested
         var p_text: []const u8 = undefined;
         if (opts.copy_input) {
-            var talloc: []u8 = try alloc.alloc(u8, text.len);
+            const talloc: []u8 = try alloc.alloc(u8, text.len);
             @memcpy(talloc, text);
             p_text = talloc;
         } else {
@@ -63,6 +63,7 @@ pub const Parser = struct {
 
         var parser = Parser{
             .alloc = alloc,
+            .opts = opts,
             .lexer = Lexer.init(alloc, p_text),
             .text = p_text,
             .tokens = ArrayList(Token).init(alloc),
@@ -236,46 +237,77 @@ fn parseNewBlock(line: []const Token) !Block {
     } };
 }
 
-// test "Parse basic Markdown" {
-//     const data =
-//         \\# Header!
-//         \\## Header 2
-//         \\### Header 3...
-//         \\#### ...and Header 4
-//         \\
-//         \\  some *generic* text _here_, with formatting!
-//         \\  including ***BOLD italic*** text!
-//         \\  Note that the renderer should automaticallly wrap text for us
-//         \\  at some parameterizeable wrap width
-//         \\
-//         \\after the break...
-//         \\
-//         \\> Quote line
-//         \\> Another quote line
-//         \\> > And a nested quote
-//         \\
-//         \\```
-//         \\code
-//         \\```
-//         \\
-//         \\And now a list:
-//         \\
-//         \\+ foo
-//         \\+ fuzz
-//         \\    + no indents yet
-//         \\- bar
-//         \\
-//         \\
-//         \\1. Numbered lists, too!
-//         \\2. 2nd item
-//         \\2. not the 2nd item
-//     ;
-//
-//     // TODO: Fix memory leaks!!
-//     //var alloc = std.testing.allocator;
-//     var alloc = std.heap.page_allocator;
-//
-//     // Tokenize the input text
-//     var parser = try Parser.init(alloc, data);
-//     try parser.parseMarkdown();
-// }
+fn createAST() !Block {
+    const alloc = std.testing.allocator;
+
+    var root = Block.initContainer(alloc, .Document);
+    var quote = Block.initContainer(alloc, .Quote);
+    var list = Block.initContainer(alloc, .List);
+    var list_item = Block.initContainer(alloc, .ListItem);
+    var paragraph = Block.initLeaf(alloc, .Paragraph);
+
+    const text1 = zd.Text{ .text = "Hello, " };
+    const text2 = zd.Text{ .text = "World", .style = .{ .bold = true } };
+    var text3 = zd.Text{ .text = "!" };
+    text3.style.bold = true;
+    text3.style.italic = true;
+
+    try paragraph.Leaf.content.Paragraph.addText(text1);
+    try paragraph.Leaf.content.Paragraph.addText(text2);
+    try paragraph.Leaf.content.Paragraph.addText(text3);
+
+    try list_item.addChild(paragraph);
+    try list.addChild(list_item);
+    try quote.addChild(list);
+    try root.addChild(quote);
+
+    return root;
+}
+
+test "1. one-line nested blocks" {
+
+    // ~~ Expected Parser Output ~~
+
+    const root = try createAST();
+
+    // ~~ Parse ~~
+
+    // const input = "> - Hello, World!";
+    // const alloc = std.testing.allocator;
+    // var p: Parser = try Parser.init(alloc, input, .{});
+    // defer p.deinit();
+
+    // try p.parseMarkdown();
+
+    // ~~ Compare ~~
+
+    // Compare Document Block
+    // const root = p.document;
+    try std.testing.expect(zd.isContainer(root));
+    try std.testing.expectEqual(zd.ContainerType.Document, @as(zd.ContainerType, root.Container.content));
+    try std.testing.expectEqual(1, root.Container.children.items.len);
+
+    // Compare Quote Block
+    const quote = root.Container.children.items[0];
+    try std.testing.expect(zd.isContainer(quote));
+    try std.testing.expectEqual(zd.ContainerType.Quote, @as(zd.ContainerType, quote.Container.content));
+    try std.testing.expectEqual(1, quote.Container.children.items.len);
+
+    // Compare List Block
+    const list = quote.Container.children.items[0];
+    try std.testing.expect(zd.isContainer(list));
+    try std.testing.expectEqual(zd.ContainerType.List, @as(zd.ContainerType, list.Container.content));
+    try std.testing.expectEqual(1, list.Container.children.items.len);
+
+    // Compare ListItem Block
+    const list_item = list.Container.children.items[0];
+    try std.testing.expect(zd.isContainer(list_item));
+    try std.testing.expectEqual(zd.ContainerType.ListItem, @as(zd.ContainerType, list_item.Container.content));
+    try std.testing.expectEqual(1, list_item.Container.children.items.len);
+
+    // Compare Paragraph Block
+    const para = list_item.Container.children.items[0];
+    try std.testing.expect(zd.isLeaf(para));
+    try std.testing.expectEqual(zd.LeafType.Paragraph, @as(zd.LeafType, para.Leaf.content));
+    // try std.testing.expectEqual(1, para.Leaf.children.items.len);
+}

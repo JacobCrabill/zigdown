@@ -33,12 +33,12 @@ pub const InlineType = enum(u8) {
 };
 
 pub const InlineData = union(InlineType) {
-    text: Text,
-    link: Link,
-    image: Image,
-    codespan: Codespan,
     autolink: Autolink,
+    codespan: Codespan,
+    image: Image,
     linebreak: void,
+    link: Link,
+    text: Text,
 
     pub fn init(kind: InlineType) InlineData {
         switch (kind) {
