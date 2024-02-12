@@ -165,6 +165,14 @@ pub const Container = struct {
     }
 
     pub fn handleLine(self: *Self, line: []const Token) bool {
+        //
+        // KINDA NEW PLAN - I'm going to need a slightly different parser fn
+        // for each Block type.
+        // CASE IN POINT - a List block may _only_ contain ListItem blocks.
+        // Also, we need to handle Container and Leaf blocks differently.
+        //
+        // Many blocks should contain similar logic, but not identical.
+
         // First, check if the line is valid for our block type, as a
         // continuation line of our open child, or as the start of a new child
         // block
@@ -181,6 +189,7 @@ pub const Container = struct {
         if (!self.isLazyContinuationLine(trimmed_line))
             return false;
 
+        // Check for an open child
         if (self.children.items.len > 0) {
             var child: *Block = &self.children.items[self.children.items.len - 1];
             if (child.handleLine(trimmed_line)) {
@@ -188,15 +197,23 @@ pub const Container = struct {
             } else {
                 // child.close(); // TODO
             }
+        } else {
+            // Child did not accept this line (or no children yet)
+            // Determine which kind of Block this line should be (if we're a Container)
+            // If we're a leaf, instead parse inlines...?
+            if (startsNewBlock(trimmed_line)) |new_block_type| {
+            const child = parseBlockFromLine(self.alloc, trimmed_line);
+            try self.children.append(child);
+            }
         }
-        // Child did not accept this line (or no children yet)
-        // Determine which kind of Block this line should be
+
+        return true;
 
         // TODO
 
         // If the returned type is not a valid child type, return false to
         // indicate that our parent should handle it
-        return false;
+        // return false;
     }
 
     pub fn isContinuationLine(self: *Self, line: []const Token) bool {
@@ -495,10 +512,37 @@ fn getLine(tokens: []Token, cursor: usize) ?[]Token {
 }
 
 /// Given a raw line of Tokens, determine what kind of Block should be created
-fn parseBlockFromLine(line: []Token) !Block {
-    _ = line;
+fn parseBlockFromLine(alloc: Allocator, line: []Token) !Block {
+    var b: Block = Block.initLeaf(alloc, .Break);
+    b.Leaf.content.Break = Break{};
+    const N = line.len;
+
+    if (N < 1) return b;
+
+    switch (line[0].kind) {
+        .GT => {
+            // Parse quote block
+        },
+        .MINUS => {
+            // Parse unorderd list block
+        },
+        .STAR => {
+            if (N > 1 and line[1].kind == .SPACE) {
+                // Parse unorderd list block
+            }
+        },
+        .DIGIT => {
+            if (N > 1 and line[1].kind == .PERIOD) {
+                // Parse numbered list block
+            }
+        },
+        else => {
+            // Fallback - parse paragraph
+        },
+    }
+    return b;
     //return .{ .Leaf = .{ .break = zd.Break{}, }, };
-    return error.Unimplemented;
+    //return error.Unimplemented;
 }
 
 /// Check if the given line is a continuation line for a Quote block

@@ -228,14 +228,61 @@ pub const Parser = struct {
 };
 
 /// Parse a single line of Markdown into the start of a new Block
-fn parseNewBlock(line: []const Token) !Block {
-    _ = line;
-    return Block{ .Leaf = .{
-        .kind = .Break,
-        .config = .{},
-        .inlines = ArrayList(Inline).init(allocator),
-    } };
+fn parseNewBlock(alloc: Allocator, line: []const Token) !Block {
+    // _ = line;
+    // return Block{ .Leaf = .{
+    //     .kind = .Break,
+    //     .config = .{},
+    //     .inlines = ArrayList(Inline).init(allocator),
+    // } };
+
+    var b: Block = Block.initLeaf(alloc, .Break);
+    b.Leaf.content.Break = zd.Break{};
+    const N = line.len;
+
+    if (N < 1) return b;
+
+    switch (line[0].kind) {
+        .GT => {
+            // Parse quote block
+        },
+        .MINUS => {
+            // Parse unorderd list block
+        },
+        .STAR => {
+            if (N > 1 and line[1].kind == .SPACE) {
+                // Parse unorderd list block
+            }
+        },
+        .DIGIT => {
+            if (N > 1 and line[1].kind == .PERIOD) {
+                // Parse numbered list block
+            }
+        },
+        else => {
+            // Fallback - parse paragraph
+        },
+    }
+    return b;
 }
+
+/// Check if the given line is a continuation line for a paragraph
+fn isContinuationLineParagraph(line: []const Token) bool {
+    if (line.len == 0) return true;
+
+    for (line) |tok| {
+        switch (tok.kind) {
+            .SPACE, .INDENT => {},
+            .GT, .PLUS, .MINUS => return false,
+            else => return true,
+        }
+    }
+    return true;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Tests
+///////////////////////////////////////////////////////////////////////////////
 
 fn createAST() !Block {
     const alloc = std.testing.allocator;
@@ -310,4 +357,51 @@ test "1. one-line nested blocks" {
     try std.testing.expect(zd.isLeaf(para));
     try std.testing.expectEqual(zd.LeafType.Paragraph, @as(zd.LeafType, para.Leaf.content));
     // try std.testing.expectEqual(1, para.Leaf.children.items.len);
+}
+
+test "parser flow" {
+    // Sample code flow for parsing the following:
+    const input =
+        \\> - Hello, World!
+        \\> > New child!
+    ;
+    _ = input;
+
+    const alloc = std.testing.allocator;
+    const root = Block.initContainer(alloc, .Document);
+    _ = root;
+    // - Document.handleLine()                      "> - Hello, World!"
+    //   - open child? -> false
+    //   - parseBlockFromLine()                     "> - Hello, World!"
+    //     - Quote.handleLine()
+    //       - open child? -> false
+    //       - parseBlockFromLine()                 "- Hello, World!"
+    //         - List.handleLine()
+    //           - open ListItem? -> false
+    //           - ListItem.handleLine()
+    //             - open child? -> false
+    //             - parseBlockFromLine()           "Hello, World!"
+    //               - Paragraph.handleLine()
+    //                 - *todo* parseInlines()?
+    //             - ListItem.addChild(Paragraph)
+    //         - List.addChild(ListItem)
+    //       - Quote.addChild(List)
+    //   - Document.addChild(Quote)
+    // - Document.handleLine()                      "> > New Child!"
+    //   - open child? -> true
+    //   - openChild.handleLine()? -> true
+    //     - Quote.handleLine()                     "> > New Child!"
+    //       - open child? -> true
+    //         - List.handleLine() -> false         "> New Child!"
+    //           - List may not start with ">"
+    //         - child.close()
+    //       - parseBlockFromLine()                 "> New Child!"
+    //         - Quote.handleLine()
+    //           - open child? -> false
+    //           - parseBlockFromLine()             "New Child!"
+    //             - Paragraph.handleLine()
+    //               - *todo* parseInlines()?
+    //           - Quote.addChild(Paragraph)
+    //       - Quote.addChild(Quote)
+    // - Document.closeChildren()                   "EOF"
 }
