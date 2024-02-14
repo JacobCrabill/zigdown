@@ -3,9 +3,6 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
-/// TODO: rm
-var allocator = std.heap.page_allocator;
-
 const zd = struct {
     usingnamespace @import("utils.zig");
     usingnamespace @import("tokens.zig");
@@ -28,6 +25,305 @@ const LeafBlockType = zd.LeafBlockType;
 const Block = zd.Block;
 const ContainerBlock = zd.ContainerBlock;
 const LeafBlock = zd.LeafBlock;
+
+///////////////////////////////////////////////////////////////////////////////
+// Helper Functions
+///////////////////////////////////////////////////////////////////////////////
+
+/// Remove all leading whitespace (spaces or indents) from the start of a line
+fn trimLeadingWhitespace(line: []const Token) []const Token {
+    var start: usize = 0;
+    for (line, 0..) |tok, i| {
+        if (!(tok.kind == .SPACE or tok.kind == .INDENT)) {
+            start = i;
+            break;
+        }
+    }
+    return line[start..];
+}
+
+/// Find the index of the next token of any of type 'kind' at or beyond 'idx'
+fn findFirstOf(tokens: []const Token, idx: usize, kinds: []const TokenType) ?usize {
+    var i: usize = idx;
+    while (i < tokens.items.len) : (i += 1) {
+        if (std.mem.indexOfScalar(TokenType, kinds, tokens.items[i].kind)) |_| {
+            return i;
+        }
+    }
+    return null;
+}
+
+///////////////////////////////////////////////////////
+// Container Block Parsers
+///////////////////////////////////////////////////////
+
+fn handleLine(block: *Block, line: []const Token) !bool {
+    switch (block.*) {
+        .Container => |c| {
+            switch (c.content) {
+                .Document => return handleLineDocument(block, line),
+                .Quote => return handleLineQuote(block, line),
+                .List => return handleLineList(block, line),
+                .ListItem => return handleLineListItem(block, line),
+            }
+        },
+        .Leaf => |l| {
+            switch (l.content) {
+                .Break => return handleLineBreak(block, line),
+                .Code => return handleLineCode(block, line),
+                .Heading => return handleLineHeading(block, line),
+                .Paragraph => return handleLineParagraph(block, line),
+            }
+        },
+    }
+}
+
+pub fn handleLineDocument(block: *Block, line: []const Token) !bool {
+    // Check for an open child
+    if (block.children.items.len > 0) {
+        var child: *Block = &block.children.items[block.children.items.len - 1];
+        // TODO: implement the generic handleLine that switches on child type
+        if (child.handleLine(line)) {
+            return true;
+        } else {
+            child.close();
+        }
+    }
+
+    // Child did not accept this line (or no children yet)
+    // Determine which kind of Block this line should be
+    const new_child = try parseNewBlock(block.alloc(), line);
+    try block.children.append(new_child);
+
+    return true;
+}
+
+pub fn handleLineQuote(block: *Block, line: []const Token) !bool {
+    // If the line is a valid continuation line for our type, trim the continuation
+    // marker(s) off and pass it on to our last child
+    // e.g.:  line         = "   > foo bar" [ indent, GT, space, word, space, word ]
+    //        trimmed_line = "foo bar"  [ word, space, word ]
+    var trimmed_line = line;
+    if (isContinuationLineQuote(line))
+        trimmed_line = trimContinuationMarkersQuote(line);
+
+    // Next, check if the trimmed line can be appended to the current block or not
+    // !!! >>> TODO <<< !!!
+    // if (!isLazyContinuationLineQuote(trimmed_line))
+    //     return false;
+
+    // Check for an open child
+    if (block.children.items.len > 0) {
+        var child: *Block = &block.children.items[block.children.items.len - 1];
+        // TODO: implement the generic handleLine that switches on child type
+        if (child.handleLine(trimmed_line)) {
+            return true;
+        } else {
+            child.close();
+        }
+    }
+
+    // Child did not accept this line (or no children yet)
+    // Determine which kind of Block this line should be
+    const child = try parseNewBlock(block.alloc(), trimmed_line);
+    try block.children.append(child);
+
+    return true;
+}
+
+pub fn handleLineList(block: *Block, line: []const Token) !bool {
+    var trimmed_line = line;
+    if (isContinuationLineList(line))
+        trimmed_line = trimContinuationMarkersList(line);
+
+    // Next, check if the trimmed line can be appended to the current block or not
+    // !!! >>> TODO <<< !!!
+    // if (!isLazyContinuationLineList(trimmed_line))
+    //     return false;
+
+    // Check for an open child
+    if (block.children.items.len > 0) {
+        var child: *Block = &block.children.items[block.children.items.len - 1];
+        // TODO: implement the generic handleLine that switches on child type
+        if (child.handleLine(trimmed_line)) {
+            return true;
+        } else {
+            child.close();
+        }
+    }
+
+    // Child did not accept this line (or no children yet)
+    // Determine which kind of Block this line should be
+    const child = try parseNewBlock(block.alloc(), trimmed_line);
+    try block.children.append(child);
+
+    return true;
+}
+
+pub fn handleLineListItem(block: *Block, line: []const Token) !bool {
+    _ = block;
+    _ = line;
+    return false;
+}
+
+///////////////////////////////////////////////////////
+// Leaf Block Parsers
+///////////////////////////////////////////////////////
+
+pub fn handleLineBreak(block: *Block, line: []const Token) !bool {
+    _ = block;
+    _ = line;
+    return false;
+}
+
+pub fn handleLineCode(block: *Block, line: []const Token) !bool {
+    _ = block;
+    _ = line;
+    return false;
+}
+
+pub fn handleLineHeading(block: *Block, line: []const Token) !bool {
+    _ = block;
+    _ = line;
+    return false;
+}
+
+pub fn handleLineParagraph(block: *Block, line: []const Token) !bool {
+    _ = block;
+    _ = line;
+    return false;
+}
+
+///////////////////////////////////////////////////////
+// Inline Parsers? ~~ TODO ~~
+///////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////
+// Continuation Line Logic
+///////////////////////////////////////////////////////////////////////////////
+
+/// Check if the given line is a continuation line for a Quote block
+fn isContinuationLineQuote(line: []const Token) bool {
+    // if the line follows the pattern: [ ]{0,1,2,3}[>]+
+    //    (0 to 3 leading spaces followed by at least one '>')
+    // then it can be part of the current Quote block.
+    //
+    // Otherwise, if it is Paragraph lazy continuation line,
+    // it can also be a part of the Quote block
+    var leading_ws: u8 = 0;
+    for (line) |tok| {
+        switch (tok.kind) {
+            .SPACE => leading_ws += 1,
+            .INDENT => leading_ws += 2,
+            .GT, .WORD, .BREAK => return true,
+            else => return false,
+        }
+
+        if (leading_ws > 3)
+            return false;
+    }
+
+    return false;
+}
+
+/// TODO
+fn isLazyContinuationLineQuote(line: []const Token) bool {
+    _ = line;
+    return true;
+}
+
+/// TODO
+fn isLazyContinuationLineList(line: []const Token) bool {
+    _ = line;
+    return true;
+}
+
+/// Check if the given line is a continuation line for a paragraph
+fn isContinuationLineParagraph(line: []const Token) bool {
+    if (line.len == 0) return true;
+
+    for (line, 0..) |tok, i| {
+        switch (tok.kind) {
+            .SPACE, .INDENT => {},
+            .GT, .PLUS, .MINUS, .STAR => {
+                if (i + 1 < line.len) {
+                    const kind = line[i + 1].kind;
+                    if (kind == .SPACE or kind == .INDENT) {
+                        return false;
+                    }
+                }
+            },
+            .DIGIT => {
+                if (i + 1 < line.len and line[i + 1].kind == .PERIOD) {
+                    return false;
+                }
+            },
+            else => return true,
+        }
+    }
+    return true;
+}
+
+/// Check if the given line is a continuation line for a list
+fn isContinuationLineList(line: []const Token) bool {
+    if (line.len == 0) return true;
+
+    for (line, 0..) |tok, i| {
+        switch (tok.kind) {
+            .SPACE, .INDENT => {},
+            .GT, .PLUS, .MINUS, .STAR => {
+                if (i + 1 < line.len) {
+                    const kind = line[i + 1].kind;
+                    if (kind == .SPACE or kind == .INDENT) {
+                        return true;
+                    }
+                }
+            },
+            .DIGIT => {
+                if (i + 1 < line.len and line[i + 1].kind == .PERIOD) {
+                    return true;
+                }
+            },
+            else => return false,
+        }
+    }
+    return false;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Trim Continuation Markers
+///////////////////////////////////////////////////////////////////////////////
+
+fn trimContinuationMarkersQuote(line: []const Token) []const Token {
+    // Turn '  > Foo' into 'Foo'
+    const trimmed = trimLeadingWhitespace(line);
+    std.debug.assert(trimmed.len > 0);
+    std.debug.assert(trimmed[0].kind == .GT);
+    return trimLeadingWhitespace(trimmed[1..]);
+}
+
+fn trimContinuationMarkersList(line: []const Token) []const Token {
+    // Find the first list-item marker (*, -, +, or digit)
+    const trimmed = trimLeadingWhitespace(line);
+    std.debug.assert(trimmed.len > 0);
+    switch (trimmed[0].kind) {
+        .DASH, .PLUS, .STAR => {
+            return trimLeadingWhitespace(trimmed[1..]);
+        },
+        .DIGIT => {
+            std.debug.assert(trimmed[1].kind == .PERIOD);
+            return trimLeadingWhitespace(trimmed[2..]);
+        },
+        else => {
+            std.debug.print("ERROR: Shouldn't be here! List line: '{s}'\n", .{line});
+            return trimmed;
+        },
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Parser Struct
+///////////////////////////////////////////////////////////////////////////////
 
 /// Options to configure the Parser
 pub const ParserOpts = struct {
@@ -195,17 +491,6 @@ pub const Parser = struct {
         }
     }
 
-    /// Find the index of the next token of any of type 'kind' at or beyond 'idx'
-    fn findFirstOf(self: Self, idx: usize, kinds: []const TokenType) ?usize {
-        var i: usize = idx;
-        while (i < self.tokens.items.len) : (i += 1) {
-            if (std.mem.indexOfScalar(TokenType, kinds, self.tokens.items[i].kind)) |_| {
-                return i;
-            }
-        }
-        return null;
-    }
-
     /// Return the index of the next BREAK token, or EOF
     fn nextBreak(self: *Self, idx: usize) usize {
         if (idx >= self.tokens.items.len)
@@ -264,20 +549,6 @@ fn parseNewBlock(alloc: Allocator, line: []const Token) !Block {
         },
     }
     return b;
-}
-
-/// Check if the given line is a continuation line for a paragraph
-fn isContinuationLineParagraph(line: []const Token) bool {
-    if (line.len == 0) return true;
-
-    for (line) |tok| {
-        switch (tok.kind) {
-            .SPACE, .INDENT => {},
-            .GT, .PLUS, .MINUS => return false,
-            else => return true,
-        }
-    }
-    return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

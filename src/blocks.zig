@@ -1,8 +1,5 @@
 const std = @import("std");
 
-/// TODO: rm
-var allocator = std.heap.page_allocator;
-
 const zd = struct {
     usingnamespace @import("utils.zig");
     usingnamespace @import("tokens.zig");
@@ -55,9 +52,21 @@ pub const Block = union(BlockType) {
         }
     }
 
+    pub fn alloc(self: Block) Allocator {
+        return switch (self) {
+            inline else => |b| b.alloc,
+        };
+    }
+
     pub fn handleLine(self: *Self, line: []const Token) bool {
         return switch (self.*) {
             inline else => |*b| b.handleLine(line),
+        };
+    }
+
+    pub fn isOpen(self: Self) bool {
+        return switch (self) {
+            inline else => |*b| b.open,
         };
     }
 
@@ -90,6 +99,7 @@ pub const Block = union(BlockType) {
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Container Block Implementations
+/// TODO: Delete container_types.zig; relocate these to containers.zig
 ///////////////////////////////////////////////////////////////////////////////
 
 /// Containers are Blocks which contain other Blocks
@@ -111,7 +121,6 @@ pub const Quote = struct {
 pub const List = struct {
     ordered: bool = false,
     start: usize = 1, // Starting number, if ordered list
-    // items: ArrayList(ListItem),
 };
 
 /// A ListItem may contain other Containers
@@ -161,6 +170,11 @@ pub const Container = struct {
     }
 
     pub fn close(self: *Self) void {
+        for (self.children.items) |*child| {
+            if (child.isOpen()) {
+                child.close();
+            }
+        }
         self.open = false;
     }
 
@@ -201,10 +215,10 @@ pub const Container = struct {
             // Child did not accept this line (or no children yet)
             // Determine which kind of Block this line should be (if we're a Container)
             // If we're a leaf, instead parse inlines...?
-            if (startsNewBlock(trimmed_line)) |new_block_type| {
-            const child = parseBlockFromLine(self.alloc, trimmed_line);
-            try self.children.append(child);
-            }
+            // if (startsNewBlock(trimmed_line)) |new_block_type| {
+            //   const child = parseBlockFromLine(self.alloc, trimmed_line);
+            //   try self.children.append(child);
+            // }
         }
 
         return true;
@@ -264,6 +278,7 @@ pub const Container = struct {
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Leaf Block Implementations
+/// TODO: Relocate these to leaves.zig
 ///////////////////////////////////////////////////////////////////////////////
 
 /// All types of Leaf blocks that can be contained in Container blocks
