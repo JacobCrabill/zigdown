@@ -9,6 +9,7 @@ const zd = struct {
     usingnamespace @import("lexer.zig");
     usingnamespace @import("inlines.zig");
     usingnamespace @import("blocks.zig");
+    usingnamespace @import("leaves.zig");
 };
 
 const Lexer = zd.Lexer;
@@ -29,6 +30,14 @@ const LeafBlock = zd.LeafBlock;
 ///////////////////////////////////////////////////////////////////////////////
 // Helper Functions
 ///////////////////////////////////////////////////////////////////////////////
+
+fn isContainer(block: Block) bool {
+    return block == .Container;
+}
+
+fn isLeaf(block: Block) bool {
+    return block == .Leaf;
+}
 
 /// Remove all leading whitespace (spaces or indents) from the start of a line
 fn trimLeadingWhitespace(line: []const Token) []const Token {
@@ -92,7 +101,7 @@ pub fn handleLineDocument(block: *Block, line: []const Token) !bool {
 
     // Child did not accept this line (or no children yet)
     // Determine which kind of Block this line should be
-    const new_child = try parseNewBlock(block.alloc(), line);
+    const new_child = try parseNewBlock(block.allocator(), line);
     try block.children.append(new_child);
 
     return true;
@@ -125,7 +134,7 @@ pub fn handleLineQuote(block: *Block, line: []const Token) !bool {
 
     // Child did not accept this line (or no children yet)
     // Determine which kind of Block this line should be
-    const child = try parseNewBlock(block.alloc(), trimmed_line);
+    const child = try parseNewBlock(block.allocator(), trimmed_line);
     try block.children.append(child);
 
     return true;
@@ -253,6 +262,7 @@ fn isContinuationLineParagraph(line: []const Token) bool {
                     }
                 }
             },
+            // TODO: '123.456' vs '10. '
             .DIGIT => {
                 if (i + 1 < line.len and line[i + 1].kind == .PERIOD) {
                     return false;
@@ -601,31 +611,31 @@ test "1. one-line nested blocks" {
 
     // Compare Document Block
     // const root = p.document;
-    try std.testing.expect(zd.isContainer(root));
+    try std.testing.expect(isContainer(root));
     try std.testing.expectEqual(zd.ContainerType.Document, @as(zd.ContainerType, root.Container.content));
     try std.testing.expectEqual(1, root.Container.children.items.len);
 
     // Compare Quote Block
     const quote = root.Container.children.items[0];
-    try std.testing.expect(zd.isContainer(quote));
+    try std.testing.expect(isContainer(quote));
     try std.testing.expectEqual(zd.ContainerType.Quote, @as(zd.ContainerType, quote.Container.content));
     try std.testing.expectEqual(1, quote.Container.children.items.len);
 
     // Compare List Block
     const list = quote.Container.children.items[0];
-    try std.testing.expect(zd.isContainer(list));
+    try std.testing.expect(isContainer(list));
     try std.testing.expectEqual(zd.ContainerType.List, @as(zd.ContainerType, list.Container.content));
     try std.testing.expectEqual(1, list.Container.children.items.len);
 
     // Compare ListItem Block
     const list_item = list.Container.children.items[0];
-    try std.testing.expect(zd.isContainer(list_item));
+    try std.testing.expect(isContainer(list_item));
     try std.testing.expectEqual(zd.ContainerType.ListItem, @as(zd.ContainerType, list_item.Container.content));
     try std.testing.expectEqual(1, list_item.Container.children.items.len);
 
     // Compare Paragraph Block
     const para = list_item.Container.children.items[0];
-    try std.testing.expect(zd.isLeaf(para));
+    try std.testing.expect(isLeaf(para));
     try std.testing.expectEqual(zd.LeafType.Paragraph, @as(zd.LeafType, para.Leaf.content));
     // try std.testing.expectEqual(1, para.Leaf.children.items.len);
 }
@@ -675,4 +685,154 @@ test "parser flow" {
     //           - Quote.addChild(Paragraph)
     //       - Quote.addChild(Quote)
     // - Document.closeChildren()                   "EOF"
+}
+
+/// Return the index of the next BREAK token, or EOF
+fn nextBreak(tokens: []Token, idx: usize) usize {
+    if (idx >= tokens.len)
+        return tokens.len;
+
+    for (tokens[idx..], idx..) |tok, i| {
+        if (tok.kind == .BREAK)
+            return i;
+    }
+
+    return tokens.len;
+}
+
+// Return a slice of the tokens from the cursor to the next line break (or EOF)
+fn getLine(tokens: []Token, cursor: usize) ?[]Token {
+    if (cursor >= tokens.len) return null;
+    const end = @min(nextBreak(tokens, cursor) + 1, tokens.len);
+    return tokens[cursor..end];
+}
+
+/// Given a raw line of Tokens, determine what kind of Block should be created
+fn parseBlockFromLine(alloc: Allocator, line: []Token) !Block {
+    var b: Block = Block.initLeaf(alloc, .Break);
+    b.Leaf.content.Break = zd.Break{};
+    const N = line.len;
+
+    if (N < 1) return b;
+
+    switch (line[0].kind) {
+        .GT => {
+            // Parse quote block
+        },
+        .MINUS => {
+            // Parse unorderd list block
+        },
+        .STAR => {
+            if (N > 1 and line[1].kind == .SPACE) {
+                // Parse unorderd list block
+            }
+        },
+        .DIGIT => {
+            if (N > 1 and line[1].kind == .PERIOD) {
+                // Parse numbered list block
+            }
+        },
+        else => {
+            // Fallback - parse paragraph
+        },
+    }
+    return b;
+    //return .{ .Leaf = .{ .break = zd.Break{}, }, };
+    //return error.Unimplemented;
+}
+
+test "Top-level parsing" {
+    // Setup
+    const text: []const u8 = "# Heading";
+    const alloc = std.testing.allocator;
+    var lexer = Lexer.init(alloc, text);
+    var tokens_array = try lexer.tokenize();
+    defer tokens_array.deinit();
+    const tokens: []Token = tokens_array.items;
+    var cursor: usize = 0;
+
+    // Create empty document; parse first line into the start of a new Block
+    var document = Block.initContainer(alloc, .Document);
+    // defer document.deinit();
+    const first_line = getLine(tokens, cursor);
+    if (first_line == null) {
+        // empty document?
+        return;
+    }
+    cursor += first_line.?.len;
+
+    var open_block = try parseBlockFromLine(first_line.?);
+    try document.addChild(open_block);
+
+    if (first_line.?.len == tokens.len) // Only one line in the text
+        return;
+
+    while (getLine(tokens, cursor)) |line| {
+        // First see if the current open block of the document can accept this line
+        if (!open_block.handleLine(line)) {
+            // This line cannot continue the current open block; close and continue
+            // Close the current open block (child of the Document)
+            open_block.close();
+
+            // Append a new Block to the document
+            open_block = try parseBlockFromLine(line);
+            try document.addChild(open_block);
+        } else {
+            // The line belongs with this block
+            // TODO: Add line to block
+        }
+
+        // This line has been handled, one way or another; continue to the next line
+        cursor += line.len;
+    }
+}
+
+test "Quote block continuation lines" {
+    const data =
+        \\# Header!
+        \\## Header 2
+        \\### Header 3...
+        \\#### ...and Header 4
+        \\
+        \\  some *generic* text _here_, with formatting!
+        \\  including ***BOLD italic*** text!
+        \\  Note that the renderer should automaticallly wrap text for us
+        \\  at some parameterizeable wrap width
+        \\
+        \\after the break...
+        \\
+        \\> Quote line
+        \\> Another quote line
+        \\> > And a nested quote
+        \\
+        \\```
+        \\code
+        \\```
+        \\
+        \\And now a list:
+        \\
+        \\+ foo
+        \\+ fuzz
+        \\    + no indents yet
+        \\- bar
+        \\
+        \\
+        \\1. Numbered lists, too!
+        \\2. 2nd item
+        \\2. not the 2nd item
+    ;
+
+    const alloc = std.testing.allocator;
+    var lexer = Lexer.init(alloc, data);
+    var tokens = try lexer.tokenize();
+    defer tokens.deinit();
+
+    // Now process every line!
+    var cursor: usize = 0;
+    while (getLine(tokens.items, cursor)) |line| {
+        zd.printTypes(line);
+        const continues_quote: bool = isContinuationLineQuote(line);
+        std.debug.print(" ^-- Could continue a Quote block? {}\n", .{continues_quote});
+        cursor += line.len;
+    }
 }

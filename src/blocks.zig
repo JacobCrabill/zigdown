@@ -5,6 +5,8 @@ const zd = struct {
     usingnamespace @import("tokens.zig");
     usingnamespace @import("lexer.zig");
     usingnamespace @import("inlines.zig");
+    usingnamespace @import("leaves.zig");
+    usingnamespace @import("containers.zig");
 };
 
 const Allocator = std.mem.Allocator;
@@ -14,6 +16,11 @@ const Lexer = zd.Lexer;
 const TokenType = zd.TokenType;
 const Token = zd.Token;
 const TokenList = zd.TokenList;
+
+const ContainerType = zd.ContainerType;
+const ContainerData = zd.ContainerData;
+const LeafType = zd.LeafType;
+const LeafData = zd.LeafData;
 
 const Inline = zd.Inline;
 const InlineType = zd.InlineType;
@@ -30,7 +37,8 @@ pub const BlockType = enum(u8) {
     Leaf,
 };
 
-// A Block may be a Container or a Leaf
+/// A Block may be a Container or a Leaf.
+/// The Block is the basic unit of the Markdown AST.
 pub const Block = union(BlockType) {
     const Self = @This();
     Container: Container,
@@ -52,15 +60,9 @@ pub const Block = union(BlockType) {
         }
     }
 
-    pub fn alloc(self: Block) Allocator {
+    pub fn allocator(self: Block) Allocator {
         return switch (self) {
             inline else => |b| b.alloc,
-        };
-    }
-
-    pub fn handleLine(self: *Self, line: []const Token) bool {
-        return switch (self.*) {
-            inline else => |*b| b.handleLine(line),
         };
     }
 
@@ -97,42 +99,6 @@ pub const Block = union(BlockType) {
     }
 };
 
-///////////////////////////////////////////////////////////////////////////////
-/// Container Block Implementations
-/// TODO: Delete container_types.zig; relocate these to containers.zig
-///////////////////////////////////////////////////////////////////////////////
-
-/// Containers are Blocks which contain other Blocks
-pub const ContainerType = enum(u8) {
-    Document, // The Document is the root container
-    Quote,
-    List, // Can only contain ListItems
-    ListItem, // Can only be contained by a List
-};
-
-pub const Quote = struct {
-    level: u8 = 0, // TODO: This may be unnecessary
-};
-
-/// List blocks contain only ListItems
-/// However, we will use the base Container type's 'children' field to
-/// store the list items for simplicity, as the ListItems are Container blocks
-/// which can hold any kind of Block.
-pub const List = struct {
-    ordered: bool = false,
-    start: usize = 1, // Starting number, if ordered list
-};
-
-/// A ListItem may contain other Containers
-pub const ListItem = struct {};
-
-pub const ContainerData = union(ContainerType) {
-    Document: void,
-    Quote: Quote,
-    List: List,
-    ListItem: void,
-};
-
 /// A Container can contain one or more Blocks
 pub const Container = struct {
     const Self = @This();
@@ -150,8 +116,8 @@ pub const Container = struct {
 
         block.content = switch (kind) {
             .Document => ContainerData{ .Document = {} },
-            .Quote => ContainerData{ .Quote = Quote{} },
-            .List => ContainerData{ .List = List{} },
+            .Quote => ContainerData{ .Quote = {} },
+            .List => ContainerData{ .List = zd.List{} },
             .ListItem => ContainerData{ .ListItem = {} },
         };
 
@@ -178,89 +144,6 @@ pub const Container = struct {
         self.open = false;
     }
 
-    pub fn handleLine(self: *Self, line: []const Token) bool {
-        //
-        // KINDA NEW PLAN - I'm going to need a slightly different parser fn
-        // for each Block type.
-        // CASE IN POINT - a List block may _only_ contain ListItem blocks.
-        // Also, we need to handle Container and Leaf blocks differently.
-        //
-        // Many blocks should contain similar logic, but not identical.
-
-        // First, check if the line is valid for our block type, as a
-        // continuation line of our open child, or as the start of a new child
-        // block
-
-        // If the line is a valid continuation line for our type, trim the continuation
-        // marker(s) off and pass it on to our last child
-        // e.g.:  line         = "   > foo bar" [ indent, GT, space, word, space, word ]
-        //        trimmed_line = "foo bar"  [ word, space, word ]
-        var trimmed_line = line;
-        if (self.isContinuationLine(line))
-            trimmed_line = self.trimContinuationMarkers(line);
-
-        // Next, check if the trimmed line
-        if (!self.isLazyContinuationLine(trimmed_line))
-            return false;
-
-        // Check for an open child
-        if (self.children.items.len > 0) {
-            var child: *Block = &self.children.items[self.children.items.len - 1];
-            if (child.handleLine(trimmed_line)) {
-                return true;
-            } else {
-                // child.close(); // TODO
-            }
-        } else {
-            // Child did not accept this line (or no children yet)
-            // Determine which kind of Block this line should be (if we're a Container)
-            // If we're a leaf, instead parse inlines...?
-            // if (startsNewBlock(trimmed_line)) |new_block_type| {
-            //   const child = parseBlockFromLine(self.alloc, trimmed_line);
-            //   try self.children.append(child);
-            // }
-        }
-
-        return true;
-
-        // TODO
-
-        // If the returned type is not a valid child type, return false to
-        // indicate that our parent should handle it
-        // return false;
-    }
-
-    pub fn isContinuationLine(self: *Self, line: []const Token) bool {
-        _ = self;
-        _ = line;
-        return true;
-    }
-
-    pub fn isLazyContinuationLine(self: *Self, line: []const Token) bool {
-        _ = self;
-        _ = line;
-        return true;
-    }
-
-    pub fn trimContinuationMarkers(self: *Self, line: []const Token) []const Token {
-        return switch (self.kind) {
-            .Quote => self.trimContinuationMarkersQuote(line),
-            else => line,
-        };
-    }
-
-    pub fn trimContinuationMarkersQuote(self: *Self, line: []const Token) []const Token {
-        _ = self;
-        var start: usize = 0;
-        for (line, 0..) |tok, i| {
-            if (!(tok.kind == .GT or tok.kind == .SPACE or tok.kind == .INDENT)) {
-                start = i;
-                break;
-            }
-        }
-        return line[start..line.len];
-    }
-
     pub fn print(self: Container, depth: u8) void {
         printIndent(depth);
 
@@ -275,123 +158,6 @@ pub const Container = struct {
         }
     }
 };
-
-///////////////////////////////////////////////////////////////////////////////
-/// Leaf Block Implementations
-/// TODO: Relocate these to leaves.zig
-///////////////////////////////////////////////////////////////////////////////
-
-/// All types of Leaf blocks that can be contained in Container blocks
-pub const LeafType = enum(u8) {
-    Break,
-    Code,
-    Heading,
-    Paragraph,
-    // Reference,
-};
-
-/// The type-specific content of a Leaf block
-pub const LeafData = union(LeafType) {
-    Break: Break,
-    Code: Code,
-    Heading: Heading,
-    Paragraph: Paragraph,
-    // Reference: Reference,
-
-    pub fn deinit(self: *LeafData) void {
-        switch (self.*) {
-            .Paragraph => |*p| p.deinit(),
-            inline else => {},
-        }
-    }
-
-    pub fn print(self: LeafData, depth: u8) void {
-        switch (self) {
-            .Paragraph => |p| p.print(depth),
-            inline else => {},
-        }
-    }
-};
-
-/// A single hard line break
-pub const Break = struct {};
-
-/// A heading with associated level
-pub const Heading = struct {
-    level: u8 = 1,
-    text: []const u8 = undefined,
-};
-
-/// Raw code or other preformatted content
-pub const Code = struct {
-    language: ?[]const u8 = null,
-    text: []const u8 = "",
-};
-
-/// Block of multiple sections of formatted text
-/// Example:
-///   plain and **bold** text, as well as [links](example.com) and `code`
-pub const Paragraph = struct {
-    const Self = @This();
-    alloc: Allocator,
-    content: ArrayList(zd.Inline),
-
-    /// Instantiate a Paragraph
-    pub fn init(alloc: std.mem.Allocator) Paragraph {
-        return .{
-            .alloc = alloc,
-            .content = ArrayList(zd.Inline).init(alloc),
-        };
-    }
-
-    /// Free allocated memory
-    pub fn deinit(self: *Self) void {
-        for (self.content.items) |*item| {
-            item.deinit();
-        }
-        self.content.deinit();
-    }
-
-    /// Append a chunk of Text to the contents of the Paragraph
-    pub fn addText(self: *Self, text: Text) !void {
-        try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .text = text }));
-    }
-
-    /// Append a Link to the contents Paragraph
-    pub fn addLink(self: *Self, link: Link) !void {
-        try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .link = link }));
-    }
-
-    /// Append an Image to the contents Paragraph
-    pub fn addImage(self: *Self, image: zd.Image) !void {
-        try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .image = image }));
-    }
-
-    /// Append an inline code span to the contents Paragraph
-    pub fn addCode(self: *Self, code: zd.Codespan) !void {
-        try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .codespan = code }));
-    }
-
-    /// Append a line break to the contents Paragraph
-    pub fn addBreak(self: *Self) !void {
-        try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .newline = {} }));
-    }
-
-    /// Append the elements of 'other' to this Paragraph
-    pub fn join(self: *Self, other: *Self) void {
-        try self.text.appendSlice(other.text.items);
-        other.text.deinit();
-    }
-
-    /// Pretty-print the Paragraph's contents
-    pub fn print(self: Self, depth: u8) void {
-        for (self.content.items) |item| {
-            item.print(depth);
-        }
-    }
-};
-
-pub const Reference = struct {};
 
 /// A Leaf contains only Inline content
 pub const Leaf = struct {
@@ -410,10 +176,10 @@ pub const Leaf = struct {
 
         leaf.content = blk: {
             switch (kind) {
-                .Break => break :blk .{ .Break = Break{} },
-                .Code => break :blk .{ .Code = Code{} },
-                .Heading => break :blk .{ .Heading = Heading{} },
-                .Paragraph => break :blk .{ .Paragraph = Paragraph.init(alloc) },
+                .Break => break :blk .{ .Break = zd.Break{} },
+                .Code => break :blk .{ .Code = zd.Code{} },
+                .Heading => break :blk .{ .Heading = zd.Heading{} },
+                .Paragraph => break :blk .{ .Paragraph = zd.Paragraph.init(alloc) },
             }
         };
 
@@ -436,12 +202,6 @@ pub const Leaf = struct {
         self.open = false;
     }
 
-    pub fn handleLine(self: *Self, line: []const Token) bool {
-        _ = line;
-        _ = self;
-        return true;
-    }
-
     pub fn print(self: Leaf, depth: u8) void {
         printIndent(depth);
 
@@ -457,196 +217,6 @@ pub const Leaf = struct {
 ///////////////////////////////////////////////////////////////////////////////
 // Tests
 ///////////////////////////////////////////////////////////////////////////////
-
-// test "CommonMark strategy" {
-//     // Setup
-//     const text: []const u8 = "# Heading";
-//     var alloc = std.testing.allocator;
-//     var lexer = Lexer.init(alloc, text);
-//     var tokens_array = try lexer.tokenize();
-//     defer tokens_array.deinit();
-//     var tokens: []Token = tokens_array.items;
-//     var cursor: usize = 0;
-//
-//     // Create empty document; parse first line into the start of a new Block
-//     var document = Block.initContainer(alloc, .Document);
-//     // defer document.deinit();
-//     const first_line = getLine(tokens, cursor);
-//     if (first_line == null) {
-//         // empty document?
-//         return;
-//     }
-//     cursor += first_line.?.len;
-//
-//     var open_block = try parseBlockFromLine(first_line.?);
-//     try document.addChild(open_block);
-//
-//     if (first_line.?.len == tokens.len) // Only one line in the text
-//         return;
-//
-//     while (getLine(tokens, cursor)) |line| {
-//         // First see if the current open block of the document can accept this line
-//         if (!open_block.handleLine(line)) {
-//             // This line cannot continue the current open block; close and continue
-//             // Close the current open block (child of the Document)
-//             open_block.close();
-//
-//             // Append a new Block to the document
-//             open_block = try parseBlockFromLine(line);
-//             try document.addChild(open_block);
-//         } else {
-//             // The line belongs with this block
-//             // TODO: Add line to block
-//         }
-//
-//         // This line has been handled, one way or another; continue to the next line
-//         cursor += line.len;
-//     }
-// }
-
-//////////////////////////////////////////////////////////////////////////
-
-/// Return the index of the next BREAK token, or EOF
-fn nextBreak(tokens: []Token, idx: usize) usize {
-    if (idx >= tokens.len)
-        return tokens.len;
-
-    for (tokens[idx..], idx..) |tok, i| {
-        if (tok.kind == .BREAK)
-            return i;
-    }
-
-    return tokens.len;
-}
-
-// Return a slice of the tokens from the cursor to the next line break (or EOF)
-fn getLine(tokens: []Token, cursor: usize) ?[]Token {
-    if (cursor >= tokens.len) return null;
-    const end = @min(nextBreak(tokens, cursor) + 1, tokens.len);
-    return tokens[cursor..end];
-}
-
-/// Given a raw line of Tokens, determine what kind of Block should be created
-fn parseBlockFromLine(alloc: Allocator, line: []Token) !Block {
-    var b: Block = Block.initLeaf(alloc, .Break);
-    b.Leaf.content.Break = Break{};
-    const N = line.len;
-
-    if (N < 1) return b;
-
-    switch (line[0].kind) {
-        .GT => {
-            // Parse quote block
-        },
-        .MINUS => {
-            // Parse unorderd list block
-        },
-        .STAR => {
-            if (N > 1 and line[1].kind == .SPACE) {
-                // Parse unorderd list block
-            }
-        },
-        .DIGIT => {
-            if (N > 1 and line[1].kind == .PERIOD) {
-                // Parse numbered list block
-            }
-        },
-        else => {
-            // Fallback - parse paragraph
-        },
-    }
-    return b;
-    //return .{ .Leaf = .{ .break = zd.Break{}, }, };
-    //return error.Unimplemented;
-}
-
-/// Check if the given line is a continuation line for a Quote block
-fn isContinuationLineQuote(line: []const Token) bool {
-    // if the line follows the pattern: [ ]{0,1,2,3}[>]+
-    //    (0 to 3 leading spaces followed by at least one '>')
-    // then it can be part of the current Quote block.
-    //
-    // Otherwise, if it is Paragraph lazy continuation line,
-    // it can also be a part of the Quote block
-    var leading_ws: u8 = 0;
-    for (line) |tok| {
-        switch (tok.kind) {
-            .SPACE => leading_ws += 1,
-            .INDENT => leading_ws += 2,
-            .GT, .WORD, .BREAK => return true,
-            else => return false,
-        }
-
-        if (leading_ws > 3)
-            return false;
-    }
-
-    return false;
-}
-
-/// Check if the given line is a continuation line for a paragraph
-fn isContinuationLineParagraph(line: []const Token) bool {
-    if (line.len == 0) return true;
-
-    for (line) |tok| {
-        switch (tok.kind) {
-            .SPACE, .INDENT => {},
-            .GT, .PLUS, .MINUS => return false,
-            else => return true,
-        }
-    }
-    return true;
-}
-
-test "Quote block continuation lines" {
-    const data =
-        \\# Header!
-        \\## Header 2
-        \\### Header 3...
-        \\#### ...and Header 4
-        \\
-        \\  some *generic* text _here_, with formatting!
-        \\  including ***BOLD italic*** text!
-        \\  Note that the renderer should automaticallly wrap text for us
-        \\  at some parameterizeable wrap width
-        \\
-        \\after the break...
-        \\
-        \\> Quote line
-        \\> Another quote line
-        \\> > And a nested quote
-        \\
-        \\```
-        \\code
-        \\```
-        \\
-        \\And now a list:
-        \\
-        \\+ foo
-        \\+ fuzz
-        \\    + no indents yet
-        \\- bar
-        \\
-        \\
-        \\1. Numbered lists, too!
-        \\2. 2nd item
-        \\2. not the 2nd item
-    ;
-
-    const alloc = std.testing.allocator;
-    var lexer = Lexer.init(alloc, data);
-    var tokens = try lexer.tokenize();
-    defer tokens.deinit();
-
-    // Now process every line!
-    var cursor: usize = 0;
-    while (getLine(tokens.items, cursor)) |line| {
-        zd.printTypes(line);
-        const continues_quote: bool = isContinuationLineQuote(line);
-        std.debug.print(" ^-- Could continue a Quote block? {}\n", .{continues_quote});
-        cursor += line.len;
-    }
-}
 
 // ----------------------------------------------------------------------------
 // A better, more detailed content model:
