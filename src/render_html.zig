@@ -3,6 +3,8 @@ const utils = @import("utils.zig");
 const zd = struct {
     usingnamespace @import("blocks.zig");
     usingnamespace @import("inlines.zig");
+    usingnamespace @import("leaves.zig");
+    usingnamespace @import("containers.zig");
 };
 
 const Allocator = std.mem.Allocator;
@@ -74,22 +76,22 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
 
         /// Render a Quote block
         pub fn renderQuote(self: *Self, block: zd.Container) !void {
-            const q = block.content.Quote;
+            // const q = block.content.Quote;
 
             try self.stream.print("\n<blockquote>", .{});
-            var i: i32 = @as(i32, q.level) - 1;
-            while (i > 0) : (i -= 1) {
-                try self.stream.print("<blockquote>\n", .{});
-            }
+            // var i: i32 = @as(i32, q.level) - 1;
+            // while (i > 0) : (i -= 1) {
+            //     try self.stream.print("<blockquote>\n", .{});
+            // }
 
             for (block.children.items) |child| {
                 try self.renderBlock(child);
             }
 
-            i = @as(i32, q.level) - 1;
-            while (i > 0) : (i -= 1) {
-                try self.stream.print("</blockquote>", .{});
-            }
+            // i = @as(i32, q.level) - 1;
+            // while (i > 0) : (i -= 1) {
+            //     try self.stream.print("</blockquote>", .{});
+            // }
             try self.stream.print("</blockquote>\n", .{});
         }
 

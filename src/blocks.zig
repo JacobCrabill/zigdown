@@ -66,6 +66,22 @@ pub const Block = union(BlockType) {
         };
     }
 
+    pub fn isContainer(self: Block) bool {
+        return self == .Container;
+    }
+
+    pub fn isLeaf(self: Block) bool {
+        return self == .Leaf;
+    }
+
+    pub fn container(self: *Self) *Container {
+        return &self.Container;
+    }
+
+    pub fn leaf(self: *Self) *Leaf {
+        return &self.Leaf;
+    }
+
     pub fn isOpen(self: Self) bool {
         return switch (self) {
             inline else => |*b| b.open,
@@ -176,7 +192,7 @@ pub const Leaf = struct {
 
         leaf.content = blk: {
             switch (kind) {
-                .Break => break :blk .{ .Break = zd.Break{} },
+                .Break => break :blk .{ .Break = {} },
                 .Code => break :blk .{ .Code = zd.Code{} },
                 .Heading => break :blk .{ .Heading = zd.Heading{} },
                 .Paragraph => break :blk .{ .Paragraph = zd.Paragraph.init(alloc) },

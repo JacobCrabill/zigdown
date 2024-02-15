@@ -124,8 +124,6 @@ pub const Text = struct {
     }
 };
 
-pub const Break = struct {};
-
 /// Hyperlink
 pub const Link = struct {
     alloc: Allocator,

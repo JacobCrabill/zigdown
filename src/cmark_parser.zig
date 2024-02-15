@@ -8,8 +8,9 @@ const zd = struct {
     usingnamespace @import("tokens.zig");
     usingnamespace @import("lexer.zig");
     usingnamespace @import("inlines.zig");
-    usingnamespace @import("blocks.zig");
     usingnamespace @import("leaves.zig");
+    usingnamespace @import("containers.zig");
+    usingnamespace @import("blocks.zig");
 };
 
 const Lexer = zd.Lexer;
@@ -30,14 +31,6 @@ const LeafBlock = zd.LeafBlock;
 ///////////////////////////////////////////////////////////////////////////////
 // Helper Functions
 ///////////////////////////////////////////////////////////////////////////////
-
-fn isContainer(block: Block) bool {
-    return block == .Container;
-}
-
-fn isLeaf(block: Block) bool {
-    return block == .Leaf;
-}
 
 /// Remove all leading whitespace (spaces or indents) from the start of a line
 fn trimLeadingWhitespace(line: []const Token) []const Token {
@@ -62,11 +55,94 @@ fn findFirstOf(tokens: []const Token, idx: usize, kinds: []const TokenType) ?usi
     return null;
 }
 
+/// Check for the pattern "[ ]*[0-9]*[.][ ]+"
+fn isOrderedListItem(line: []const Token) bool {
+    var have_period: bool = false;
+    for (trimLeadingWhitespace(line)) |tok| {
+        switch (tok.kind) {
+            .DIGIT => {
+                if (have_period) return false;
+            },
+            .PERIOD => {
+                have_period = true;
+            },
+            .SPACE, .INDENT => {
+                if (have_period) return true;
+                return false;
+            },
+            else => return false,
+        }
+    }
+
+    return false;
+}
+
+/// Check for the pattern "[ ]*[-+*][ ]+"
+fn isUnorderedListItem(line: []const Token) bool {
+    var have_bullet: bool = false;
+    for (line) |tok| {
+        switch (tok.kind) {
+            .SPACE, .INDENT => {
+                if (have_bullet) return true;
+            },
+            .PLUS, .MINUS, .STAR => {
+                if (have_bullet) return false; // Can only have one bullet character
+                have_bullet = true;
+            },
+            else => return false,
+        }
+    }
+
+    return false;
+}
+
+/// Check for any kind of list item
+fn isListItem(line: []const Token) bool {
+    return isUnorderedListItem(line) or isOrderedListItem(line);
+}
+
+/// Check for the pattern "[ ]*[>][ ]+"
+fn isQuote(line: []const Token) bool {
+    var have_caret: bool = false;
+    for (line) |tok| {
+        switch (tok.kind) {
+            .GT => {
+                if (have_caret) return false;
+                have_caret = true;
+            },
+            .SPACE, .INDENT => {
+                if (have_caret) return true;
+            },
+            else => return false,
+        }
+    }
+
+    return false;
+}
+
+/// Check for the pattern "[ ]*[#]+[ ]+"
+fn isHeading(line: []const Token) bool {
+    var have_hash: bool = false;
+    for (line) |tok| {
+        switch (tok.kind) {
+            .HASH => {
+                have_hash = true;
+            },
+            .SPACE, .INDENT => {
+                if (have_hash) return true;
+            },
+            else => return false,
+        }
+    }
+
+    return false;
+}
+
 ///////////////////////////////////////////////////////
 // Container Block Parsers
 ///////////////////////////////////////////////////////
 
-fn handleLine(block: *Block, line: []const Token) !bool {
+fn handleLine(block: *Block, line: []const Token) bool {
     switch (block.*) {
         .Container => |c| {
             switch (c.content) {
@@ -87,12 +163,15 @@ fn handleLine(block: *Block, line: []const Token) !bool {
     }
 }
 
-pub fn handleLineDocument(block: *Block, line: []const Token) !bool {
+pub fn handleLineDocument(block: *Block, line: []const Token) bool {
+    if (!block.isContainer()) return false;
+
     // Check for an open child
-    if (block.children.items.len > 0) {
-        var child: *Block = &block.children.items[block.children.items.len - 1];
+    var cblock = block.container();
+    if (cblock.children.items.len > 0) {
+        var child: *Block = &cblock.children.items[cblock.children.items.len - 1];
         // TODO: implement the generic handleLine that switches on child type
-        if (child.handleLine(line)) {
+        if (handleLine(child, line)) {
             return true;
         } else {
             child.close();
@@ -101,31 +180,40 @@ pub fn handleLineDocument(block: *Block, line: []const Token) !bool {
 
     // Child did not accept this line (or no children yet)
     // Determine which kind of Block this line should be
-    const new_child = try parseNewBlock(block.allocator(), line);
-    try block.children.append(new_child);
+    const new_child = parseNewBlock(block.allocator(), line) catch unreachable;
+    cblock.children.append(new_child) catch unreachable;
 
     return true;
 }
 
-pub fn handleLineQuote(block: *Block, line: []const Token) !bool {
-    // If the line is a valid continuation line for our type, trim the continuation
-    // marker(s) off and pass it on to our last child
-    // e.g.:  line         = "   > foo bar" [ indent, GT, space, word, space, word ]
-    //        trimmed_line = "foo bar"  [ word, space, word ]
+pub fn handleLineQuote(block: *Block, line: []const Token) bool {
+    if (!block.isContainer()) return false;
+
+    var cblock = &block.Container;
+
     var trimmed_line = line;
-    if (isContinuationLineQuote(line))
+    if (isContinuationLineQuote(line)) {
+        // If the line is a valid continuation line for our type, trim the continuation
+        // marker(s) off and pass it on to our last child
+        // e.g.:  line         = "   > foo bar" [ indent, GT, space, word, space, word ]
+        //        trimmed_line = "foo bar"  [ word, space, word ]
         trimmed_line = trimContinuationMarkersQuote(line);
-
-    // Next, check if the trimmed line can be appended to the current block or not
-    // !!! >>> TODO <<< !!!
-    // if (!isLazyContinuationLineQuote(trimmed_line))
-    //     return false;
+    } else if (!isLazyContinuationLineQuote(trimmed_line)) {
+        // Otherwise, check if the the line can be appended to this block or not
+        // Example for false:
+        //   "> First line: Quote"
+        //   "- 2nd line: List (NOT quote)"
+        // Example for true:
+        //   "> First line: Quote"
+        //   "2nd line: can lazily continue the quote"
+        return false;
+    }
 
     // Check for an open child
-    if (block.children.items.len > 0) {
-        var child: *Block = &block.children.items[block.children.items.len - 1];
+    if (cblock.children.items.len > 0) {
+        var child: *Block = &cblock.children.items[cblock.children.items.len - 1];
         // TODO: implement the generic handleLine that switches on child type
-        if (child.handleLine(trimmed_line)) {
+        if (handleLine(child, trimmed_line)) {
             return true;
         } else {
             child.close();
@@ -134,27 +222,31 @@ pub fn handleLineQuote(block: *Block, line: []const Token) !bool {
 
     // Child did not accept this line (or no children yet)
     // Determine which kind of Block this line should be
-    const child = try parseNewBlock(block.allocator(), trimmed_line);
-    try block.children.append(child);
+    const child = parseNewBlock(block.allocator(), trimmed_line) catch unreachable;
+    cblock.children.append(child) catch unreachable;
 
     return true;
 }
 
-pub fn handleLineList(block: *Block, line: []const Token) !bool {
+/// TODO: This should maybe be swapped with ListItem?
+pub fn handleLineList(block: *Block, line: []const Token) bool {
+    if (!block.isContainer()) return false;
+
     var trimmed_line = line;
-    if (isContinuationLineList(line))
+    if (isContinuationLineList(line)) {
         trimmed_line = trimContinuationMarkersList(line);
-
-    // Next, check if the trimmed line can be appended to the current block or not
-    // !!! >>> TODO <<< !!!
-    // if (!isLazyContinuationLineList(trimmed_line))
-    //     return false;
+    }
+    // Otherwise, check if the trimmed line can be appended to the current block or not
+    else if (!isLazyContinuationLineList(trimmed_line)) {
+        return false;
+    }
 
     // Check for an open child
-    if (block.children.items.len > 0) {
-        var child: *Block = &block.children.items[block.children.items.len - 1];
+    var cblock = block.container();
+    if (cblock.children.items.len > 0) {
+        var child: *Block = &cblock.children.items[cblock.children.items.len - 1];
         // TODO: implement the generic handleLine that switches on child type
-        if (child.handleLine(trimmed_line)) {
+        if (handleLine(child, trimmed_line)) {
             return true;
         } else {
             child.close();
@@ -163,13 +255,13 @@ pub fn handleLineList(block: *Block, line: []const Token) !bool {
 
     // Child did not accept this line (or no children yet)
     // Determine which kind of Block this line should be
-    const child = try parseNewBlock(block.alloc(), trimmed_line);
-    try block.children.append(child);
+    const child = parseNewBlock(block.allocator(), trimmed_line) catch unreachable;
+    cblock.children.append(child) catch unreachable;
 
     return true;
 }
 
-pub fn handleLineListItem(block: *Block, line: []const Token) !bool {
+pub fn handleLineListItem(block: *Block, line: []const Token) bool {
     _ = block;
     _ = line;
     return false;
@@ -179,25 +271,25 @@ pub fn handleLineListItem(block: *Block, line: []const Token) !bool {
 // Leaf Block Parsers
 ///////////////////////////////////////////////////////
 
-pub fn handleLineBreak(block: *Block, line: []const Token) !bool {
+pub fn handleLineBreak(block: *Block, line: []const Token) bool {
     _ = block;
     _ = line;
     return false;
 }
 
-pub fn handleLineCode(block: *Block, line: []const Token) !bool {
+pub fn handleLineCode(block: *Block, line: []const Token) bool {
     _ = block;
     _ = line;
     return false;
 }
 
-pub fn handleLineHeading(block: *Block, line: []const Token) !bool {
+pub fn handleLineHeading(block: *Block, line: []const Token) bool {
     _ = block;
     _ = line;
     return false;
 }
 
-pub fn handleLineParagraph(block: *Block, line: []const Token) !bool {
+pub fn handleLineParagraph(block: *Block, line: []const Token) bool {
     _ = block;
     _ = line;
     return false;
@@ -235,69 +327,32 @@ fn isContinuationLineQuote(line: []const Token) bool {
     return false;
 }
 
-/// TODO
-fn isLazyContinuationLineQuote(line: []const Token) bool {
-    _ = line;
-    return true;
-}
-
-/// TODO
-fn isLazyContinuationLineList(line: []const Token) bool {
-    _ = line;
-    return true;
+/// Check if the given line is a continuation line for a list
+fn isContinuationLineList(line: []const Token) bool {
+    if (line.len == 0) return true; // TODO: check
+    if (isListItem(line)) return true;
+    return false;
 }
 
 /// Check if the given line is a continuation line for a paragraph
 fn isContinuationLineParagraph(line: []const Token) bool {
-    if (line.len == 0) return true;
-
-    for (line, 0..) |tok, i| {
-        switch (tok.kind) {
-            .SPACE, .INDENT => {},
-            .GT, .PLUS, .MINUS, .STAR => {
-                if (i + 1 < line.len) {
-                    const kind = line[i + 1].kind;
-                    if (kind == .SPACE or kind == .INDENT) {
-                        return false;
-                    }
-                }
-            },
-            // TODO: '123.456' vs '10. '
-            .DIGIT => {
-                if (i + 1 < line.len and line[i + 1].kind == .PERIOD) {
-                    return false;
-                }
-            },
-            else => return true,
-        }
-    }
+    if (line.len == 0) return true; // TODO: check
+    if (isListItem(line) or isQuote(line) or isHeading(line)) return false;
     return true;
 }
 
-/// Check if the given line is a continuation line for a list
-fn isContinuationLineList(line: []const Token) bool {
+/// Check if the line can "lazily" continue an open Quote block
+fn isLazyContinuationLineQuote(line: []const Token) bool {
     if (line.len == 0) return true;
+    if (isListItem(line) or isHeading(line)) return false;
+    return true;
+}
 
-    for (line, 0..) |tok, i| {
-        switch (tok.kind) {
-            .SPACE, .INDENT => {},
-            .GT, .PLUS, .MINUS, .STAR => {
-                if (i + 1 < line.len) {
-                    const kind = line[i + 1].kind;
-                    if (kind == .SPACE or kind == .INDENT) {
-                        return true;
-                    }
-                }
-            },
-            .DIGIT => {
-                if (i + 1 < line.len and line[i + 1].kind == .PERIOD) {
-                    return true;
-                }
-            },
-            else => return false,
-        }
-    }
-    return false;
+/// Check if the line can "lazily" continue an open List block
+fn isLazyContinuationLineList(line: []const Token) bool {
+    if (line.len == 0) return true; // TODO: blank line - allow?
+    if (isQuote(line) or isHeading(line)) return false;
+    return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -316,19 +371,62 @@ fn trimContinuationMarkersList(line: []const Token) []const Token {
     // Find the first list-item marker (*, -, +, or digit)
     const trimmed = trimLeadingWhitespace(line);
     std.debug.assert(trimmed.len > 0);
+    if (isOrderedListItem(line)) return trimContinuationMarkersOrderedList(line);
+    if (isUnorderedListItem(line)) return trimContinuationMarkersUnorderedList(line);
+
+    std.debug.print("{s}-{d}: ERROR: Shouldn't be here!\n", .{ @src().fn_name, @src().line });
+    return trimmed;
+}
+
+fn trimContinuationMarkersUnorderedList(line: []const Token) []const Token {
+    // Find the first list-item marker (*, -, +)
+    const trimmed = trimLeadingWhitespace(line);
+    std.debug.assert(trimmed.len > 0);
     switch (trimmed[0].kind) {
-        .DASH, .PLUS, .STAR => {
+        .MINUS, .PLUS, .STAR => {
             return trimLeadingWhitespace(trimmed[1..]);
         },
-        .DIGIT => {
-            std.debug.assert(trimmed[1].kind == .PERIOD);
-            return trimLeadingWhitespace(trimmed[2..]);
-        },
         else => {
-            std.debug.print("ERROR: Shouldn't be here! List line: '{s}'\n", .{line});
+            std.debug.print("{s}-{d}: ERROR: Shouldn't be here! List line: '{any}'\n", .{
+                @src().fn_name,
+                @src().line,
+                line,
+            });
             return trimmed;
         },
     }
+
+    return trimmed;
+}
+
+fn trimContinuationMarkersOrderedList(line: []const Token) []const Token {
+    // Find the first list-item marker "[0-9]+[.]"
+    const trimmed = trimLeadingWhitespace(line);
+    std.debug.assert(trimmed.len > 0);
+    var have_dot: bool = false;
+    for (trimmed, 0..) |tok, i| {
+        switch (tok.kind) {
+            .DIGIT => {},
+            .PERIOD => {
+                have_dot = true;
+                std.debug.assert(trimmed[1].kind == .PERIOD);
+                return trimLeadingWhitespace(trimmed[2..]);
+            },
+            else => {
+                if (have_dot and i + 1 < line.len)
+                    return trimLeadingWhitespace(trimmed[i + 1 ..]);
+
+                std.debug.print("{s}-{d}: ERROR: Shouldn't be here! List line: '{any}'\n", .{
+                    @src().fn_name,
+                    @src().line,
+                    line,
+                });
+                return trimmed;
+            },
+        }
+    }
+
+    return trimmed;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -532,7 +630,7 @@ fn parseNewBlock(alloc: Allocator, line: []const Token) !Block {
     // } };
 
     var b: Block = Block.initLeaf(alloc, .Break);
-    b.Leaf.content.Break = zd.Break{};
+    b.Leaf.content.Break = {};
     const N = line.len;
 
     if (N < 1) return b;
@@ -611,31 +709,31 @@ test "1. one-line nested blocks" {
 
     // Compare Document Block
     // const root = p.document;
-    try std.testing.expect(isContainer(root));
+    try std.testing.expect(root.isContainer());
     try std.testing.expectEqual(zd.ContainerType.Document, @as(zd.ContainerType, root.Container.content));
     try std.testing.expectEqual(1, root.Container.children.items.len);
 
     // Compare Quote Block
     const quote = root.Container.children.items[0];
-    try std.testing.expect(isContainer(quote));
+    try std.testing.expect(quote.isContainer());
     try std.testing.expectEqual(zd.ContainerType.Quote, @as(zd.ContainerType, quote.Container.content));
     try std.testing.expectEqual(1, quote.Container.children.items.len);
 
     // Compare List Block
     const list = quote.Container.children.items[0];
-    try std.testing.expect(isContainer(list));
+    try std.testing.expect(list.isContainer());
     try std.testing.expectEqual(zd.ContainerType.List, @as(zd.ContainerType, list.Container.content));
     try std.testing.expectEqual(1, list.Container.children.items.len);
 
     // Compare ListItem Block
     const list_item = list.Container.children.items[0];
-    try std.testing.expect(isContainer(list_item));
+    try std.testing.expect(list_item.isContainer());
     try std.testing.expectEqual(zd.ContainerType.ListItem, @as(zd.ContainerType, list_item.Container.content));
     try std.testing.expectEqual(1, list_item.Container.children.items.len);
 
     // Compare Paragraph Block
     const para = list_item.Container.children.items[0];
-    try std.testing.expect(isLeaf(para));
+    try std.testing.expect(para.isLeaf());
     try std.testing.expectEqual(zd.LeafType.Paragraph, @as(zd.LeafType, para.Leaf.content));
     // try std.testing.expectEqual(1, para.Leaf.children.items.len);
 }
@@ -710,7 +808,7 @@ fn getLine(tokens: []Token, cursor: usize) ?[]Token {
 /// Given a raw line of Tokens, determine what kind of Block should be created
 fn parseBlockFromLine(alloc: Allocator, line: []Token) !Block {
     var b: Block = Block.initLeaf(alloc, .Break);
-    b.Leaf.content.Break = zd.Break{};
+    b.Leaf.content.Break = {};
     const N = line.len;
 
     if (N < 1) return b;
@@ -737,7 +835,7 @@ fn parseBlockFromLine(alloc: Allocator, line: []Token) !Block {
         },
     }
     return b;
-    //return .{ .Leaf = .{ .break = zd.Break{}, }, };
+    //return .{ .Leaf = .{ .break = {}, }, };
     //return error.Unimplemented;
 }
 
@@ -761,7 +859,7 @@ test "Top-level parsing" {
     }
     cursor += first_line.?.len;
 
-    var open_block = try parseBlockFromLine(first_line.?);
+    var open_block = try parseBlockFromLine(alloc, first_line.?);
     try document.addChild(open_block);
 
     if (first_line.?.len == tokens.len) // Only one line in the text
@@ -769,13 +867,13 @@ test "Top-level parsing" {
 
     while (getLine(tokens, cursor)) |line| {
         // First see if the current open block of the document can accept this line
-        if (!open_block.handleLine(line)) {
+        if (!handleLine(&open_block, line)) {
             // This line cannot continue the current open block; close and continue
             // Close the current open block (child of the Document)
             open_block.close();
 
             // Append a new Block to the document
-            open_block = try parseBlockFromLine(line);
+            open_block = try parseBlockFromLine(alloc, line);
             try document.addChild(open_block);
         } else {
             // The line belongs with this block

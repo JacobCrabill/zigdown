@@ -31,7 +31,7 @@ pub const LeafType = enum(u8) {
 
 /// The type-specific content of a Leaf block
 pub const LeafData = union(LeafType) {
-    Break: Break,
+    Break: void,
     Code: Code,
     Heading: Heading,
     Paragraph: Paragraph,
@@ -51,9 +51,6 @@ pub const LeafData = union(LeafType) {
         }
     }
 };
-
-/// A single hard line break
-pub const Break = struct {};
 
 /// A heading with associated level
 pub const Heading = struct {
