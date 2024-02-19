@@ -305,8 +305,20 @@ pub fn handleLineHeading(block: *Block, line: []const Token) bool {
     }
     if (level <= 0) return false;
 
-    block.Leaf.content.Heading.level = level;
-    // todo: append all text to block
+    var head: *zd.Heading = &block.Leaf.content.Heading;
+    head.level = level;
+
+    if (level >= line.len) return true;
+
+    var words = ArrayList([]const u8).init(block.allocator());
+    defer words.deinit();
+    for (trimLeadingWhitespace(line[level..])) |tok| {
+        if (tok.kind == .BREAK) continue;
+        words.append(tok.text) catch unreachable;
+    }
+
+    head.text = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
+
     return true;
 }
 
@@ -387,7 +399,6 @@ fn isLazyContinuationLineList(line: []const Token) bool {
 
 fn trimContinuationMarkersQuote(line: []const Token) []const Token {
     // Turn '  > Foo' into 'Foo'
-    std.debug.print("trimming quote line: '{any}'\n", .{line});
     const trimmed = trimLeadingWhitespace(line);
     std.debug.assert(trimmed.len > 0);
     std.debug.assert(trimmed[0].kind == .GT);
@@ -521,8 +532,8 @@ pub const Parser = struct {
     pub fn parseMarkdown(self: *Self) !void {
         loop: while (self.getLine()) |line| {
             // >> DEBUGGING <<
+            // std.debug.print("Handling line:", .{});
             // zd.printTypes(line);
-            std.debug.print("Handling line: '{any}'\n", .{line});
             if (!handleLine(&self.document, line))
                 return error.ParseError;
             self.advanceCursor(line.len);
@@ -616,20 +627,6 @@ pub const Parser = struct {
     // Utility Functions
     ///////////////////////////////////////////////////////
 
-    /// Could be a few differnt types of sections
-    fn handleIndent(self: *Self) !void {
-        while (self.curTokenIs(.INDENT) or self.curTokenIs(.SPACE)) {
-            self.nextToken();
-        }
-
-        switch (self.curToken().kind) {
-            .MINUS, .PLUS, .STAR => try self.parseList(),
-            .DIGIT => try self.parseNumberedList(),
-            // TODO - any other sections which can be indented...
-            else => try self.parseTextBlock(),
-        }
-    }
-
     /// Return the index of the next BREAK token, or EOF
     fn nextBreak(self: *Self, idx: usize) usize {
         if (idx >= self.tokens.items.len)
@@ -691,8 +688,7 @@ fn parseNewBlock(alloc: Allocator, line: []const Token) !Block {
         },
         .HASH => {
             b = Block.initLeaf(alloc, .Heading);
-            b.Leaf.content.Heading = zd.Heading{};
-            // todo: consider parsing and setting the start number here
+            b.Leaf.content.Heading = zd.Heading.init(alloc);
             if (!handleLineHeading(&b, line))
                 try errorReturn("Cannot parse line as heading: {any}", .{line});
         },

@@ -40,6 +40,7 @@ pub const LeafData = union(LeafType) {
     pub fn deinit(self: *LeafData) void {
         switch (self.*) {
             .Paragraph => |*p| p.deinit(),
+            .Heading => |*h| h.deinit(),
             inline else => {},
         }
     }
@@ -47,6 +48,7 @@ pub const LeafData = union(LeafType) {
     pub fn print(self: LeafData, depth: u8) void {
         switch (self) {
             .Paragraph => |p| p.print(depth),
+            .Heading => |h| h.print(depth),
             inline else => {},
         }
     }
@@ -54,8 +56,22 @@ pub const LeafData = union(LeafType) {
 
 /// A heading with associated level
 pub const Heading = struct {
+    alloc: Allocator = undefined,
     level: u8 = 1,
     text: []const u8 = undefined,
+
+    pub fn init(alloc: Allocator) Heading {
+        return .{ .alloc = alloc };
+    }
+
+    pub fn deinit(h: *Heading) void {
+        h.alloc.free(h.text);
+    }
+
+    pub fn print(h: Heading, depth: u8) void {
+        printIndent(depth);
+        std.debug.print("[H{d}] '{s}'\n", .{ h.level, h.text });
+    }
 };
 
 /// Raw code or other preformatted content

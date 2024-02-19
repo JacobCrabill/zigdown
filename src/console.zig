@@ -46,6 +46,97 @@ pub const text_strike = ansi ++ "[9m";
 pub const hyperlink = ansi ++ "]8;;";
 pub const link_end = ansi ++ "\\";
 
+pub const Color = enum(u8) {
+    Black,
+    Red,
+    Green,
+    Yellow,
+    Blue,
+    Cyan,
+    White,
+};
+
+pub const Style = enum(u8) {
+    Bold,
+    Italic,
+    Underline,
+    Blink,
+    FastBlink,
+    Reverse,
+    Hide,
+    Strike,
+};
+
+pub const TextStyle = struct {
+    color: Color = .White,
+    bold: bool = false,
+    italic: bool = false,
+    underline: bool = false,
+    blink: bool = false,
+    fastblink: bool = false,
+    reverse: bool = false,
+    hide: bool = false,
+    strike: bool = false,
+};
+
+/// Configure the terminal to start printing with the given color
+pub fn startColor(color: Color) void {
+    switch (color) {
+        .Black => std.debug.print(fg_black, .{}),
+        .Red => std.debug.print(fg_red, .{}),
+        .Green => std.debug.print(fg_green, .{}),
+        .Yellow => std.debug.print(fg_yellow, .{}),
+        .Blue => std.debug.print(fg_blue, .{}),
+        .Cyan => std.debug.print(fg_cyan, .{}),
+        .White => std.debug.print(fg_white, .{}),
+    }
+}
+
+/// Configure the terminal to start printing with the given (single) style
+pub fn startStyle(style: Style) void {
+    switch (style) {
+        .Bold => std.debug.print(text_bold, .{}),
+        .Italic => std.debug.print(text_italic, .{}),
+        .Underline => std.debug.print(text_underline, .{}),
+        .Blink => std.debug.print(text_blink, .{}),
+        .FastBlink => std.debug.print(text_fastblink, .{}),
+        .Reverse => std.debug.print(text_reverse, .{}),
+        .Hide => std.debug.print(text_hide, .{}),
+        .Strike => std.debug.print(text_strike, .{}),
+    }
+}
+
+/// Configure the terminal to start printing one or more styles with color
+pub fn startStyles(style: TextStyle) void {
+    if (style.bold) std.debug.print(text_bold, .{});
+    if (style.italic) std.debug.print(text_italic, .{});
+    if (style.underline) std.debug.print(text_underline, .{});
+    if (style.blink) std.debug.print(text_blink, .{});
+    if (style.fastblink) std.debug.print(text_fastblink, .{});
+    if (style.reverse) std.debug.print(text_reverse, .{});
+    if (style.hide) std.debug.print(text_hide, .{});
+    startColor(style.color);
+}
+
+/// Reset all style in the terminal
+pub fn resetStyle() void {
+    std.debug.print(ansi_end, .{});
+}
+
+/// Print the text using the given color
+pub fn printColor(color: Color, comptime fmt: []const u8, args: anytype) void {
+    startColor(color);
+    std.debug.print(fmt, args);
+    resetStyle();
+}
+
+/// Print the text using the given style description
+pub fn printStyled(style: TextStyle, comptime fmt: []const u8, args: anytype) void {
+    startStyles(style);
+    std.debug.print(fmt, args);
+    resetStyle();
+}
+
 // ====================================================
 // Assemble our suite of box-drawing Unicode characters
 // ----------------------------------------------------
