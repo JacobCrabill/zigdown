@@ -13,6 +13,9 @@ pub fn main() !void {
         \\
         \\- And now a list!
         \\- more items
+        \\```c++
+        \\  Some raw code here
+        \\```
     ;
 
     var style: cons.TextStyle = cons.TextStyle{ .color = .Green, .bold = true };

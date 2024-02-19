@@ -76,8 +76,25 @@ pub const Heading = struct {
 
 /// Raw code or other preformatted content
 pub const Code = struct {
-    language: ?[]const u8 = null,
-    text: []const u8 = "",
+    alloc: Allocator = undefined,
+    // The opening tag, e.g. "```", that has to be matched to end the block
+    opener: ?[]const u8 = null,
+    tag: ?[]const u8 = null,
+    text: ?[]const u8 = "",
+
+    pub fn init(alloc: Allocator) Code {
+        return .{ .alloc = alloc };
+    }
+
+    pub fn deinit(c: *Code) void {
+        if (c.tag) |tag| c.alloc.free(tag);
+        if (c.text) |text| c.alloc.free(text);
+    }
+
+    pub fn print(c: Code, depth: u8) void {
+        printIndent(depth);
+        std.debug.print("{s}\n", .{c.text});
+    }
 };
 
 /// Block of multiple sections of formatted text

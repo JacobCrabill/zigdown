@@ -152,6 +152,18 @@ fn isHeading(line: []const Token) bool {
     return false;
 }
 
+fn isCodeBlock(line: []const Token) bool {
+    for (line) |tok| {
+        switch (tok.kind) {
+            .CODE_BLOCK => return true,
+            .SPACE, .INDENT => {},
+            else => return false,
+        }
+    }
+
+    return false;
+}
+
 ///////////////////////////////////////////////////////
 // Container Block Parsers
 ///////////////////////////////////////////////////////
@@ -291,9 +303,54 @@ pub fn handleLineBreak(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineCode(block: *Block, line: []const Token) bool {
-    _ = block;
-    _ = line;
-    // todo: append all text to block
+    var code: *zd.Code = &block.Leaf.content.Code;
+
+    if (code.opener == null) {
+        // Brand new code block
+        const trimmed_line = trimLeadingWhitespace(line);
+        if (trimmed_line.len < 1) return false;
+
+        // Code block opener.  We allow nesting (TODO), so track the specific chars
+        if (trimmed_line[0].kind == .CODE_BLOCK) {
+            code.opener = trimmed_line[0].text;
+        } else {
+            return false;
+        }
+
+        // Parse the directive tag (language, or special command like "warning")
+        var words = ArrayList([]const u8).init(block.allocator());
+        defer words.deinit();
+
+        for (trimmed_line[1..]) |tok| {
+            if (tok.kind == .BREAK) break;
+            words.append(tok.text) catch unreachable;
+        }
+        code.tag = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
+
+        return true;
+    }
+
+    // Concatenate all text into the Code block
+    var words = ArrayList([]const u8).init(block.allocator());
+    defer words.deinit();
+
+    // Start by appending our current text
+    if (code.text) |text| {
+        words.append(text) catch unreachable;
+    }
+    for (line) |tok| {
+        if (tok.kind == .BREAK) continue;
+        words.append(tok.text) catch unreachable;
+    }
+
+    // Update the text, freeing the old string if it existed
+    const cur_text: ?[]const u8 = code.text;
+    code.text = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
+
+    if (cur_text) |old_text| {
+        code.alloc.free(old_text);
+    }
+
     return false;
 }
 
@@ -308,16 +365,17 @@ pub fn handleLineHeading(block: *Block, line: []const Token) bool {
     var head: *zd.Heading = &block.Leaf.content.Heading;
     head.level = level;
 
-    if (level >= line.len) return true;
+    if (line.len > level) {
+        // Concatenate all text into the Heading
+        var words = ArrayList([]const u8).init(block.allocator());
+        defer words.deinit();
+        for (trimLeadingWhitespace(line[level..])) |tok| {
+            if (tok.kind == .BREAK) continue;
+            words.append(tok.text) catch unreachable;
+        }
 
-    var words = ArrayList([]const u8).init(block.allocator());
-    defer words.deinit();
-    for (trimLeadingWhitespace(line[level..])) |tok| {
-        if (tok.kind == .BREAK) continue;
-        words.append(tok.text) catch unreachable;
+        head.text = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
     }
-
-    head.text = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
 
     return true;
 }
@@ -375,21 +433,22 @@ fn isContinuationLineList(line: []const Token) bool {
 /// Check if the given line is a continuation line for a paragraph
 fn isContinuationLineParagraph(line: []const Token) bool {
     if (line.len == 0) return true; // TODO: check
-    if (isEmptyLine(line) or isListItem(line) or isQuote(line) or isHeading(line)) return false;
+    if (isEmptyLine(line) or isListItem(line) or isQuote(line) or isHeading(line) or isCodeBlock(line))
+        return false;
     return true;
 }
 
 /// Check if the line can "lazily" continue an open Quote block
 fn isLazyContinuationLineQuote(line: []const Token) bool {
     if (line.len == 0) return true;
-    if (isListItem(line) or isHeading(line)) return false;
+    if (isListItem(line) or isHeading(line) or isCodeBlock(line)) return false;
     return true;
 }
 
 /// Check if the line can "lazily" continue an open List block
 fn isLazyContinuationLineList(line: []const Token) bool {
     if (line.len == 0) return true; // TODO: blank line - allow?
-    if (isQuote(line) or isHeading(line)) return false;
+    if (isQuote(line) or isHeading(line) or isCodeBlock(line)) return false;
     return true;
 }
 
@@ -691,6 +750,12 @@ fn parseNewBlock(alloc: Allocator, line: []const Token) !Block {
             b.Leaf.content.Heading = zd.Heading.init(alloc);
             if (!handleLineHeading(&b, line))
                 try errorReturn("Cannot parse line as heading: {any}", .{line});
+        },
+        .CODE_BLOCK => {
+            b = Block.initLeaf(alloc, .Code);
+            b.Leaf.content.Code = zd.Code.init(alloc);
+            if (!handleLineCode(&b, line))
+                try errorReturn("Cannot parse line as code: {any}", .{line});
         },
         .BREAK => {
             b = Block.initLeaf(alloc, .Break);
