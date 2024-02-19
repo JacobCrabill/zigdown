@@ -249,20 +249,21 @@ inline fn printABox(comptime str: []const u8, comptime width: u8, comptime heigh
     std.debug.print("{s}", .{full_str});
 }
 
-test "print cwd" {
-    var buffer: [1024]u8 = .{0} ** 1024;
-    const path = std.fs.selfExeDirPath(&buffer) catch unreachable;
-    std.debug.print("\ncwd: {s}\n", .{path});
-}
-test "Print a text box" {
-    const box_style = BoldBox;
-    std.debug.print("\n", .{});
-    printABox("I'm computed at compile time!", 25, 5, box_style);
-}
-
-test "Print ANSI char demo table" {
-    try printANSITable();
-}
+// test "print cwd" {
+//     var buffer: [1024]u8 = .{0} ** 1024;
+//     const path = std.fs.selfExeDirPath(&buffer) catch unreachable;
+//     std.debug.print("\ncwd: {s}\n", .{path});
+// }
+//
+// test "Print a text box" {
+//     const box_style = BoldBox;
+//     std.debug.print("\n", .{});
+//     printABox("I'm computed at compile time!", 25, 5, box_style);
+// }
+//
+// test "Print ANSI char demo table" {
+//     try printANSITable();
+// }
 
 inline fn printANSITable() !void {
     const stdout_file = std.io.getStdOut().writer();

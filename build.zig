@@ -67,6 +67,27 @@ pub fn build(b: *std.Build) void {
     addTest(b, "test-parser-new", "Run the new paresr tests", "src/cmark_parser.zig", optimize);
 
     addTest(b, "test-all", "Run all unit tests", "src/test.zig", optimize);
+
+    // Add custom test executables
+    const parser_test = b.addExecutable(.{
+        .name = "parser_test",
+        .root_source_file = .{ .path = "src/test_cmark.zig" },
+        .version = .{ .major = 0, .minor = 1, .patch = 0 },
+        .optimize = optimize,
+        .target = target,
+    });
+    b.installArtifact(parser_test);
+
+    const ptest_run = b.addRunArtifact(parser_test);
+    ptest_run.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        ptest_run.addArgs(args);
+    }
+
+    const ptest_step = b.step("ptest", "Build Parser test exe");
+    ptest_step.dependOn(b.getInstallStep());
+    ptest_step.dependOn(&parser_test.step);
+    ptest_step.dependOn(&ptest_run.step);
 }
 
 /// Add a unit test step using the given file

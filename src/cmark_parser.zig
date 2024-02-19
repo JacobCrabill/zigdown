@@ -32,6 +32,13 @@ const LeafBlock = zd.LeafBlock;
 // Helper Functions
 ///////////////////////////////////////////////////////////////////////////////
 
+fn errorReturn(comptime fmt: []const u8, args: anytype) !void {
+    std.debug.print("ERROR: ", .{});
+    std.debug.print(fmt, .{args});
+    std.debug.print("\n", .{});
+    return error.ParseError;
+}
+
 /// Remove all leading whitespace (spaces or indents) from the start of a line
 fn trimLeadingWhitespace(line: []const Token) []const Token {
     var start: usize = 0;
@@ -53,6 +60,13 @@ fn findFirstOf(tokens: []const Token, idx: usize, kinds: []const TokenType) ?usi
         }
     }
     return null;
+}
+
+fn isEmptyLine(line: []const Token) bool {
+    if (line.len == 0 or line[0].kind == .BREAK)
+        return true;
+
+    return false;
 }
 
 /// Check for the pattern "[ ]*[0-9]*[.][ ]+"
@@ -170,7 +184,6 @@ pub fn handleLineDocument(block: *Block, line: []const Token) bool {
     var cblock = block.container();
     if (cblock.children.items.len > 0) {
         var child: *Block = &cblock.children.items[cblock.children.items.len - 1];
-        // TODO: implement the generic handleLine that switches on child type
         if (handleLine(child, line)) {
             return true;
         } else {
@@ -280,19 +293,31 @@ pub fn handleLineBreak(block: *Block, line: []const Token) bool {
 pub fn handleLineCode(block: *Block, line: []const Token) bool {
     _ = block;
     _ = line;
+    // todo: append all text to block
     return false;
 }
 
 pub fn handleLineHeading(block: *Block, line: []const Token) bool {
-    _ = block;
-    _ = line;
-    return false;
+    var level: u8 = 0;
+    for (line) |tok| {
+        if (tok.kind != .HASH) break;
+        level += 1;
+    }
+    if (level <= 0) return false;
+
+    block.Leaf.content.Heading.level = level;
+    // todo: append all text to block
+    return true;
 }
 
 pub fn handleLineParagraph(block: *Block, line: []const Token) bool {
-    _ = block;
-    _ = line;
-    return false;
+    if (!block.isLeaf()) return false;
+
+    if (!isContinuationLineParagraph(line)) {
+        return false;
+    }
+
+    return true;
 }
 
 ///////////////////////////////////////////////////////
@@ -309,6 +334,7 @@ fn isContinuationLineQuote(line: []const Token) bool {
     //    (0 to 3 leading spaces followed by at least one '>')
     // then it can be part of the current Quote block.
     //
+    // // TODO: lazy continuation below...
     // Otherwise, if it is Paragraph lazy continuation line,
     // it can also be a part of the Quote block
     var leading_ws: u8 = 0;
@@ -316,7 +342,7 @@ fn isContinuationLineQuote(line: []const Token) bool {
         switch (tok.kind) {
             .SPACE => leading_ws += 1,
             .INDENT => leading_ws += 2,
-            .GT, .WORD, .BREAK => return true,
+            .GT => return true,
             else => return false,
         }
 
@@ -337,7 +363,7 @@ fn isContinuationLineList(line: []const Token) bool {
 /// Check if the given line is a continuation line for a paragraph
 fn isContinuationLineParagraph(line: []const Token) bool {
     if (line.len == 0) return true; // TODO: check
-    if (isListItem(line) or isQuote(line) or isHeading(line)) return false;
+    if (isEmptyLine(line) or isListItem(line) or isQuote(line) or isHeading(line)) return false;
     return true;
 }
 
@@ -361,6 +387,7 @@ fn isLazyContinuationLineList(line: []const Token) bool {
 
 fn trimContinuationMarkersQuote(line: []const Token) []const Token {
     // Turn '  > Foo' into 'Foo'
+    std.debug.print("trimming quote line: '{any}'\n", .{line});
     const trimmed = trimLeadingWhitespace(line);
     std.debug.assert(trimmed.len > 0);
     std.debug.assert(trimmed[0].kind == .GT);
@@ -483,17 +510,21 @@ pub const Parser = struct {
     /// Free any heap allocations
     pub fn deinit(self: *Self) void {
         self.tokens.deinit();
+        self.document.deinit();
 
         if (self.opts.copy_input) {
-            self.alloc.free(self.input);
+            self.alloc.free(self.text);
         }
     }
 
     /// Parse the document
     pub fn parseMarkdown(self: *Self) !void {
         loop: while (self.getLine()) |line| {
-            zd.printTypes(line);
-            try self.document.handleLine(line);
+            // >> DEBUGGING <<
+            // zd.printTypes(line);
+            std.debug.print("Handling line: '{any}'\n", .{line});
+            if (!handleLine(&self.document, line))
+                return error.ParseError;
             self.advanceCursor(line.len);
             continue :loop;
         }
@@ -622,40 +653,62 @@ pub const Parser = struct {
 
 /// Parse a single line of Markdown into the start of a new Block
 fn parseNewBlock(alloc: Allocator, line: []const Token) !Block {
-    // _ = line;
-    // return Block{ .Leaf = .{
-    //     .kind = .Break,
-    //     .config = .{},
-    //     .inlines = ArrayList(Inline).init(allocator),
-    // } };
-
-    var b: Block = Block.initLeaf(alloc, .Break);
-    b.Leaf.content.Break = {};
-    const N = line.len;
-
-    if (N < 1) return b;
+    var b: Block = undefined;
 
     switch (line[0].kind) {
         .GT => {
             // Parse quote block
+            b = Block.initContainer(alloc, .Quote);
+            b.Container.content.Quote = {};
+            if (!handleLineQuote(&b, line))
+                return error.ParseError;
         },
         .MINUS => {
             // Parse unorderd list block
+            b = Block.initContainer(alloc, .List);
+            b.Container.content.List = zd.List{ .ordered = false };
+            if (!handleLineList(&b, line))
+                return error.ParseError;
         },
         .STAR => {
-            if (N > 1 and line[1].kind == .SPACE) {
+            if (line.len > 1 and line[1].kind == .SPACE) {
                 // Parse unorderd list block
+                b = Block.initContainer(alloc, .List);
+                b.Container.content.List = zd.List{ .ordered = false };
+                if (!handleLineList(&b, line))
+                    return error.ParseError;
             }
         },
         .DIGIT => {
-            if (N > 1 and line[1].kind == .PERIOD) {
+            if (line.len > 1 and line[1].kind == .PERIOD) {
                 // Parse numbered list block
+                b = Block.initContainer(alloc, .List);
+                b.Container.content.List = zd.List{ .ordered = true };
+                // todo: consider parsing and setting the start number here
+                if (!handleLineList(&b, line))
+                    try errorReturn("Cannot parse line as numlist: {any}", .{line});
             }
+        },
+        .HASH => {
+            b = Block.initLeaf(alloc, .Heading);
+            b.Leaf.content.Heading = zd.Heading{};
+            // todo: consider parsing and setting the start number here
+            if (!handleLineHeading(&b, line))
+                try errorReturn("Cannot parse line as heading: {any}", .{line});
+        },
+        .BREAK => {
+            b = Block.initLeaf(alloc, .Break);
+            b.Leaf.content.Break = {};
         },
         else => {
             // Fallback - parse paragraph
+            b = Block.initLeaf(alloc, .Paragraph);
+            b.Leaf.content.Paragraph = zd.Paragraph.init(alloc);
+            if (!handleLineParagraph(&b, line))
+                try errorReturn("Cannot parse line as paragraph: {any}", .{line});
         },
     }
+
     return b;
 }
 
@@ -694,7 +747,8 @@ test "1. one-line nested blocks" {
 
     // ~~ Expected Parser Output ~~
 
-    const root = try createAST();
+    var root = try createAST();
+    defer root.deinit();
 
     // ~~ Parse ~~
 
@@ -751,15 +805,15 @@ test "parser flow" {
     _ = root;
     // - Document.handleLine()                      "> - Hello, World!"
     //   - open child? -> false
-    //   - parseBlockFromLine()                     "> - Hello, World!"
+    //   - parseNewBlock()                     "> - Hello, World!"
     //     - Quote.handleLine()
     //       - open child? -> false
-    //       - parseBlockFromLine()                 "- Hello, World!"
+    //       - parseNewBlock()                 "- Hello, World!"
     //         - List.handleLine()
     //           - open ListItem? -> false
     //           - ListItem.handleLine()
     //             - open child? -> false
-    //             - parseBlockFromLine()           "Hello, World!"
+    //             - parseNewBlock()           "Hello, World!"
     //               - Paragraph.handleLine()
     //                 - *todo* parseInlines()?
     //             - ListItem.addChild(Paragraph)
@@ -774,10 +828,10 @@ test "parser flow" {
     //         - List.handleLine() -> false         "> New Child!"
     //           - List may not start with ">"
     //         - child.close()
-    //       - parseBlockFromLine()                 "> New Child!"
+    //       - parseNewBlock()                 "> New Child!"
     //         - Quote.handleLine()
     //           - open child? -> false
-    //           - parseBlockFromLine()             "New Child!"
+    //           - parseNewBlock()             "New Child!"
     //             - Paragraph.handleLine()
     //               - *todo* parseInlines()?
     //           - Quote.addChild(Paragraph)
@@ -805,44 +859,23 @@ fn getLine(tokens: []Token, cursor: usize) ?[]Token {
     return tokens[cursor..end];
 }
 
-/// Given a raw line of Tokens, determine what kind of Block should be created
-fn parseBlockFromLine(alloc: Allocator, line: []Token) !Block {
-    var b: Block = Block.initLeaf(alloc, .Break);
-    b.Leaf.content.Break = {};
-    const N = line.len;
-
-    if (N < 1) return b;
-
-    switch (line[0].kind) {
-        .GT => {
-            // Parse quote block
-        },
-        .MINUS => {
-            // Parse unorderd list block
-        },
-        .STAR => {
-            if (N > 1 and line[1].kind == .SPACE) {
-                // Parse unorderd list block
-            }
-        },
-        .DIGIT => {
-            if (N > 1 and line[1].kind == .PERIOD) {
-                // Parse numbered list block
-            }
-        },
-        else => {
-            // Fallback - parse paragraph
-        },
-    }
-    return b;
-    //return .{ .Leaf = .{ .break = {}, }, };
-    //return error.Unimplemented;
-}
-
 test "Top-level parsing" {
     // Setup
-    const text: []const u8 = "# Heading";
+    std.debug.print("==== Top-level Parsing Test ====\n", .{});
+    const text: []const u8 =
+        \\# Heading
+        \\
+        \\Foo Bar baz. Hi!
+    ;
     const alloc = std.testing.allocator;
+
+    {
+        std.debug.print("============= starting parsing? ================\n", .{});
+        var p: Parser = try Parser.init(alloc, text, .{ .copy_input = true });
+        defer p.deinit();
+        try p.parseMarkdown();
+    }
+
     var lexer = Lexer.init(alloc, text);
     var tokens_array = try lexer.tokenize();
     defer tokens_array.deinit();
@@ -851,19 +884,19 @@ test "Top-level parsing" {
 
     // Create empty document; parse first line into the start of a new Block
     var document = Block.initContainer(alloc, .Document);
-    // defer document.deinit();
+    defer document.deinit();
     const first_line = getLine(tokens, cursor);
     if (first_line == null) {
         // empty document?
-        return;
+        return error.EmptyDocument;
     }
     cursor += first_line.?.len;
 
-    var open_block = try parseBlockFromLine(alloc, first_line.?);
+    var open_block = try parseNewBlock(alloc, first_line.?);
     try document.addChild(open_block);
 
-    if (first_line.?.len == tokens.len) // Only one line in the text
-        return;
+    // if (first_line.?.len == tokens.len) // Only one line in the text
+    //     return error.EmptyDocument;
 
     while (getLine(tokens, cursor)) |line| {
         // First see if the current open block of the document can accept this line
@@ -873,7 +906,7 @@ test "Top-level parsing" {
             open_block.close();
 
             // Append a new Block to the document
-            open_block = try parseBlockFromLine(alloc, line);
+            open_block = try parseNewBlock(alloc, line);
             try document.addChild(open_block);
         } else {
             // The line belongs with this block
@@ -883,6 +916,8 @@ test "Top-level parsing" {
         // This line has been handled, one way or another; continue to the next line
         cursor += line.len;
     }
+
+    zd.printAST(document);
 }
 
 test "Quote block continuation lines" {
@@ -928,9 +963,9 @@ test "Quote block continuation lines" {
     // Now process every line!
     var cursor: usize = 0;
     while (getLine(tokens.items, cursor)) |line| {
-        zd.printTypes(line);
-        const continues_quote: bool = isContinuationLineQuote(line);
-        std.debug.print(" ^-- Could continue a Quote block? {}\n", .{continues_quote});
+        // zd.printTypes(line);
+        // const continues_quote: bool = isContinuationLineQuote(line);
+        // std.debug.print(" ^-- Could continue a Quote block? {}\n", .{continues_quote});
         cursor += line.len;
     }
 }
