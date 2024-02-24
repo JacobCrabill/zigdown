@@ -24,6 +24,8 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             };
         }
 
+        pub fn deinit(_: *Self) void {}
+
         // Write an array of bytes to the underlying writer
         pub fn write(self: *Self, bytes: []const u8) WriteError!void {
             try self.stream.writeAll(bytes);
@@ -79,19 +81,11 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             // const q = block.content.Quote;
 
             try self.stream.print("\n<blockquote>", .{});
-            // var i: i32 = @as(i32, q.level) - 1;
-            // while (i > 0) : (i -= 1) {
-            //     try self.stream.print("<blockquote>\n", .{});
-            // }
 
             for (block.children.items) |child| {
                 try self.renderBlock(child);
             }
 
-            // i = @as(i32, q.level) - 1;
-            // while (i > 0) : (i -= 1) {
-            //     try self.stream.print("</blockquote>", .{});
-            // }
             try self.stream.print("</blockquote>\n", .{});
         }
 
@@ -142,11 +136,15 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         fn renderCode(self: *Self, c: zd.Code) !void {
             try self.write("\n<pre><code");
 
-            if (c.language) |lang| {
-                try self.stream.print(" language=\"{s}\"", .{lang});
+            if (c.tag) |lang| {
+                try self.stream.print(" language=\"{s}\">", .{lang});
             }
 
-            try self.stream.print(">{s}</code></pre>\n", .{c.text});
+            if (c.text) |text| {
+                try self.stream.print("{s}", .{text});
+            }
+
+            try self.stream.print("</code></pre>\n", .{});
         }
 
         /// Render a standard paragraph of text

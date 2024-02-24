@@ -115,6 +115,7 @@ pub fn startStyles(style: TextStyle) void {
     if (style.fastblink) std.debug.print(text_fastblink, .{});
     if (style.reverse) std.debug.print(text_reverse, .{});
     if (style.hide) std.debug.print(text_hide, .{});
+    if (style.strike) std.debug.print(text_strike, .{});
     startColor(style.color);
 }
 

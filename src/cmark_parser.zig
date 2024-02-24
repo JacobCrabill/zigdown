@@ -54,8 +54,8 @@ fn trimLeadingWhitespace(line: []const Token) []const Token {
 /// Find the index of the next token of any of type 'kind' at or beyond 'idx'
 fn findFirstOf(tokens: []const Token, idx: usize, kinds: []const TokenType) ?usize {
     var i: usize = idx;
-    while (i < tokens.items.len) : (i += 1) {
-        if (std.mem.indexOfScalar(TokenType, kinds, tokens.items[i].kind)) |_| {
+    while (i < tokens.len) : (i += 1) {
+        if (std.mem.indexOfScalar(TokenType, kinds, tokens[i].kind)) |_| {
             return i;
         }
     }
@@ -253,8 +253,37 @@ pub fn handleLineQuote(block: *Block, line: []const Token) bool {
     return true;
 }
 
-/// TODO: This should maybe be swapped with ListItem?
 pub fn handleLineList(block: *Block, line: []const Token) bool {
+    if (!isLazyContinuationLineList(line))
+        return false;
+
+    // Ensure we have at least 1 open ListItem child
+    var cblock = block.container();
+    var child: *Block = undefined;
+    if (cblock.children.items.len == 0) {
+        block.addChild(Block.initContainer(block.allocator(), .ListItem)) catch unreachable;
+    } else {
+        // Check for the start of a new ListItem
+        // If so, close the current ListItem (if any) and start a new one
+        child = &cblock.children.items[cblock.children.items.len - 1];
+        if (isListItem(line) or !child.isOpen()) {
+            child.close();
+            block.addChild(Block.initContainer(block.allocator(), .ListItem)) catch unreachable;
+        }
+    }
+    child = &cblock.children.items[cblock.children.items.len - 1];
+
+    // Have the last (open) ListItem handle the line
+    if (handleLineListItem(child, line)) {
+        return true;
+    } else {
+        child.close();
+    }
+
+    return true;
+}
+
+pub fn handleLineListItem(block: *Block, line: []const Token) bool {
     if (!block.isContainer()) return false;
 
     var trimmed_line = line;
@@ -270,7 +299,6 @@ pub fn handleLineList(block: *Block, line: []const Token) bool {
     var cblock = block.container();
     if (cblock.children.items.len > 0) {
         var child: *Block = &cblock.children.items[cblock.children.items.len - 1];
-        // TODO: implement the generic handleLine that switches on child type
         if (handleLine(child, trimmed_line)) {
             return true;
         } else {
@@ -284,12 +312,6 @@ pub fn handleLineList(block: *Block, line: []const Token) bool {
     cblock.children.append(child) catch unreachable;
 
     return true;
-}
-
-pub fn handleLineListItem(block: *Block, line: []const Token) bool {
-    _ = block;
-    _ = line;
-    return false;
 }
 
 ///////////////////////////////////////////////////////
@@ -306,11 +328,12 @@ pub fn handleLineCode(block: *Block, line: []const Token) bool {
     var code: *zd.Code = &block.Leaf.content.Code;
 
     if (code.opener == null) {
-        // Brand new code block
+        // Brand new code block; parse the directive line
         const trimmed_line = trimLeadingWhitespace(line);
         if (trimmed_line.len < 1) return false;
 
-        // Code block opener.  We allow nesting (TODO), so track the specific chars
+        // Code block opener. We allow nesting (TODO), so track the specific chars
+        // ==== TODO: only "```" gets tokenized; allow variable tokens! ====
         if (trimmed_line[0].kind == .CODE_BLOCK) {
             code.opener = trimmed_line[0].text;
         } else {
@@ -318,15 +341,8 @@ pub fn handleLineCode(block: *Block, line: []const Token) bool {
         }
 
         // Parse the directive tag (language, or special command like "warning")
-        var words = ArrayList([]const u8).init(block.allocator());
-        defer words.deinit();
-
-        for (trimmed_line[1..]) |tok| {
-            if (tok.kind == .BREAK) break;
-            words.append(tok.text) catch unreachable;
-        }
-        code.tag = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
-
+        const end: usize = findFirstOf(trimmed_line, 1, &.{.BREAK}) orelse trimmed_line.len;
+        code.tag = zd.concatWords(block.allocator(), trimmed_line[1..end]) catch unreachable;
         return true;
     }
 
@@ -334,12 +350,19 @@ pub fn handleLineCode(block: *Block, line: []const Token) bool {
     var words = ArrayList([]const u8).init(block.allocator());
     defer words.deinit();
 
-    // Start by appending our current text
+    // Start by appending our current text to the temporary array
     if (code.text) |text| {
         words.append(text) catch unreachable;
     }
+
+    // Append all of the current line's text to the array
+    // Check if we have the closing code block token on this line
+    var have_closer: bool = false;
     for (line) |tok| {
-        if (tok.kind == .BREAK) continue;
+        if (tok.kind == .CODE_BLOCK and std.mem.eql(u8, tok.text, code.opener.?)) {
+            have_closer = true;
+            break;
+        }
         words.append(tok.text) catch unreachable;
     }
 
@@ -351,7 +374,10 @@ pub fn handleLineCode(block: *Block, line: []const Token) bool {
         code.alloc.free(old_text);
     }
 
-    return false;
+    if (have_closer)
+        block.close();
+
+    return true;
 }
 
 pub fn handleLineHeading(block: *Block, line: []const Token) bool {
@@ -441,14 +467,16 @@ fn isContinuationLineParagraph(line: []const Token) bool {
 /// Check if the line can "lazily" continue an open Quote block
 fn isLazyContinuationLineQuote(line: []const Token) bool {
     if (line.len == 0) return true;
-    if (isListItem(line) or isHeading(line) or isCodeBlock(line)) return false;
+    if (isEmptyLine(line) or isListItem(line) or isHeading(line) or isCodeBlock(line))
+        return false;
     return true;
 }
 
 /// Check if the line can "lazily" continue an open List block
 fn isLazyContinuationLineList(line: []const Token) bool {
     if (line.len == 0) return true; // TODO: blank line - allow?
-    if (isQuote(line) or isHeading(line) or isCodeBlock(line)) return false;
+    if (isEmptyLine(line) or isQuote(line) or isHeading(line) or isCodeBlock(line))
+        return false;
     return true;
 }
 

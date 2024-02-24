@@ -41,6 +41,7 @@ pub const LeafData = union(LeafType) {
         switch (self.*) {
             .Paragraph => |*p| p.deinit(),
             .Heading => |*h| h.deinit(),
+            .Code => |*c| c.deinit(),
             inline else => {},
         }
     }
@@ -49,6 +50,7 @@ pub const LeafData = union(LeafType) {
         switch (self) {
             .Paragraph => |p| p.print(depth),
             .Heading => |h| h.print(depth),
+            .Code => |c| c.print(depth),
             inline else => {},
         }
     }
@@ -93,7 +95,11 @@ pub const Code = struct {
 
     pub fn print(c: Code, depth: u8) void {
         printIndent(depth);
-        std.debug.print("{s}\n", .{c.text});
+        var tag: []const u8 = "";
+        var text: []const u8 = "";
+        if (c.tag) |ctag| tag = ctag;
+        if (c.text) |ctext| text = ctext;
+        std.debug.print("tag: '{s}'; body:\n{s}\n", .{ tag, text });
     }
 };
 

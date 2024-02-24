@@ -188,7 +188,9 @@ pub const Tokenizers = .{
     WordTokenizer,
 };
 
+///////////////////////////////////////////////////////////////////////////////
 // Utility Functions
+///////////////////////////////////////////////////////////////////////////////
 
 pub fn typeStr(kind: TokenType) []const u8 {
     return switch (kind) {
@@ -238,4 +240,16 @@ pub fn printTypes(tokens: []const Token) void {
         std.debug.print("{s}, ", .{typeStr(tok.kind)});
     }
     std.debug.print("\n", .{});
+}
+
+/// Concatenate the raw text of each token into a single string
+pub fn concatWords(alloc: Allocator, tokens: []const Token) ![]const u8 {
+    var words = ArrayList([]const u8).init(alloc);
+    defer words.deinit();
+
+    for (tokens) |tok| {
+        try words.append(tok.text);
+    }
+
+    return try std.mem.concat(alloc, u8, words.items);
 }
