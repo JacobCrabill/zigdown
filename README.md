@@ -3,7 +3,8 @@
 Inspired by [Glow](https://github.com/charmbracelet/glow), the goal is to create a simple
 terminal-based Markdown renderer just for fun.
 
-> \[!NOTE\] This doesn't really do much... ...yet. Very simple Markdown can be rendered to HTML and
+> [!NOTE]
+> This doesn't really do much... ...yet. Very simple Markdown can be rendered to HTML and
 > to the console.
 
 ## Goals
