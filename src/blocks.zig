@@ -84,7 +84,7 @@ pub const Block = union(BlockType) {
 
     pub fn isOpen(self: Self) bool {
         return switch (self) {
-            inline else => |*b| b.open,
+            inline else => |b| b.open,
         };
     }
 
@@ -152,9 +152,10 @@ pub const Container = struct {
     }
 
     pub fn close(self: *Self) void {
-        for (self.children.items) |*child| {
+        for (self.children.items, 0..) |child, i| {
             if (child.isOpen()) {
-                child.close();
+                //child.close();
+                self.children.items[i].close();
             }
         }
         self.open = false;
@@ -180,6 +181,7 @@ pub const Leaf = struct {
     const Self = @This();
     alloc: Allocator,
     content: LeafData,
+    raw_contents: ArrayList(Token),
     open: bool = true,
     // inlines: ArrayList(Inline),
 
@@ -187,6 +189,7 @@ pub const Leaf = struct {
         var leaf = Leaf{
             .alloc = alloc,
             .content = undefined,
+            .raw_contents = ArrayList(Token).init(alloc),
             // .inlines = ArrayList(Inline).init(alloc),
         };
 
@@ -204,6 +207,7 @@ pub const Leaf = struct {
 
     pub fn deinit(self: *Self) void {
         self.content.deinit();
+        self.raw_contents.deinit();
         // for (self.inlines.items) |*item| {
         //     item.deinit();
         // }

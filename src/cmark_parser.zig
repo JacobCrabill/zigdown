@@ -195,11 +195,11 @@ pub fn handleLineDocument(block: *Block, line: []const Token) bool {
     // Check for an open child
     var cblock = block.container();
     if (cblock.children.items.len > 0) {
-        var child: *Block = &cblock.children.items[cblock.children.items.len - 1];
+        const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
         if (handleLine(child, line)) {
             return true;
         } else {
-            child.close();
+            closeBlock(child);
         }
     }
 
@@ -236,12 +236,12 @@ pub fn handleLineQuote(block: *Block, line: []const Token) bool {
 
     // Check for an open child
     if (cblock.children.items.len > 0) {
-        var child: *Block = &cblock.children.items[cblock.children.items.len - 1];
+        const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
         // TODO: implement the generic handleLine that switches on child type
         if (handleLine(child, trimmed_line)) {
             return true;
         } else {
-            child.close();
+            closeBlock(child);
         }
     }
 
@@ -267,7 +267,7 @@ pub fn handleLineList(block: *Block, line: []const Token) bool {
         // If so, close the current ListItem (if any) and start a new one
         child = &cblock.children.items[cblock.children.items.len - 1];
         if (isListItem(line) or !child.isOpen()) {
-            child.close();
+            closeBlock(child);
             block.addChild(Block.initContainer(block.allocator(), .ListItem)) catch unreachable;
         }
     }
@@ -277,7 +277,7 @@ pub fn handleLineList(block: *Block, line: []const Token) bool {
     if (handleLineListItem(child, line)) {
         return true;
     } else {
-        child.close();
+        closeBlock(child);
     }
 
     return true;
@@ -298,11 +298,11 @@ pub fn handleLineListItem(block: *Block, line: []const Token) bool {
     // Check for an open child
     var cblock = block.container();
     if (cblock.children.items.len > 0) {
-        var child: *Block = &cblock.children.items[cblock.children.items.len - 1];
+        const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
         if (handleLine(child, trimmed_line)) {
             return true;
         } else {
-            child.close();
+            closeBlock(child);
         }
     }
 
@@ -346,16 +346,7 @@ pub fn handleLineCode(block: *Block, line: []const Token) bool {
         return true;
     }
 
-    // Concatenate all text into the Code block
-    var words = ArrayList([]const u8).init(block.allocator());
-    defer words.deinit();
-
-    // Start by appending our current text to the temporary array
-    if (code.text) |text| {
-        words.append(text) catch unreachable;
-    }
-
-    // Append all of the current line's text to the array
+    // Append all of the current line's tokens to the block's raw_contents
     // Check if we have the closing code block token on this line
     var have_closer: bool = false;
     for (line) |tok| {
@@ -363,19 +354,11 @@ pub fn handleLineCode(block: *Block, line: []const Token) bool {
             have_closer = true;
             break;
         }
-        words.append(tok.text) catch unreachable;
-    }
-
-    // Update the text, freeing the old string if it existed
-    const cur_text: ?[]const u8 = code.text;
-    code.text = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
-
-    if (cur_text) |old_text| {
-        code.alloc.free(old_text);
+        block.Leaf.raw_contents.append(tok) catch unreachable;
     }
 
     if (have_closer)
-        block.close();
+        closeBlock(block);
 
     return true;
 }
@@ -413,12 +396,10 @@ pub fn handleLineParagraph(block: *Block, line: []const Token) bool {
         return false;
     }
 
+    block.Leaf.raw_contents.appendSlice(line) catch unreachable;
+
     return true;
 }
-
-///////////////////////////////////////////////////////
-// Inline Parsers? ~~ TODO ~~
-///////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
 // Continuation Line Logic
@@ -552,6 +533,51 @@ fn trimContinuationMarkersOrderedList(line: []const Token) []const Token {
     }
 
     return trimmed;
+}
+
+///////////////////////////////////////////////////////
+// Inline Parsers? ~~ TODO ~~
+///////////////////////////////////////////////////////
+
+/// Close the block and parse its raw text content into inline content
+fn closeBlock(block: *Block) void {
+    // TODO
+    switch (block.*) {
+        .Container => |c| {
+            switch (c.content) {
+                // .Document => return closeBlockDocument(block),
+                // .Quote => return closeBlockQuote(block),
+                // .List => return closeBlockList(block),
+                // .ListItem => return closeBlockListItem(block),
+                inline else => {},
+            }
+        },
+        .Leaf => |l| {
+            switch (l.content) {
+                // .Break => return closeBlockBreak(block),
+                .Code => return closeBlockCode(block),
+                // .Heading => return closeBlockHeading(block),
+                // .Paragraph => return closeBlockParagraph(block),
+                else => {},
+            }
+        },
+    }
+    block.close();
+}
+
+fn closeBlockCode(block: *Block) void {
+    const code: *zd.Code = &block.Leaf.content.Code;
+    if (code.text) |text| {
+        code.alloc.free(text);
+        code.text = null;
+    }
+    var words = ArrayList([]const u8).init(block.allocator());
+    defer words.deinit();
+    for (block.Leaf.raw_contents.items) |tok| {
+        words.append(tok.text) catch unreachable;
+    }
+    code.text = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
+    block.Leaf.raw_contents.clearAndFree();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -991,8 +1017,7 @@ test "Top-level parsing" {
         // First see if the current open block of the document can accept this line
         if (!handleLine(&open_block, line)) {
             // This line cannot continue the current open block; close and continue
-            // Close the current open block (child of the Document)
-            open_block.close();
+            closeBlock(&open_block);
 
             // Append a new Block to the document
             open_block = try parseNewBlock(alloc, line);

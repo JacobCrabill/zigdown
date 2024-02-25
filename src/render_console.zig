@@ -15,8 +15,11 @@ const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
 const quote_indent = zd.Text{ .style = .{ .italic = false }, .text = "┃ " };
-const list_indent = zd.Text{ .style = .{}, .text = "  " };
-const numlist_indent = zd.Text{ .style = .{}, .text = "   " };
+const list_indent = zd.Text{ .style = .{}, .text = "   " };
+const numlist_indent_0 = zd.Text{ .style = .{}, .text = "    " };
+const numlist_indent_10 = zd.Text{ .style = .{}, .text = "     " };
+const numlist_indent_100 = zd.Text{ .style = .{}, .text = "      " };
+const numlist_indent_1000 = zd.Text{ .style = .{}, .text = "       " };
 
 pub const RenderError = error{
     OutOfMemory,
@@ -51,6 +54,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         column: usize = 0,
         alloc: std.mem.Allocator,
         leader_stack: ArrayList(zd.Text),
+        needs_leaders: bool = true,
         opts: RenderOpts = undefined,
 
         pub fn init(stream: OutStream, alloc: Allocator, opts: RenderOpts) Self {
@@ -93,7 +97,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.writeno(cons.ansi_end);
         }
 
-        // Write an array of bytes to the underlying writer, and update the current column
+        /// Write an array of bytes to the underlying writer, and update the current column
         pub fn write(self: *Self, bytes: []const u8) void {
             self.stream.writeAll(bytes) catch |err| {
                 std.debug.print("[ERROR] Unable to write! {s}\n", .{@errorName(err)});
@@ -101,13 +105,14 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.column += bytes.len;
         }
 
-        // Write an array of bytes to the underlying writer, without updating the current column
+        /// Write an array of bytes to the underlying writer, without updating the current column
         pub fn writeno(self: Self, bytes: []const u8) void {
             self.stream.writeAll(bytes) catch |err| {
                 std.debug.print("[ERROR] Unable to write! {s}\n", .{@errorName(err)});
             };
         }
 
+        /// Print the format and args to the output stream, without updating the current column
         pub fn print(self: Self, comptime fmt: []const u8, args: anytype) void {
             self.stream.print(fmt, args) catch |err| {
                 std.debug.print("[ERROR] Unable to print! {s}\n", .{@errorName(err)});
@@ -124,11 +129,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             // do nothing
         }
 
-        fn render_quote(self: *Self, q: zd.Quote) void {
-            // TODO: *parse* q.level
-            self.render_textblock(q.textblock, q.level, "┃ ");
-        }
-
         fn render_list(self: *Self, list: zd.List) void {
             if (self.column > 0)
                 self.render_break();
@@ -137,7 +137,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 // indent
                 self.write_n("  ", item.level);
                 // marker
-                self.write(cons.fg_blue ++ " * " ++ cons.ansi_end);
+                self.startStyle(.{ .color = .Blue });
+                self.write(" * ");
+                self.resetStyle();
                 // item
                 for (item.text.text.items) |text| {
                     self.render_text(text, 1, "    ");
@@ -162,7 +164,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// TODO: update
-        fn render_text(self: *Self, text: zd.Text, indent: usize, leader: []const u8) void {
+        fn render_text(self: *Self, text: zd.Text) void {
             // for style in style => add style tag
             if (text.style.bold)
                 self.print("{s}", .{cons.text_bold});
@@ -173,7 +175,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             if (text.style.underline)
                 self.print("{s}", .{cons.text_underline});
 
-            self.write_wrap(text.text, indent, leader);
+            self.write_wrap(text.text);
 
             self.print("{s}", .{cons.ansi_end});
         }
@@ -236,7 +238,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Write the text, with an indent, wrapping at 'width' characters
-        fn write_wrap(self: *Self, text: []const u8, indent: usize, leader: []const u8) void {
+        fn write_wrap(self: *Self, text: []const u8) void {
             const len = text.len;
             if (len == 0) return;
 
@@ -247,25 +249,33 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             var words = std.mem.tokenizeAny(u8, text, " ");
             while (words.next()) |word| {
                 if (self.column + word.len > self.opts.width) {
-                    self.write("\n");
-                    self.column = 0;
-                    self.write_n(leader, indent);
+                    self.renderBreak();
+                    //self.write_n(leader, indent);
+                    self.writeLeaders();
                 }
                 self.write(word);
                 self.write(" ");
             }
 
             // backup over the trailing " " if the text didn't have one
-            if (!std.mem.endsWith(u8, text, " ")) {
+            if (!std.mem.endsWith(u8, text, " ") and self.column > 0) {
                 self.print(cons.ansi_back, .{1});
-                self.column -= 1 + cons.ansi_back.len;
+                self.column -= 1; // + cons.ansi_back.len;
             }
         }
 
-        pub fn printLeaders(self: *Self) WriteError!void {
+        pub fn writeLeaders(self: *Self) void {
             for (self.leader_stack.items) |text| {
-                // TODO: update
-                self.render_text(text, 0, "");
+                const style = cons.TextStyle{
+                    .color = .White,
+                    .bold = text.style.bold,
+                    .italic = text.style.italic,
+                    .underline = text.style.underline,
+                    .strike = text.style.strike,
+                };
+                self.startStyle(style);
+                self.write(text.text);
+                self.resetStyle();
             }
         }
 
@@ -291,8 +301,15 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a Leaf block
         pub fn renderLeaf(self: *Self, block: zd.Leaf) !void {
+            if (self.needs_leaders) {
+                self.writeLeaders(); // HACK - TESTING
+                self.needs_leaders = true;
+            }
+            for (block.raw_contents.items) |item| {
+                self.write_wrap(item.text); // HACK - TESTING
+            }
             switch (block.content) {
-                .Break => try self.renderBreak(),
+                .Break => self.renderBreak(),
                 .Code => |c| try self.renderCode(c),
                 .Heading => |h| try self.renderHeading(h),
                 .Paragraph => |p| try self.renderParagraph(p),
@@ -331,18 +348,16 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         fn renderUnorderedList(self: *Self, list: zd.Container) !void {
-            // if (ordered) {
-            //     self.startStyle(.{ .style = .{ .bold = true } });
-            //     try self.stream.print("<ol start={d}>\n", .{list.content.List.start});
-            // } else {
-            //     try self.stream.print("<ul>\n", .{});
-            // }
-
-            // Although Lists should only contain ListItems, we are simply
-            // using the basic Container type as the child ListItems can be
-            // any other Block type
             for (list.children.items) |item| {
-                // print out "- " (list marker)
+                // print out list bullet
+                self.writeLeaders();
+                self.startStyle(.{ .color = .Blue, .bold = true });
+                self.write(" * ");
+                self.resetStyle();
+
+                // Print out the contents; note the first line doesn't
+                // need the leaders (we did that already)
+                self.needs_leaders = false;
                 try self.leader_stack.append(list_indent);
                 defer _ = self.leader_stack.pop();
                 try self.renderListItem(item.Container);
@@ -353,10 +368,21 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             const start: usize = list.content.List.start;
             var buffer: [16]u8 = undefined;
             for (list.children.items, 0..) |item, i| {
-                const marker = try std.fmt.bufPrint(&buffer, "{d}. ", .{start + i});
+                const num: usize = start + i;
+                const marker = try std.fmt.bufPrint(&buffer, " {d}. ", .{num});
                 self.write(marker);
 
-                try self.leader_stack.append(list_indent);
+                // Hacky, but makes life easier, and what are you doing with
+                // a 10,000-line-long numbered Markdown list anyways?
+                if (num < 10) {
+                    try self.leader_stack.append(numlist_indent_0);
+                } else if (num < 100) {
+                    try self.leader_stack.append(numlist_indent_10);
+                } else if (num < 1000) {
+                    try self.leader_stack.append(numlist_indent_100);
+                } else {
+                    try self.leader_stack.append(numlist_indent_1000);
+                }
                 defer _ = self.leader_stack.pop();
 
                 try self.renderListItem(item.Container);
@@ -372,8 +398,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         // Leaf Rendering Functions -------------------------------------------
 
         /// Render a single line break
-        fn renderBreak(self: *Self) !void {
-            try self.stream.print("\n", .{});
+        fn renderBreak(self: *Self) void {
+            self.write("\n");
+            self.column = 0;
         }
 
         /// Render an ATX Heading
@@ -391,6 +418,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 3 => self.print("{s}{s}{s}{s}\n", .{ cons.text_italic, cons.text_underline, text, cons.ansi_end }),
                 else => self.print("{s}{s}{s}\n", .{ cons.text_underline, text, cons.ansi_end }),
             }
+            self.column = 0;
         }
 
         /// Render a raw block of code
@@ -398,15 +426,17 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             // TODO: Proper indent / leaders
             const style = cons.TextStyle{ .color = .Yellow, .bold = true };
             self.startStyle(style);
-            self.print("━━━━━━━━━━━━━━━━━━━━ <{s}>\n", .{c.tag orelse "none"});
+            self.print("━━━━━━━━━━━━━━━━━━━━ <{s}>", .{c.tag orelse "none"});
+            self.renderBreak();
             self.resetStyle();
 
-            self.write_wrap(c.text orelse "", 1, "    ");
+            self.writeLeaders();
+            self.write_wrap(c.text orelse "");
 
             self.startStyle(style);
-            self.print("━━━━━━━━━━━━━━━━━━━━\n", .{});
+            self.print("━━━━━━━━━━━━━━━━━━━━", .{});
             self.resetStyle();
-            self.render_break();
+            self.renderBreak();
         }
 
         /// Render a standard paragraph of text
@@ -423,21 +453,24 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 .autolink => |l| try self.renderAutolink(l),
                 .codespan => |c| try self.renderInlineCode(c),
                 .image => |i| try self.renderImage(i),
-                .linebreak => try self.renderBreak(),
+                .linebreak => self.renderBreak(),
                 .link => |l| try self.renderLink(l),
                 .text => |t| try self.renderText(t),
             }
         }
 
         fn renderAutolink(self: *Self, link: zd.Autolink) !void {
+            // TODO
             try self.stream.print("<a href=\"{s}\"/>", .{link.url});
         }
 
         fn renderInlineCode(self: *Self, code: zd.Codespan) !void {
+            // TODO
             try self.stream.print("<code>{s}</code>", .{code.text});
         }
 
         fn renderText(self: *Self, text: zd.Text) !void {
+            // TODO
             // for style in style => add style tag
             if (text.style.bold)
                 try self.stream.print("<b>", .{});
@@ -461,18 +494,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 try self.stream.print("</b>", .{});
         }
 
-        fn renderNumlist(self: *Self, list: zd.List) !void {
-            try self.stream.print("<ol>\n", .{});
-            for (list.lines.items) |line| {
-                // TODO: Number
-                try self.stream.print("<li>", .{});
-                try self.render_textblock(line.text);
-                try self.stream.print("</li>\n", .{});
-            }
-            try self.stream.print("</ol>\n", .{});
-        }
-
         fn renderLink(self: *Self, link: zd.Link) !void {
+            // TODO
             try self.stream.print("<a href=\"{s}\">", .{link.url});
             for (link.text.items) |text| {
                 try self.renderText(text);
@@ -481,6 +504,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         fn renderImage(self: *Self, image: zd.Image) !void {
+            // TODO
             try self.stream.print("<img src=\"{s}\" alt=\"", .{image.src});
             for (image.alt.items) |text| {
                 try self.renderText(text);

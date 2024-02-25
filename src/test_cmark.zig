@@ -55,6 +55,7 @@ pub fn main() !void {
     style.color = .Red;
     cons.printStyled(style, "────────────────── Rendered Text ──────────────────\n", .{});
     var crenderer = consoleRenderer(stdout, alloc, .{ .width = 70 });
+    defer crenderer.deinit();
     try crenderer.renderBlock(p.document);
     cons.printStyled(style, "───────────────────────────────────────────────────\n", .{});
 }
