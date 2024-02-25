@@ -37,9 +37,9 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
-    var p: zd.Parser = try zd.Parser.init(alloc, text, .{ .copy_input = false });
+    var p: zd.Parser = try zd.Parser.init(alloc, .{ .copy_input = false });
     defer p.deinit();
-    try p.parseMarkdown();
+    try p.parseMarkdown(text);
 
     style.color = .Blue;
     cons.printStyled(style, "─────────────────── Parsed AST ────────────────────\n", .{});

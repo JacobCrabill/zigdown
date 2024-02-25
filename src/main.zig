@@ -80,8 +80,8 @@ pub fn main() !void {
     defer alloc.free(md_text);
 
     // Parse the input text
-    var parser = try zd.Parser.init(alloc, md_text, .{});
-    try parser.parseMarkdown();
+    var parser = try zd.Parser.init(alloc, .{});
+    try parser.parseMarkdown(md_text);
     const md: zd.Block = parser.document;
 
     if (outfile) |outname| {

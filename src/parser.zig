@@ -598,38 +598,25 @@ pub const Parser = struct {
     alloc: Allocator,
     opts: ParserOpts,
     lexer: Lexer,
-    text: []const u8,
+    text: ?[]const u8,
     tokens: ArrayList(Token),
     cursor: usize = 0,
     cur_token: Token,
     next_token: Token,
     document: Block,
 
-    pub fn init(alloc: Allocator, text: []const u8, opts: ParserOpts) !Self {
-        // Allocate copy of the input text if requested
-        // Useful if the parsed document should outlast the input text buffer
-        var p_text: []const u8 = undefined;
-        if (opts.copy_input) {
-            const talloc: []u8 = try alloc.alloc(u8, text.len);
-            @memcpy(talloc, text);
-            p_text = talloc;
-        } else {
-            p_text = text;
-        }
-
-        var parser = Parser{
+    pub fn init(alloc: Allocator, opts: ParserOpts) !Self {
+        return Parser{
             .alloc = alloc,
             .opts = opts,
-            .lexer = Lexer.init(alloc, p_text),
-            .text = p_text,
+            .lexer = undefined,
+            .text = null,
             .tokens = ArrayList(Token).init(alloc),
             .cursor = 0,
             .cur_token = undefined,
             .next_token = undefined,
             .document = Block.initContainer(alloc, .Document),
         };
-        try parser.tokenize();
-        return parser;
     }
 
     /// Free any heap allocations
@@ -638,12 +625,34 @@ pub const Parser = struct {
         self.document.deinit();
 
         if (self.opts.copy_input) {
-            self.alloc.free(self.text);
+            if (self.text) |text| {
+                self.alloc.free(text);
+            }
         }
     }
 
     /// Parse the document
-    pub fn parseMarkdown(self: *Self) !void {
+    pub fn parseMarkdown(self: *Self, text: []const u8) !void {
+        if (self.text) |stext| {
+            if (self.opts.copy_input) {
+                self.alloc.free(stext);
+                self.text = null;
+            }
+        }
+
+        // Allocate copy of the input text if requested
+        // Useful if the parsed document should outlast the input text buffer
+        if (self.opts.copy_input) {
+            const talloc: []u8 = try self.alloc.alloc(u8, text.len);
+            @memcpy(talloc, text);
+            self.text = talloc;
+        } else {
+            self.text = text;
+        }
+        self.lexer = Lexer.init(self.alloc, self.text.?);
+        try self.tokenize();
+
+        // TODO: take text in here, not in init
         loop: while (self.getLine()) |line| {
             if (!handleLine(&self.document, line))
                 return error.ParseError;
@@ -984,9 +993,9 @@ test "Top-level parsing" {
 
     {
         std.debug.print("============= starting parsing? ================\n", .{});
-        var p: Parser = try Parser.init(alloc, text, .{ .copy_input = true });
+        var p: Parser = try Parser.init(alloc, .{ .copy_input = true });
         defer p.deinit();
-        try p.parseMarkdown();
+        try p.parseMarkdown(text);
     }
 
     var lexer = Lexer.init(alloc, text);

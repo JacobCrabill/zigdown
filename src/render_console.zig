@@ -1,6 +1,5 @@
 const std = @import("std");
 const zd = struct {
-    // usingnamespace @import("markdown.zig");
     usingnamespace @import("blocks.zig");
     usingnamespace @import("containers.zig");
     usingnamespace @import("leaves.zig");
@@ -164,28 +163,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
         }
 
-        /// TODO: update
-        fn render_text(self: *Self, text: zd.Text) void {
-            // for style in style => add style tag
-            if (text.style.bold)
-                self.print("{s}", .{cons.text_bold});
-
-            if (text.style.italic)
-                self.print("{s}", .{cons.text_italic});
-
-            if (text.style.underline)
-                self.print("{s}", .{cons.text_underline});
-
-            self.write_wrap(text.text);
-
-            self.print("{s}", .{cons.ansi_end});
-        }
-
-        fn render_break(self: *Self) void {
-            self.write("\n");
-            self.column = 0;
-        }
-
         fn render_textblock(self: *Self, block: zd.TextBlock, indent: usize, leader: []const u8) void {
             // Reset column to 0 to start a new paragraph
             //self.render_break();
@@ -201,6 +178,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.writeno(cons.hyperlink);
             self.print("{s}", .{link.url});
             self.writeno(cons.link_end);
+
             self.render_textblock(link.text, 0, "");
             self.writeno(cons.hyperlink);
             self.writeno(cons.link_end);
@@ -238,7 +216,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.write(text);
         }
 
-        /// Write the text, with an indent, wrapping at 'width' characters
+        /// Write the text, wrapping (with the current indentation) at 'width' characters
         fn write_wrap(self: *Self, text: []const u8) void {
             const len = text.len;
             if (len == 0) return;
@@ -249,9 +227,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             var words = std.mem.tokenizeAny(u8, text, " ");
             while (words.next()) |word| {
-                if (self.column + word.len > self.opts.width) {
+                if (self.column > 0 and self.column + word.len > self.opts.width) {
                     self.renderBreak();
-                    //self.write_n(leader, indent);
                     self.writeLeaders();
                 }
                 self.write(word);
@@ -346,7 +323,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 // print out list bullet
                 self.writeLeaders();
                 self.startStyle(.{ .color = .Blue, .bold = true });
-                self.write(" * ");
+                self.write(" * "); // todo: fancier bullet char?
                 self.resetStyle();
 
                 // Print out the contents; note the first line doesn't
@@ -470,35 +447,28 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         fn renderText(self: *Self, text: zd.Text) !void {
             // TODO
             // for style in style => add style tag
-            if (text.style.bold)
-                try self.stream.print("<b>", .{});
-
-            if (text.style.italic)
-                try self.stream.print("<i>", .{});
-
-            if (text.style.underline)
-                try self.stream.print("<u>", .{});
-
-            try self.stream.print("{s}", .{text.text});
-
-            // Don't forget to reverse the order!
-            if (text.style.underline)
-                try self.stream.print("</u>", .{});
-
-            if (text.style.italic)
-                try self.stream.print("</i>", .{});
-
-            if (text.style.bold)
-                try self.stream.print("</b>", .{});
+            self.startStyle(text.style);
+            self.write(text.text);
+            self.resetStyle();
         }
 
         fn renderLink(self: *Self, link: zd.Link) !void {
-            // TODO
-            try self.stream.print("<a href=\"{s}\">", .{link.url});
+            self.startStyle(.{ .color = .Cyan });
+
+            // Write the URL inside the special hyperlink escape sequence
+            self.writeno(cons.hyperlink);
+            self.writeno(link.url);
+            self.writeno(cons.link_end);
+
+            // Render the visible text of the link, followed by the end of the escape sequence
             for (link.text.items) |text| {
+                // TODO: I think rendering style will screw up the link
                 try self.renderText(text);
             }
-            try self.stream.print("</a>", .{});
+            self.writeno(cons.hyperlink);
+            self.writeno(cons.link_end);
+            self.resetStyle();
+            self.write(" ");
         }
 
         fn renderImage(self: *Self, image: zd.Image) !void {
