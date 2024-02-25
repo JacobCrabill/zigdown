@@ -1,20 +1,588 @@
 const std = @import("std");
 
+const Allocator = std.mem.Allocator;
+const ArrayList = std.ArrayList;
+
 const zd = struct {
     usingnamespace @import("utils.zig");
     usingnamespace @import("tokens.zig");
     usingnamespace @import("lexer.zig");
-    usingnamespace @import("markdown.zig");
+    usingnamespace @import("inlines.zig");
+    usingnamespace @import("leaves.zig");
+    usingnamespace @import("containers.zig");
+    usingnamespace @import("blocks.zig");
 };
-
-const Allocator = std.mem.Allocator;
-const ArrayList = std.ArrayList;
-const startsWith = std.mem.startsWith;
 
 const Lexer = zd.Lexer;
 const TokenType = zd.TokenType;
 const Token = zd.Token;
 const TokenList = zd.TokenList;
+
+const InlineType = zd.InlineType;
+const Inline = zd.Inline;
+const BlockType = zd.BlockType;
+const ContainerBlockType = zd.ContainerBlockType;
+const LeafBlockType = zd.LeafBlockType;
+
+const Block = zd.Block;
+const ContainerBlock = zd.ContainerBlock;
+const LeafBlock = zd.LeafBlock;
+
+///////////////////////////////////////////////////////////////////////////////
+// Helper Functions
+///////////////////////////////////////////////////////////////////////////////
+
+fn errorReturn(comptime fmt: []const u8, args: anytype) !void {
+    std.debug.print("ERROR: ", .{});
+    std.debug.print(fmt, .{args});
+    std.debug.print("\n", .{});
+    return error.ParseError;
+}
+
+/// Remove all leading whitespace (spaces or indents) from the start of a line
+fn trimLeadingWhitespace(line: []const Token) []const Token {
+    var start: usize = 0;
+    for (line, 0..) |tok, i| {
+        if (!(tok.kind == .SPACE or tok.kind == .INDENT)) {
+            start = i;
+            break;
+        }
+    }
+    return line[start..];
+}
+
+/// Find the index of the next token of any of type 'kind' at or beyond 'idx'
+fn findFirstOf(tokens: []const Token, idx: usize, kinds: []const TokenType) ?usize {
+    var i: usize = idx;
+    while (i < tokens.len) : (i += 1) {
+        if (std.mem.indexOfScalar(TokenType, kinds, tokens[i].kind)) |_| {
+            return i;
+        }
+    }
+    return null;
+}
+
+fn isEmptyLine(line: []const Token) bool {
+    if (line.len == 0 or line[0].kind == .BREAK)
+        return true;
+
+    return false;
+}
+
+/// Check for the pattern "[ ]*[0-9]*[.][ ]+"
+fn isOrderedListItem(line: []const Token) bool {
+    var have_period: bool = false;
+    for (trimLeadingWhitespace(line)) |tok| {
+        switch (tok.kind) {
+            .DIGIT => {
+                if (have_period) return false;
+            },
+            .PERIOD => {
+                have_period = true;
+            },
+            .SPACE, .INDENT => {
+                if (have_period) return true;
+                return false;
+            },
+            else => return false,
+        }
+    }
+
+    return false;
+}
+
+/// Check for the pattern "[ ]*[-+*][ ]+"
+fn isUnorderedListItem(line: []const Token) bool {
+    var have_bullet: bool = false;
+    for (line) |tok| {
+        switch (tok.kind) {
+            .SPACE, .INDENT => {
+                if (have_bullet) return true;
+            },
+            .PLUS, .MINUS, .STAR => {
+                if (have_bullet) return false; // Can only have one bullet character
+                have_bullet = true;
+            },
+            else => return false,
+        }
+    }
+
+    return false;
+}
+
+/// Check for any kind of list item
+fn isListItem(line: []const Token) bool {
+    return isUnorderedListItem(line) or isOrderedListItem(line);
+}
+
+/// Check for the pattern "[ ]*[>][ ]+"
+fn isQuote(line: []const Token) bool {
+    var have_caret: bool = false;
+    for (line) |tok| {
+        switch (tok.kind) {
+            .GT => {
+                if (have_caret) return false;
+                have_caret = true;
+            },
+            .SPACE, .INDENT => {
+                if (have_caret) return true;
+            },
+            else => return false,
+        }
+    }
+
+    return false;
+}
+
+/// Check for the pattern "[ ]*[#]+[ ]+"
+fn isHeading(line: []const Token) bool {
+    var have_hash: bool = false;
+    for (line) |tok| {
+        switch (tok.kind) {
+            .HASH => {
+                have_hash = true;
+            },
+            .SPACE, .INDENT => {
+                if (have_hash) return true;
+            },
+            else => return false,
+        }
+    }
+
+    return false;
+}
+
+fn isCodeBlock(line: []const Token) bool {
+    for (line) |tok| {
+        switch (tok.kind) {
+            .CODE_BLOCK => return true,
+            .SPACE, .INDENT => {},
+            else => return false,
+        }
+    }
+
+    return false;
+}
+
+///////////////////////////////////////////////////////
+// Container Block Parsers
+///////////////////////////////////////////////////////
+
+fn handleLine(block: *Block, line: []const Token) bool {
+    switch (block.*) {
+        .Container => |c| {
+            switch (c.content) {
+                .Document => return handleLineDocument(block, line),
+                .Quote => return handleLineQuote(block, line),
+                .List => return handleLineList(block, line),
+                .ListItem => return handleLineListItem(block, line),
+            }
+        },
+        .Leaf => |l| {
+            switch (l.content) {
+                .Break => return handleLineBreak(block, line),
+                .Code => return handleLineCode(block, line),
+                .Heading => return handleLineHeading(block, line),
+                .Paragraph => return handleLineParagraph(block, line),
+            }
+        },
+    }
+}
+
+pub fn handleLineDocument(block: *Block, line: []const Token) bool {
+    if (!block.isContainer()) return false;
+
+    // Check for an open child
+    var cblock = block.container();
+    if (cblock.children.items.len > 0) {
+        const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
+        if (handleLine(child, line)) {
+            return true;
+        } else {
+            closeBlock(child);
+        }
+    }
+
+    // Child did not accept this line (or no children yet)
+    // Determine which kind of Block this line should be
+    const new_child = parseNewBlock(block.allocator(), line) catch unreachable;
+    cblock.children.append(new_child) catch unreachable;
+
+    return true;
+}
+
+pub fn handleLineQuote(block: *Block, line: []const Token) bool {
+    if (!block.isContainer()) return false;
+
+    var cblock = &block.Container;
+
+    var trimmed_line = line;
+    if (isContinuationLineQuote(line)) {
+        // If the line is a valid continuation line for our type, trim the continuation
+        // marker(s) off and pass it on to our last child
+        // e.g.:  line         = "   > foo bar" [ indent, GT, space, word, space, word ]
+        //        trimmed_line = "foo bar"  [ word, space, word ]
+        trimmed_line = trimContinuationMarkersQuote(line);
+    } else if (!isLazyContinuationLineQuote(trimmed_line)) {
+        // Otherwise, check if the the line can be appended to this block or not
+        // Example for false:
+        //   "> First line: Quote"
+        //   "- 2nd line: List (NOT quote)"
+        // Example for true:
+        //   "> First line: Quote"
+        //   "2nd line: can lazily continue the quote"
+        return false;
+    }
+
+    // Check for an open child
+    if (cblock.children.items.len > 0) {
+        const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
+        // TODO: implement the generic handleLine that switches on child type
+        if (handleLine(child, trimmed_line)) {
+            return true;
+        } else {
+            closeBlock(child);
+        }
+    }
+
+    // Child did not accept this line (or no children yet)
+    // Determine which kind of Block this line should be
+    const child = parseNewBlock(block.allocator(), trimmed_line) catch unreachable;
+    cblock.children.append(child) catch unreachable;
+
+    return true;
+}
+
+pub fn handleLineList(block: *Block, line: []const Token) bool {
+    if (!isLazyContinuationLineList(line))
+        return false;
+
+    // Ensure we have at least 1 open ListItem child
+    var cblock = block.container();
+    var child: *Block = undefined;
+    if (cblock.children.items.len == 0) {
+        block.addChild(Block.initContainer(block.allocator(), .ListItem)) catch unreachable;
+    } else {
+        // Check for the start of a new ListItem
+        // If so, close the current ListItem (if any) and start a new one
+        child = &cblock.children.items[cblock.children.items.len - 1];
+        if (isListItem(line) or !child.isOpen()) {
+            closeBlock(child);
+            block.addChild(Block.initContainer(block.allocator(), .ListItem)) catch unreachable;
+        }
+    }
+    child = &cblock.children.items[cblock.children.items.len - 1];
+
+    // Have the last (open) ListItem handle the line
+    if (handleLineListItem(child, line)) {
+        return true;
+    } else {
+        closeBlock(child);
+    }
+
+    return true;
+}
+
+pub fn handleLineListItem(block: *Block, line: []const Token) bool {
+    if (!block.isContainer()) return false;
+
+    var trimmed_line = line;
+    if (isContinuationLineList(line)) {
+        trimmed_line = trimContinuationMarkersList(line);
+    }
+    // Otherwise, check if the trimmed line can be appended to the current block or not
+    else if (!isLazyContinuationLineList(trimmed_line)) {
+        return false;
+    }
+
+    // Check for an open child
+    var cblock = block.container();
+    if (cblock.children.items.len > 0) {
+        const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
+        if (handleLine(child, trimmed_line)) {
+            return true;
+        } else {
+            closeBlock(child);
+        }
+    }
+
+    // Child did not accept this line (or no children yet)
+    // Determine which kind of Block this line should be
+    const child = parseNewBlock(block.allocator(), trimmed_line) catch unreachable;
+    cblock.children.append(child) catch unreachable;
+
+    return true;
+}
+
+///////////////////////////////////////////////////////
+// Leaf Block Parsers
+///////////////////////////////////////////////////////
+
+pub fn handleLineBreak(block: *Block, line: []const Token) bool {
+    _ = block;
+    _ = line;
+    return false;
+}
+
+pub fn handleLineCode(block: *Block, line: []const Token) bool {
+    var code: *zd.Code = &block.Leaf.content.Code;
+
+    if (code.opener == null) {
+        // Brand new code block; parse the directive line
+        const trimmed_line = trimLeadingWhitespace(line);
+        if (trimmed_line.len < 1) return false;
+
+        // Code block opener. We allow nesting (TODO), so track the specific chars
+        // ==== TODO: only "```" gets tokenized; allow variable tokens! ====
+        if (trimmed_line[0].kind == .CODE_BLOCK) {
+            code.opener = trimmed_line[0].text;
+        } else {
+            return false;
+        }
+
+        // Parse the directive tag (language, or special command like "warning")
+        const end: usize = findFirstOf(trimmed_line, 1, &.{.BREAK}) orelse trimmed_line.len;
+        code.tag = zd.concatWords(block.allocator(), trimmed_line[1..end]) catch unreachable;
+        return true;
+    }
+
+    // Append all of the current line's tokens to the block's raw_contents
+    // Check if we have the closing code block token on this line
+    var have_closer: bool = false;
+    for (line) |tok| {
+        if (tok.kind == .CODE_BLOCK and std.mem.eql(u8, tok.text, code.opener.?)) {
+            have_closer = true;
+            break;
+        }
+        block.Leaf.raw_contents.append(tok) catch unreachable;
+    }
+
+    if (have_closer)
+        closeBlock(block);
+
+    return true;
+}
+
+pub fn handleLineHeading(block: *Block, line: []const Token) bool {
+    var level: u8 = 0;
+    for (line) |tok| {
+        if (tok.kind != .HASH) break;
+        level += 1;
+    }
+    if (level <= 0) return false;
+
+    var head: *zd.Heading = &block.Leaf.content.Heading;
+    head.level = level;
+
+    if (line.len > level) {
+        // Concatenate all text into the Heading
+        var words = ArrayList([]const u8).init(block.allocator());
+        defer words.deinit();
+        for (trimLeadingWhitespace(line[level..])) |tok| {
+            if (tok.kind == .BREAK) continue;
+            words.append(tok.text) catch unreachable;
+        }
+
+        head.text = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
+    }
+
+    return true;
+}
+
+pub fn handleLineParagraph(block: *Block, line: []const Token) bool {
+    if (!block.isLeaf()) return false;
+
+    if (!isContinuationLineParagraph(line)) {
+        return false;
+    }
+
+    block.Leaf.raw_contents.appendSlice(line) catch unreachable;
+
+    return true;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Continuation Line Logic
+///////////////////////////////////////////////////////////////////////////////
+
+/// Check if the given line is a continuation line for a Quote block
+fn isContinuationLineQuote(line: []const Token) bool {
+    // if the line follows the pattern: [ ]{0,1,2,3}[>]+
+    //    (0 to 3 leading spaces followed by at least one '>')
+    // then it can be part of the current Quote block.
+    //
+    // // TODO: lazy continuation below...
+    // Otherwise, if it is Paragraph lazy continuation line,
+    // it can also be a part of the Quote block
+    var leading_ws: u8 = 0;
+    for (line) |tok| {
+        switch (tok.kind) {
+            .SPACE => leading_ws += 1,
+            .INDENT => leading_ws += 2,
+            .GT => return true,
+            else => return false,
+        }
+
+        if (leading_ws > 3)
+            return false;
+    }
+
+    return false;
+}
+
+/// Check if the given line is a continuation line for a list
+fn isContinuationLineList(line: []const Token) bool {
+    if (line.len == 0) return true; // TODO: check
+    if (isListItem(line)) return true;
+    return false;
+}
+
+/// Check if the given line is a continuation line for a paragraph
+fn isContinuationLineParagraph(line: []const Token) bool {
+    if (line.len == 0) return true; // TODO: check
+    if (isEmptyLine(line) or isListItem(line) or isQuote(line) or isHeading(line) or isCodeBlock(line))
+        return false;
+    return true;
+}
+
+/// Check if the line can "lazily" continue an open Quote block
+fn isLazyContinuationLineQuote(line: []const Token) bool {
+    if (line.len == 0) return true;
+    if (isEmptyLine(line) or isListItem(line) or isHeading(line) or isCodeBlock(line))
+        return false;
+    return true;
+}
+
+/// Check if the line can "lazily" continue an open List block
+fn isLazyContinuationLineList(line: []const Token) bool {
+    if (line.len == 0) return true; // TODO: blank line - allow?
+    if (isEmptyLine(line) or isQuote(line) or isHeading(line) or isCodeBlock(line))
+        return false;
+    return true;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Trim Continuation Markers
+///////////////////////////////////////////////////////////////////////////////
+
+fn trimContinuationMarkersQuote(line: []const Token) []const Token {
+    // Turn '  > Foo' into 'Foo'
+    const trimmed = trimLeadingWhitespace(line);
+    std.debug.assert(trimmed.len > 0);
+    std.debug.assert(trimmed[0].kind == .GT);
+    return trimLeadingWhitespace(trimmed[1..]);
+}
+
+fn trimContinuationMarkersList(line: []const Token) []const Token {
+    // Find the first list-item marker (*, -, +, or digit)
+    const trimmed = trimLeadingWhitespace(line);
+    std.debug.assert(trimmed.len > 0);
+    if (isOrderedListItem(line)) return trimContinuationMarkersOrderedList(line);
+    if (isUnorderedListItem(line)) return trimContinuationMarkersUnorderedList(line);
+
+    std.debug.print("{s}-{d}: ERROR: Shouldn't be here!\n", .{ @src().fn_name, @src().line });
+    return trimmed;
+}
+
+fn trimContinuationMarkersUnorderedList(line: []const Token) []const Token {
+    // Find the first list-item marker (*, -, +)
+    const trimmed = trimLeadingWhitespace(line);
+    std.debug.assert(trimmed.len > 0);
+    switch (trimmed[0].kind) {
+        .MINUS, .PLUS, .STAR => {
+            return trimLeadingWhitespace(trimmed[1..]);
+        },
+        else => {
+            std.debug.print("{s}-{d}: ERROR: Shouldn't be here! List line: '{any}'\n", .{
+                @src().fn_name,
+                @src().line,
+                line,
+            });
+            return trimmed;
+        },
+    }
+
+    return trimmed;
+}
+
+fn trimContinuationMarkersOrderedList(line: []const Token) []const Token {
+    // Find the first list-item marker "[0-9]+[.]"
+    const trimmed = trimLeadingWhitespace(line);
+    std.debug.assert(trimmed.len > 0);
+    var have_dot: bool = false;
+    for (trimmed, 0..) |tok, i| {
+        switch (tok.kind) {
+            .DIGIT => {},
+            .PERIOD => {
+                have_dot = true;
+                std.debug.assert(trimmed[1].kind == .PERIOD);
+                return trimLeadingWhitespace(trimmed[2..]);
+            },
+            else => {
+                if (have_dot and i + 1 < line.len)
+                    return trimLeadingWhitespace(trimmed[i + 1 ..]);
+
+                std.debug.print("{s}-{d}: ERROR: Shouldn't be here! List line: '{any}'\n", .{
+                    @src().fn_name,
+                    @src().line,
+                    line,
+                });
+                return trimmed;
+            },
+        }
+    }
+
+    return trimmed;
+}
+
+///////////////////////////////////////////////////////
+// Inline Parsers? ~~ TODO ~~
+///////////////////////////////////////////////////////
+
+/// Close the block and parse its raw text content into inline content
+fn closeBlock(block: *Block) void {
+    // TODO
+    switch (block.*) {
+        .Container => |c| {
+            switch (c.content) {
+                // .Document => return closeBlockDocument(block),
+                // .Quote => return closeBlockQuote(block),
+                // .List => return closeBlockList(block),
+                // .ListItem => return closeBlockListItem(block),
+                inline else => {},
+            }
+        },
+        .Leaf => |l| {
+            switch (l.content) {
+                // .Break => return closeBlockBreak(block),
+                .Code => return closeBlockCode(block),
+                // .Heading => return closeBlockHeading(block),
+                // .Paragraph => return closeBlockParagraph(block),
+                else => {},
+            }
+        },
+    }
+    block.close();
+}
+
+fn closeBlockCode(block: *Block) void {
+    const code: *zd.Code = &block.Leaf.content.Code;
+    if (code.text) |text| {
+        code.alloc.free(text);
+        code.text = null;
+    }
+    var words = ArrayList([]const u8).init(block.allocator());
+    defer words.deinit();
+    for (block.Leaf.raw_contents.items) |tok| {
+        words.append(tok.text) catch unreachable;
+    }
+    code.text = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
+    block.Leaf.raw_contents.clearAndFree();
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Parser Struct
+///////////////////////////////////////////////////////////////////////////////
 
 /// Options to configure the Parser
 pub const ParserOpts = struct {
@@ -27,7 +595,7 @@ pub const ParserOpts = struct {
 /// Caller owns the input, unless a copy is requested via ParserOpts
 pub const Parser = struct {
     const Self = @This();
-    alloc: Allocator = undefined,
+    alloc: Allocator,
     opts: ParserOpts,
     lexer: Lexer,
     text: []const u8,
@@ -35,45 +603,58 @@ pub const Parser = struct {
     cursor: usize = 0,
     cur_token: Token,
     next_token: Token,
-    md: zd.Markdown,
+    document: Block,
 
-    /// Create a new Parser for the given input text
-    pub fn init(alloc: Allocator, input: []const u8, opts: ParserOpts) !Parser {
+    pub fn init(alloc: Allocator, text: []const u8, opts: ParserOpts) !Self {
         // Allocate copy of the input text if requested
-        var p_input: []const u8 = undefined;
+        // Useful if the parsed document should outlast the input text buffer
+        var p_text: []const u8 = undefined;
         if (opts.copy_input) {
-            const talloc: []u8 = try alloc.alloc(u8, input.len);
-            @memcpy(talloc, input);
-            p_input = talloc;
+            const talloc: []u8 = try alloc.alloc(u8, text.len);
+            @memcpy(talloc, text);
+            p_text = talloc;
         } else {
-            p_input = input;
+            p_text = text;
         }
 
         var parser = Parser{
             .alloc = alloc,
             .opts = opts,
-            .lexer = Lexer.init(alloc, p_input),
-            .text = p_input,
+            .lexer = Lexer.init(alloc, p_text),
+            .text = p_text,
             .tokens = ArrayList(Token).init(alloc),
             .cursor = 0,
             .cur_token = undefined,
             .next_token = undefined,
-            .md = zd.Markdown.init(alloc),
+            .document = Block.initContainer(alloc, .Document),
         };
-
         try parser.tokenize();
-
         return parser;
     }
 
     /// Free any heap allocations
     pub fn deinit(self: *Self) void {
         self.tokens.deinit();
+        self.document.deinit();
 
         if (self.opts.copy_input) {
-            self.alloc.free(self.input);
+            self.alloc.free(self.text);
         }
     }
+
+    /// Parse the document
+    pub fn parseMarkdown(self: *Self) !void {
+        loop: while (self.getLine()) |line| {
+            if (!handleLine(&self.document, line))
+                return error.ParseError;
+            self.advanceCursor(line.len);
+            continue :loop;
+        }
+    }
+
+    ///////////////////////////////////////////////////////
+    // Token & Cursor Interactions
+    ///////////////////////////////////////////////////////
 
     /// Tokenize the input, replacing current token list if it exists
     fn tokenize(self: *Self) !void {
@@ -108,6 +689,11 @@ pub const Parser = struct {
         } else {
             self.next_token = self.tokens.items[cursor + 1];
         }
+    }
+
+    /// Advance the cursor by 'n' tokens
+    fn advanceCursor(self: *Self, n: usize) void {
+        self.setCursor(self.cursor + n);
     }
 
     /// Get the current Token
@@ -148,439 +734,9 @@ pub const Parser = struct {
         self.setCursor(self.cursor + 1);
     }
 
-    /// Parse the document and return a Markdown document as an abstract syntax tree
-    pub fn parseMarkdown(self: *Self) !zd.Markdown {
-        while (!self.curTokenIs(.EOF)) {
-            const token = self.curToken();
-            //std.debug.print("Parse loop at {any}: '{s}'\n", .{ token.kind, token.text });
-            switch (token.kind) {
-                .HASH => {
-                    try self.parseHeader();
-                },
-                .GT => {
-                    try self.parseQuoteBlock();
-                },
-                .MINUS, .PLUS => {
-                    try self.parseList();
-                },
-                .DIGIT => {
-                    try self.parseNumberedList();
-                },
-                .CODE_BLOCK => {
-                    try self.parseCodeBlock();
-                },
-                .WORD => {
-                    try self.parseTextBlock();
-                },
-                .BANG => try self.parseLinkOrImage(true),
-                .LBRACK => try self.parseLinkOrImage(false),
-                .BREAK => {
-                    // Merge consecutive line breaks
-                    //const len = self.md.sections.items.len;
-                    //if (len > 0 and self.md.sections.items[len - 1] != zd.SectionType.linebreak) {
-                    try self.md.append(zd.SecBreak);
-                    //}
-                    self.nextToken();
-                },
-                .INDENT => {
-                    try self.handleIndent();
-                },
-                else => {
-                    //std.debug.print("Skipping token of type: {any}\n", .{token.kind});
-                    self.nextToken();
-                },
-            }
-        }
-
-        //std.debug.print("------------------- AST ----------------\n", .{});
-        //for (self.md.sections.items) |sec| {
-        //    std.debug.print("{any}\n", .{sec});
-        //}
-
-        return self.md;
-    }
-
-    /// Parse a header line from the token list
-    pub fn parseHeader(self: *Self) !void {
-        // check what level of heading
-        // TODO: Max CommonMark heading level == 6
-        var level: u8 = 0;
-        while (self.curTokenIs(.HASH)) {
-            self.nextToken();
-            level += 1;
-        }
-
-        var words = ArrayList([]const u8).init(self.alloc);
-        defer words.deinit();
-        while (!(self.curTokenIs(.BREAK) or self.curTokenIs(.EOF))) : (self.nextToken()) {
-            const token = self.curToken();
-            try words.append(token.text);
-        }
-
-        if (self.curTokenIs(.BREAK))
-            self.nextToken();
-
-        // Append text up to next line break
-        // Return Section of type Heading
-        try self.md.append(zd.Section{ .heading = zd.Heading{
-            .level = level,
-            .text = try std.mem.concat(self.alloc, u8, words.items),
-        } });
-    }
-
-    /// Parse a quote line from the token stream
-    pub fn parseQuoteBlock(self: *Self) !void {
-        // Keep adding lines to the TextBlock as long as they start with possible plain text
-        var kinds = [_]TokenType{TokenType.GT};
-
-        loop: while (self.getLine()) |line| {
-            if (line.len < 1 or !isOneOf(kinds[0..], line[0].kind))
-                break :loop;
-
-            // Skip the '>' when parsing the line
-            const block = try self.parseLine(line[1..]);
-
-            // TODO: Merge back-to-back Quote sections together
-            try self.md.append(zd.Section{ .quote = zd.Quote{
-                .level = 1,
-                .textblock = block,
-            } });
-        }
-    }
-
-    /// Parse a list from the token stream
-    pub fn parseList(self: *Self) !void {
-        // Keep adding lines until we find one which does not start with "[indent]*[+-*]"
-        var kinds = [_]TokenType{ .INDENT, .SPACE, .MINUS, .PLUS, .STAR };
-        var bullet_kinds = [_]TokenType{ .MINUS, .PLUS, .STAR };
-
-        var list = zd.List.init(self.alloc);
-        loop: while (self.getLine()) |line| {
-            if (line.len < 1 or !isOneOf(kinds[0..], line[0].kind))
-                break :loop;
-
-            // Find indent level
-            var start: usize = 0;
-            var level: u8 = 0;
-            while (start < line.len and !isOneOf(bullet_kinds[0..], line[start].kind)) {
-                if (line[start].kind == .INDENT)
-                    level += 1;
-                start += 1;
-            }
-
-            // Remove leading whitespace
-            var block: zd.TextBlock = undefined;
-            if (start + 1 < line.len) {
-                const stripped_line = stripLeadingWhitespace(line[start + 1 ..]);
-                self.setCursor(self.cursor + line.len - stripped_line.len);
-                block = try self.parseLine(stripped_line);
-            } else {
-                // Create empty block for list item
-                block = zd.TextBlock.init(self.alloc);
-                self.setCursor(self.cursor + line.len - 1);
-            }
-            try list.addLine(level, block);
-        }
-        try self.md.append(zd.Section{ .list = list });
-    }
-
-    /// Parse a numbered list from the token stream
-    pub fn parseNumberedList(self: *Self) !void {
-        // Keep adding lines until we find one which does not start with "[indent]*[d]"
-        var kinds = [_]TokenType{ .INDENT, .SPACE, .DIGIT };
-        var bullet_kinds = [_]TokenType{.DIGIT};
-
-        var list = zd.NumList.init(self.alloc);
-        loop: while (self.getLine()) |line| {
-            if (line.len < 1 or !isOneOf(kinds[0..], line[0].kind))
-                break :loop;
-
-            // Find indent level
-            var start: usize = 0;
-            var level: u8 = 0;
-            while (start < line.len and !isOneOf(bullet_kinds[0..], line[start].kind)) {
-                if (line[start].kind == .INDENT)
-                    level += 1;
-                start += 1;
-            }
-            if (line[start + 1].kind == .PERIOD) {
-                start += 1;
-            }
-
-            // Remove leading whitespace
-            var block: zd.TextBlock = undefined;
-            if (start + 1 < line.len) {
-                const stripped_line = stripLeadingWhitespace(line[start + 1 ..]);
-                self.setCursor(self.cursor + line.len - stripped_line.len);
-                block = try self.parseLine(stripped_line);
-            } else {
-                // Create empty block for list item
-                block = zd.TextBlock.init(self.alloc);
-                self.setCursor(self.cursor + line.len - 1);
-            }
-            try list.addLine(level, block);
-        }
-        try self.md.append(zd.Section{ .numlist = list });
-    }
-
-    /// Parse a paragraph of generic text from the token stream
-    fn parseTextBlock(self: *Self) !void {
-
-        // Keep adding lines to the TextBlock as long as they start with possible plain text
-        var kinds = [_]TokenType{ TokenType.WORD, TokenType.STAR, TokenType.USCORE };
-
-        loop: while (self.getLine()) |line| {
-            if (line.len < 1 or !isOneOf(kinds[0..], line[0].kind))
-                break :loop;
-
-            const block = try self.parseLine(line);
-            try self.md.append(zd.Section{ .textblock = block });
-        }
-        //std.debug.print("After parseTextBlock: {any}: {s}\n", .{ self.next_token.kind, self.next_token.text });
-    }
-
-    /// Parse a code block from the token stream
-    pub fn parseCodeBlock(self: *Self) !void {
-        self.nextToken();
-        var tag: []const u8 = undefined;
-        // Check the language or directive tag
-        if (try self.parseDirectiveTag()) |dtag| {
-            tag = dtag;
-        }
-        var end: usize = self.cursor + 1;
-        if (self.findFirstOf(self.cursor + 1, &.{TokenType.CODE_BLOCK})) |idx| {
-            end = idx;
-        } else {
-            // There is no closing tag for the code block, so fall back to a text block
-            try self.parseTextBlock();
-            return;
-        }
-
-        // consume the end token?
-        //self.nextToken();
-
-        // Concatenate the tokens up to the next codeblock tag
-        var words = ArrayList([]const u8).init(self.alloc);
-        defer words.deinit();
-        while (self.cursor < end) : (self.nextToken()) {
-            try words.append(self.curToken().text);
-        }
-
-        // Advance past the codeblock tag
-        self.nextToken();
-
-        // Consume the following line break, if it exists
-        if (self.curTokenIs(.BREAK))
-            self.nextToken();
-
-        try self.md.append(zd.Section{ .code = zd.Code{
-            .language = tag,
-            .text = try std.mem.concat(self.alloc, u8, words.items),
-        } });
-    }
-
-    fn parseDirectiveTag(self: *Self) !?[]const u8 {
-        var tag: ?[]const u8 = null;
-        var words = ArrayList([]const u8).init(self.alloc);
-        defer words.deinit();
-
-        while (!self.curTokenIs(.BREAK)) {
-            try words.append(self.curToken().text);
-            self.nextToken();
-        }
-        tag = try std.mem.concat(self.alloc, u8, words.items);
-
-        return tag;
-    }
-
-    /// Parse a generic line of text (up to BREAK or EOF)
-    fn parseLine(self: *Self, line: []Token) !zd.TextBlock {
-        var block = zd.TextBlock.init(self.alloc);
-        var style = zd.TextStyle{};
-
-        // Concatenate the tokens up to the end of the line
-        var words = ArrayList([]const u8).init(self.alloc);
-        defer words.deinit();
-
-        var prev_type: TokenType = .BREAK;
-        var next_type: TokenType = .BREAK;
-
-        // Loop over the tokens, excluding the final BREAK or EOF tag
-        var i: usize = 0;
-        tloop: while (i < line.len) : (i += 1) {
-            const token = line[i];
-            //std.debug.print("  {any}: '{s}'\n", .{ token.kind, token.text });
-            if (i + 1 < line.len) {
-                next_type = line[i + 1].kind;
-            } else {
-                next_type = .BREAK;
-            }
-
-            switch (token.kind) {
-                .EMBOLD => {
-                    try self.appendWord(&block, &words, style);
-                    style.bold = !style.bold;
-                    style.italic = !style.italic;
-                },
-                .STAR, .BOLD => {
-                    // TODO: Properly handle emphasis between *, **, ***, * word ** word***, etc.
-                    try self.appendWord(&block, &words, style);
-                    style.bold = !style.bold;
-                },
-                .USCORE => {
-                    // If it's an underscore in the middle of a word, don't toggle style with it
-                    if (prev_type == .WORD and next_type == .WORD) {
-                        try words.append(token.text);
-                    } else {
-                        try self.appendWord(&block, &words, style);
-                        style.italic = !style.italic;
-                    }
-                },
-                .TILDE => {
-                    try self.appendWord(&block, &words, style);
-                    style.underline = !style.underline;
-                },
-                //.BANG, .LBRACK => {
-                //    // TODO: we need this link/image _inside_ the text block...
-                //    try self.parseLinkOrImage(self.curTokenIs(.BANG));
-                //},
-                // TODO: links can go within inline text!
-                // Need to refactor TextBlock / Text; create InlineText union
-                // for link, emphasis, bold, code, etc.
-                .BREAK => {
-                    // End of line; append last word
-                    try self.appendWord(&block, &words, style);
-                    break :tloop;
-                },
-                else => {
-                    try words.append(token.text);
-                },
-            }
-
-            prev_type = token.kind;
-        }
-
-        try self.appendWord(&block, &words, style);
-
-        // Set cursor to the token following this line
-        self.setCursor(self.cursor + line.len);
-
-        return block;
-    }
-
-    /// Parse an image tag
-    fn parseImage(self: *Self) !void {
-        var line: []Token = self.getLine();
-
-        if (!validateLink(line[1..])) {
-            self.parseTextBlock();
-            return;
-        }
-        // TODO
-    }
-
-    /// Parse a hyperlink
-    fn parseLinkOrImage(self: *Self, bang: bool) Allocator.Error!void {
-        if (bang) {
-            // skip the '!'; the rest should be a valid link
-            self.nextToken();
-        }
-
-        // Validate link syntax
-        var line: []Token = self.getLine().?;
-
-        if (!validateLink(line)) {
-            try self.parseTextBlock();
-            return;
-        }
-
-        // Skip the '[', find the ']'
-        self.nextToken();
-        const i = self.findFirstOf(self.cursor, &.{.RBRACK}).?;
-        line = self.tokens.items[self.cursor..i];
-        const link_text_block = try self.parseLine(line);
-        self.nextToken(); // skip the ']'
-
-        // Skip '(', advance to the next ')'
-        self.nextToken();
-        var words = ArrayList([]const u8).init(self.alloc);
-        defer words.deinit();
-        while (!self.curTokenIs(.RPAREN)) {
-            try words.append(self.curToken().text);
-            self.nextToken();
-        }
-        self.nextToken();
-
-        if (bang) {
-            try self.md.sections.append(.{ .image = zd.Image{
-                .alt = link_text_block,
-                .src = try std.mem.concat(self.alloc, u8, words.items),
-            } });
-        } else {
-            try self.md.sections.append(.{ .link = zd.Link{
-                .text = link_text_block,
-                .url = try std.mem.concat(self.alloc, u8, words.items),
-            } });
-        }
-    }
-
-    /// Check if the token slice contains a valid link of the form: [text](url)
-    /// It is assumed that the previous token is the '['
-    fn validateLink(line: []const Token) bool {
-        var i: usize = 0;
-        var have_rbrack: bool = false;
-        var have_lparen: bool = false;
-        var have_rparen: bool = false;
-        while (i < line.len) : (i += 1) {
-            if (line[i].kind == .RBRACK) {
-                have_rbrack = true;
-                break;
-            }
-        }
-        while (i < line.len) : (i += 1) {
-            if (line[i].kind == .LPAREN) {
-                have_lparen = true;
-                break;
-            }
-        }
-        while (i < line.len) : (i += 1) {
-            if (line[i].kind == .RPAREN) {
-                have_rparen = true;
-                break;
-            }
-        }
-
-        return have_rbrack and have_lparen and have_rparen;
-    }
-
     ///////////////////////////////////////////////////////
     // Utility Functions
     ///////////////////////////////////////////////////////
-
-    /// Could be a few differnt types of sections
-    fn handleIndent(self: *Self) !void {
-        while (self.curTokenIs(.INDENT) or self.curTokenIs(.SPACE)) {
-            self.nextToken();
-        }
-
-        switch (self.curToken().kind) {
-            .MINUS, .PLUS, .STAR => try self.parseList(),
-            .DIGIT => try self.parseNumberedList(),
-            // TODO - any other sections which can be indented...
-            else => try self.parseTextBlock(),
-        }
-    }
-
-    /// Find the index of the next token of any of type 'kind' at or beyond 'idx'
-    fn findFirstOf(self: Self, idx: usize, kinds: []const TokenType) ?usize {
-        var i: usize = idx;
-        while (i < self.tokens.items.len) : (i += 1) {
-            if (std.mem.indexOfScalar(TokenType, kinds, self.tokens.items[i].kind)) |_| {
-                return i;
-            }
-        }
-        return null;
-    }
 
     /// Return the index of the next BREAK token, or EOF
     fn nextBreak(self: *Self, idx: usize) usize {
@@ -596,93 +752,287 @@ pub const Parser = struct {
     }
 
     /// Get a slice of tokens up to and including the next BREAK or EOF
-    fn getLine(self: *Self) ?[]Token {
+    fn getLine(self: *Self) ?[]const Token {
         if (self.cursor >= self.tokens.items.len) return null;
         const end = @min(self.nextBreak(self.cursor) + 1, self.tokens.items.len);
-        //std.debug.print("Line: {any}\n", .{self.tokens.items[self.cursor..end]});
         return self.tokens.items[self.cursor..end];
-    }
-
-    /// Append a list of words to the given TextBlock as a Text
-    fn appendWord(self: *Self, block: *zd.TextBlock, words: *ArrayList([]const u8), style: zd.TextStyle) Allocator.Error!void {
-        if (words.items.len > 0) {
-            mergeConsecutiveWhitespace(words);
-
-            // End the current Text object with the current style
-            const text = zd.Text{
-                .style = style,
-                .text = try std.mem.concat(self.alloc, u8, words.items),
-            };
-            try block.text.append(text);
-            words.clearRetainingCapacity();
-        }
     }
 };
 
-/// Scan the list of words and remove consecutive whitespace entries
-fn mergeConsecutiveWhitespace(words: *ArrayList([]const u8)) void {
-    var i: usize = 0;
-    var is_ws: bool = false;
-    while (i < words.items.len) : (i += 1) {
-        if (std.mem.eql(u8, " ", words.items[i])) {
-            if (is_ws) {
-                // Extra whitespace to be removed
-                _ = words.orderedRemove(i);
-                i -= 1;
+/// Parse a single line of Markdown into the start of a new Block
+fn parseNewBlock(alloc: Allocator, line: []const Token) !Block {
+    var b: Block = undefined;
+
+    switch (line[0].kind) {
+        .GT => {
+            // Parse quote block
+            b = Block.initContainer(alloc, .Quote);
+            b.Container.content.Quote = {};
+            if (!handleLineQuote(&b, line))
+                return error.ParseError;
+        },
+        .MINUS => {
+            // Parse unorderd list block
+            b = Block.initContainer(alloc, .List);
+            b.Container.content.List = zd.List{ .ordered = false };
+            if (!handleLineList(&b, line))
+                return error.ParseError;
+        },
+        .STAR => {
+            if (line.len > 1 and line[1].kind == .SPACE) {
+                // Parse unorderd list block
+                b = Block.initContainer(alloc, .List);
+                b.Container.content.List = zd.List{ .ordered = false };
+                if (!handleLineList(&b, line))
+                    return error.ParseError;
             }
-            is_ws = true;
-        } else {
-            is_ws = false;
-        }
+        },
+        .DIGIT => {
+            if (line.len > 1 and line[1].kind == .PERIOD) {
+                // Parse numbered list block
+                b = Block.initContainer(alloc, .List);
+                b.Container.content.List = zd.List{ .ordered = true };
+                // todo: consider parsing and setting the start number here
+                if (!handleLineList(&b, line))
+                    try errorReturn("Cannot parse line as numlist: {any}", .{line});
+            }
+        },
+        .HASH => {
+            b = Block.initLeaf(alloc, .Heading);
+            b.Leaf.content.Heading = zd.Heading.init(alloc);
+            if (!handleLineHeading(&b, line))
+                try errorReturn("Cannot parse line as heading: {any}", .{line});
+        },
+        .CODE_BLOCK => {
+            b = Block.initLeaf(alloc, .Code);
+            b.Leaf.content.Code = zd.Code.init(alloc);
+            if (!handleLineCode(&b, line))
+                try errorReturn("Cannot parse line as code: {any}", .{line});
+        },
+        .BREAK => {
+            b = Block.initLeaf(alloc, .Break);
+            b.Leaf.content.Break = {};
+        },
+        else => {
+            // Fallback - parse paragraph
+            b = Block.initLeaf(alloc, .Paragraph);
+            b.Leaf.content.Paragraph = zd.Paragraph.init(alloc);
+            if (!handleLineParagraph(&b, line))
+                try errorReturn("Cannot parse line as paragraph: {any}", .{line});
+        },
     }
+
+    return b;
 }
 
-/// Remove leading whitespace from token list
-fn stripLeadingWhitespace(tokens: []Token) []Token {
-    var i: usize = 0;
-    while (i < tokens.len) : (i += 1) {
-        if (tokens[i].kind != .SPACE)
-            break;
-    }
-    return tokens[i..];
-}
-
-/// Check if the token is one of the expected types
-fn isOneOf(kinds: []TokenType, tok: TokenType) bool {
-    if (std.mem.indexOfScalar(TokenType, kinds, tok)) |_| {
-        return true;
-    }
-    return false;
-}
-
-//////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 // Tests
-//////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 
-test "mergeConsecutiveWhitespace" {
-    var alloc = std.testing.allocator;
-    var words = ArrayList([]const u8).init(alloc);
-    defer words.deinit();
+fn createAST() !Block {
+    const alloc = std.testing.allocator;
 
-    try words.append("foo");
-    try words.append(" ");
-    try words.append(" ");
-    try words.append("bar");
+    var root = Block.initContainer(alloc, .Document);
+    var quote = Block.initContainer(alloc, .Quote);
+    var list = Block.initContainer(alloc, .List);
+    var list_item = Block.initContainer(alloc, .ListItem);
+    var paragraph = Block.initLeaf(alloc, .Paragraph);
 
-    // Original value
-    const raw_concat = try std.mem.concat(alloc, u8, words.items);
-    defer alloc.free(raw_concat);
-    try std.testing.expect(std.mem.eql(u8, "foo  bar", raw_concat));
+    const text1 = zd.Text{ .text = "Hello, " };
+    const text2 = zd.Text{ .text = "World", .style = .{ .bold = true } };
+    var text3 = zd.Text{ .text = "!" };
+    text3.style.bold = true;
+    text3.style.italic = true;
 
-    // Merged value
-    mergeConsecutiveWhitespace(&words);
-    const merged = try std.mem.concat(alloc, u8, words.items);
-    defer alloc.free(merged);
-    try std.testing.expect(std.mem.eql(u8, "foo bar", merged));
+    try paragraph.Leaf.content.Paragraph.addText(text1);
+    try paragraph.Leaf.content.Paragraph.addText(text2);
+    try paragraph.Leaf.content.Paragraph.addText(text3);
+
+    try list_item.addChild(paragraph);
+    try list.addChild(list_item);
+    try quote.addChild(list);
+    try root.addChild(quote);
+
+    return root;
 }
 
-//test "Parse basic Markdown" {
-pub fn main() !void {
+test "1. one-line nested blocks" {
+
+    // ~~ Expected Parser Output ~~
+
+    var root = try createAST();
+    defer root.deinit();
+
+    // ~~ Parse ~~
+
+    // const input = "> - Hello, World!";
+    // const alloc = std.testing.allocator;
+    // var p: Parser = try Parser.init(alloc, input, .{});
+    // defer p.deinit();
+
+    // try p.parseMarkdown();
+
+    // ~~ Compare ~~
+
+    // Compare Document Block
+    // const root = p.document;
+    try std.testing.expect(root.isContainer());
+    try std.testing.expectEqual(zd.ContainerType.Document, @as(zd.ContainerType, root.Container.content));
+    try std.testing.expectEqual(1, root.Container.children.items.len);
+
+    // Compare Quote Block
+    const quote = root.Container.children.items[0];
+    try std.testing.expect(quote.isContainer());
+    try std.testing.expectEqual(zd.ContainerType.Quote, @as(zd.ContainerType, quote.Container.content));
+    try std.testing.expectEqual(1, quote.Container.children.items.len);
+
+    // Compare List Block
+    const list = quote.Container.children.items[0];
+    try std.testing.expect(list.isContainer());
+    try std.testing.expectEqual(zd.ContainerType.List, @as(zd.ContainerType, list.Container.content));
+    try std.testing.expectEqual(1, list.Container.children.items.len);
+
+    // Compare ListItem Block
+    const list_item = list.Container.children.items[0];
+    try std.testing.expect(list_item.isContainer());
+    try std.testing.expectEqual(zd.ContainerType.ListItem, @as(zd.ContainerType, list_item.Container.content));
+    try std.testing.expectEqual(1, list_item.Container.children.items.len);
+
+    // Compare Paragraph Block
+    const para = list_item.Container.children.items[0];
+    try std.testing.expect(para.isLeaf());
+    try std.testing.expectEqual(zd.LeafType.Paragraph, @as(zd.LeafType, para.Leaf.content));
+    // try std.testing.expectEqual(1, para.Leaf.children.items.len);
+}
+
+test "parser flow" {
+    // Sample code flow for parsing the following:
+    const input =
+        \\> - Hello, World!
+        \\> > New child!
+    ;
+    _ = input;
+
+    const alloc = std.testing.allocator;
+    const root = Block.initContainer(alloc, .Document);
+    _ = root;
+    // - Document.handleLine()                      "> - Hello, World!"
+    //   - open child? -> false
+    //   - parseNewBlock()                     "> - Hello, World!"
+    //     - Quote.handleLine()
+    //       - open child? -> false
+    //       - parseNewBlock()                 "- Hello, World!"
+    //         - List.handleLine()
+    //           - open ListItem? -> false
+    //           - ListItem.handleLine()
+    //             - open child? -> false
+    //             - parseNewBlock()           "Hello, World!"
+    //               - Paragraph.handleLine()
+    //                 - *todo* parseInlines()?
+    //             - ListItem.addChild(Paragraph)
+    //         - List.addChild(ListItem)
+    //       - Quote.addChild(List)
+    //   - Document.addChild(Quote)
+    // - Document.handleLine()                      "> > New Child!"
+    //   - open child? -> true
+    //   - openChild.handleLine()? -> true
+    //     - Quote.handleLine()                     "> > New Child!"
+    //       - open child? -> true
+    //         - List.handleLine() -> false         "> New Child!"
+    //           - List may not start with ">"
+    //         - child.close()
+    //       - parseNewBlock()                 "> New Child!"
+    //         - Quote.handleLine()
+    //           - open child? -> false
+    //           - parseNewBlock()             "New Child!"
+    //             - Paragraph.handleLine()
+    //               - *todo* parseInlines()?
+    //           - Quote.addChild(Paragraph)
+    //       - Quote.addChild(Quote)
+    // - Document.closeChildren()                   "EOF"
+}
+
+/// Return the index of the next BREAK token, or EOF
+fn nextBreak(tokens: []Token, idx: usize) usize {
+    if (idx >= tokens.len)
+        return tokens.len;
+
+    for (tokens[idx..], idx..) |tok, i| {
+        if (tok.kind == .BREAK)
+            return i;
+    }
+
+    return tokens.len;
+}
+
+// Return a slice of the tokens from the cursor to the next line break (or EOF)
+fn getLine(tokens: []Token, cursor: usize) ?[]Token {
+    if (cursor >= tokens.len) return null;
+    const end = @min(nextBreak(tokens, cursor) + 1, tokens.len);
+    return tokens[cursor..end];
+}
+
+test "Top-level parsing" {
+    // Setup
+    std.debug.print("==== Top-level Parsing Test ====\n", .{});
+    const text: []const u8 =
+        \\# Heading
+        \\
+        \\Foo Bar baz. Hi!
+    ;
+    const alloc = std.testing.allocator;
+
+    {
+        std.debug.print("============= starting parsing? ================\n", .{});
+        var p: Parser = try Parser.init(alloc, text, .{ .copy_input = true });
+        defer p.deinit();
+        try p.parseMarkdown();
+    }
+
+    var lexer = Lexer.init(alloc, text);
+    var tokens_array = try lexer.tokenize();
+    defer tokens_array.deinit();
+    const tokens: []Token = tokens_array.items;
+    var cursor: usize = 0;
+
+    // Create empty document; parse first line into the start of a new Block
+    var document = Block.initContainer(alloc, .Document);
+    defer document.deinit();
+    const first_line = getLine(tokens, cursor);
+    if (first_line == null) {
+        // empty document?
+        return error.EmptyDocument;
+    }
+    cursor += first_line.?.len;
+
+    var open_block = try parseNewBlock(alloc, first_line.?);
+    try document.addChild(open_block);
+
+    // if (first_line.?.len == tokens.len) // Only one line in the text
+    //     return error.EmptyDocument;
+
+    while (getLine(tokens, cursor)) |line| {
+        // First see if the current open block of the document can accept this line
+        if (!handleLine(&open_block, line)) {
+            // This line cannot continue the current open block; close and continue
+            closeBlock(&open_block);
+
+            // Append a new Block to the document
+            open_block = try parseNewBlock(alloc, line);
+            try document.addChild(open_block);
+        } else {
+            // The line belongs with this block
+            // TODO: Add line to block
+        }
+
+        // This line has been handled, one way or another; continue to the next line
+        cursor += line.len;
+    }
+
+    zd.printAST(document);
+}
+
+test "Quote block continuation lines" {
     const data =
         \\# Header!
         \\## Header 2
@@ -717,11 +1067,17 @@ pub fn main() !void {
         \\2. not the 2nd item
     ;
 
-    // TODO: Fix memory leaks!!
-    //var alloc = std.testing.allocator;
-    const alloc = std.heap.page_allocator;
+    const alloc = std.testing.allocator;
+    var lexer = Lexer.init(alloc, data);
+    var tokens = try lexer.tokenize();
+    defer tokens.deinit();
 
-    // Tokenize the input text
-    var parser = try Parser.init(alloc, data, .{});
-    _ = try parser.parseMarkdown();
+    // Now process every line!
+    var cursor: usize = 0;
+    while (getLine(tokens.items, cursor)) |line| {
+        // zd.printTypes(line);
+        // const continues_quote: bool = isContinuationLineQuote(line);
+        // std.debug.print(" ^-- Could continue a Quote block? {}\n", .{continues_quote});
+        cursor += line.len;
+    }
 }

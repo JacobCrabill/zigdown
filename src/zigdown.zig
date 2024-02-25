@@ -2,7 +2,7 @@
 
 // Expose public namespaces for building docs
 pub const lexer = @import("lexer.zig");
-pub const parser = @import("cmark_parser.zig");
+pub const parser = @import("parser.zig");
 pub const render = @import("render.zig");
 pub const render_console = @import("render_console.zig");
 pub const render_html = @import("render_html.zig");

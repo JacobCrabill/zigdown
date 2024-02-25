@@ -8,7 +8,6 @@ const con = @import("console.zig");
 const zd = struct {
     usingnamespace @import("tokens.zig");
     usingnamespace @import("utils.zig");
-    usingnamespace @import("markdown.zig");
 };
 
 const Allocator = std.mem.Allocator;

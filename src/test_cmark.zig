@@ -1,7 +1,7 @@
 const std = @import("std");
 const cons = @import("console.zig");
 const zd = struct {
-    usingnamespace @import("cmark_parser.zig");
+    usingnamespace @import("parser.zig");
     usingnamespace @import("render.zig");
     usingnamespace @import("render_html.zig");
     usingnamespace @import("utils.zig");
