@@ -4,6 +4,7 @@ const zd = struct {
     usingnamespace @import("utils.zig");
     usingnamespace @import("tokens.zig");
     usingnamespace @import("lexer.zig");
+    usingnamespace @import("utils.zig");
 };
 
 const ArrayList = std.ArrayList;
@@ -102,24 +103,17 @@ pub const Inline = struct {
 /// Section of formatted text (single style)
 /// Example: "plain text" or "**bold text**"
 pub const Text = struct {
-    /// All possible style options for basic text
-    pub const Style = struct {
-        bold: bool = false,
-        italic: bool = false,
-        underline: bool = false,
-        strike: bool = false,
-    };
-    style: Style = Style{},
+    style: zd.TextStyle = zd.TextStyle{},
     text: []const u8 = undefined, // The Text does not own the string(??)
 
     pub fn print(self: Text, depth: u8) void {
         printIndent(depth);
         std.debug.print("Text: '{s}' [Style: ", .{self.text});
-        inline for (@typeInfo(Style).Struct.fields) |field| {
-            if (@field(self.style, field.name)) {
-                std.debug.print("{s}, ", .{field.name});
-            }
-        }
+        // inline for (@typeInfo(zd.TextStyle).Struct.fields) |field| {
+        //     if (@field(self.style, field.name)) {
+        //         std.debug.print("{s}, ", .{field.name});
+        //     }
+        // }
         std.debug.print("]\n", .{});
     }
 };

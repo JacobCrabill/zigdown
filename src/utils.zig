@@ -2,6 +2,39 @@
 /// Common utilities.
 const std = @import("std");
 
+pub const Color = enum(u8) {
+    Black,
+    Red,
+    Green,
+    Yellow,
+    Blue,
+    Cyan,
+    White,
+};
+
+pub const Style = enum(u8) {
+    Bold,
+    Italic,
+    Underline,
+    Blink,
+    FastBlink,
+    Reverse,
+    Hide,
+    Strike,
+};
+
+pub const TextStyle = struct {
+    color: Color = .White,
+    bold: bool = false,
+    italic: bool = false,
+    underline: bool = false,
+    blink: bool = false,
+    fastblink: bool = false,
+    reverse: bool = false,
+    hide: bool = false,
+    strike: bool = false,
+};
+
 pub fn printIndent(depth: u8) void {
     var i: u8 = 0;
     while (i < depth) : (i += 1) {

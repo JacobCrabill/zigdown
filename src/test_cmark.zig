@@ -4,6 +4,7 @@ const zd = struct {
     usingnamespace @import("cmark_parser.zig");
     usingnamespace @import("render.zig");
     usingnamespace @import("render_html.zig");
+    usingnamespace @import("utils.zig");
 };
 
 pub const HtmlRenderer = zd.HtmlRenderer;
@@ -27,7 +28,7 @@ pub fn main() !void {
         \\```
     ;
 
-    var style: cons.TextStyle = cons.TextStyle{ .color = .Green, .bold = true };
+    var style: zd.TextStyle = zd.TextStyle{ .color = .Green, .bold = true };
     cons.printStyled(style, "\n────────────────── Test Document ──────────────────\n", .{});
     std.debug.print("{s}\n", .{text});
     cons.printStyled(style, "───────────────────────────────────────────────────\n", .{});

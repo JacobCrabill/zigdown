@@ -1,4 +1,9 @@
 const std = @import("std");
+const utils = @import("utils.zig");
+
+const Color = utils.Color;
+const Style = utils.Style;
+const TextStyle = utils.TextStyle;
 
 // ANSI terminal escape character
 pub const ansi = [1]u8{0x1b};
@@ -45,39 +50,6 @@ pub const text_strike = ansi ++ "[9m";
 
 pub const hyperlink = ansi ++ "]8;;";
 pub const link_end = ansi ++ "\\";
-
-pub const Color = enum(u8) {
-    Black,
-    Red,
-    Green,
-    Yellow,
-    Blue,
-    Cyan,
-    White,
-};
-
-pub const Style = enum(u8) {
-    Bold,
-    Italic,
-    Underline,
-    Blink,
-    FastBlink,
-    Reverse,
-    Hide,
-    Strike,
-};
-
-pub const TextStyle = struct {
-    color: Color = .White,
-    bold: bool = false,
-    italic: bool = false,
-    underline: bool = false,
-    blink: bool = false,
-    fastblink: bool = false,
-    reverse: bool = false,
-    hide: bool = false,
-    strike: bool = false,
-};
 
 /// Configure the terminal to start printing with the given color
 pub fn startColor(color: Color) void {

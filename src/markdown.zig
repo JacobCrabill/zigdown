@@ -252,7 +252,7 @@ pub const Quote = struct {
 /// Sction Break as a constant value
 pub const SecBreak: Section = Section{ .linebreak = undefined };
 
-pub const TextStyle = struct {
+pub const zTextStyle = struct {
     bold: bool = false,
     italic: bool = false,
     underline: bool = false,
@@ -262,7 +262,7 @@ pub const TextStyle = struct {
 /// Section of formatted text (single style)
 /// Example: "plain text" or "**bold text**"
 pub const Text = struct {
-    style: TextStyle = TextStyle{},
+    style: zTextStyle = zTextStyle{},
     text: []const u8 = undefined,
 };
 

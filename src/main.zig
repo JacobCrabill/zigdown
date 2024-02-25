@@ -81,7 +81,8 @@ pub fn main() !void {
 
     // Parse the input text
     var parser = try zd.Parser.init(alloc, md_text, .{});
-    const md = try parser.parseMarkdown();
+    try parser.parseMarkdown();
+    const md: zd.Block = parser.document;
 
     if (outfile) |outname| {
         // TODO: check if path is absolute or relative; join relpath to cwd if relative
@@ -94,17 +95,15 @@ pub fn main() !void {
     }
 }
 
-fn render(stream: anytype, md: zd.Markdown, do_console: bool, do_html: bool) !void {
-    _ = md;
-    _ = stream;
-    // if (do_html) {
-    //     var h_renderer = htmlRenderer(stream, md.alloc);
-    //     try h_renderer.render(md);
-    // }
+fn render(stream: anytype, md: zd.Block, do_console: bool, do_html: bool) !void {
+    if (do_html) {
+        var h_renderer = htmlRenderer(stream, md.allocator());
+        try h_renderer.renderBlock(md);
+    }
 
     if (do_console or !do_html) {
-        // var c_renderer = consoleRenderer(stream, md.alloc);
-        // try c_renderer.render(md);
+        var c_renderer = consoleRenderer(stream, md.allocator(), .{});
+        try c_renderer.renderBlock(md);
     }
 }
 

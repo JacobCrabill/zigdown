@@ -5,6 +5,7 @@ const zd = struct {
     usingnamespace @import("containers.zig");
     usingnamespace @import("leaves.zig");
     usingnamespace @import("inlines.zig");
+    usingnamespace @import("utils.zig");
 };
 
 const cons = @import("console.zig");
@@ -71,7 +72,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Configure the terminal to start printing with the given (single) style
-        pub fn startStyle(self: Self, style: cons.TextStyle) void {
+        pub fn startStyle(self: Self, style: zd.TextStyle) void {
             if (style.bold) self.writeno(cons.text_bold);
             if (style.italic) self.writeno(cons.text_italic);
             if (style.underline) self.writeno(cons.text_underline);
@@ -266,14 +267,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         pub fn writeLeaders(self: *Self) void {
             for (self.leader_stack.items) |text| {
-                const style = cons.TextStyle{
-                    .color = .White,
-                    .bold = text.style.bold,
-                    .italic = text.style.italic,
-                    .underline = text.style.underline,
-                    .strike = text.style.strike,
-                };
-                self.startStyle(style);
+                self.startStyle(text.style);
                 self.write(text.text);
                 self.resetStyle();
             }
@@ -428,7 +422,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Render a raw block of code
         fn renderCode(self: *Self, c: zd.Code) !void {
             // TODO: Proper indent / leaders
-            const style = cons.TextStyle{ .color = .Yellow, .bold = true };
+            const style = zd.TextStyle{ .color = .Yellow, .bold = true };
             self.startStyle(style);
             self.print("━━━━━━━━━━━━━━━━━━━━ <{s}>", .{c.tag orelse "none"});
             self.renderBreak();
