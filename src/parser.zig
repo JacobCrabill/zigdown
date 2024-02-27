@@ -581,11 +581,11 @@ fn closeBlockCode(block: *Block) void {
 }
 
 fn closeBlockParagraph(block: *Block) void {
-    const leaf: *zd.Leaf = &block.leaf();
+    const leaf: *zd.Leaf = block.leaf();
     defer leaf.raw_contents.deinit();
     const para: *zd.Paragraph = &block.Leaf.content.Paragraph;
     const tokens = leaf.raw_contents.items;
-    parseInlines(block.allocator(), para.content, tokens) catch unreachable;
+    parseInlines(block.allocator(), &para.content, tokens) catch unreachable;
 }
 
 fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []const Token) !void {
@@ -638,8 +638,8 @@ fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []cons
                 try appendWord(alloc, inlines, &words, style);
                 style.underline = !style.underline;
             },
-            .BANG => try self.parseLinkOrImage(true),
-            .LBRACK => try self.parseLinkOrImage(false),
+            .BANG => {}, //try self.parseLinkOrImage(true),
+            .LBRACK => {}, //try self.parseLinkOrImage(false),
             else => {
                 std.debug.print("Unhandled token: {any}\n", .{tok});
             },
@@ -664,10 +664,23 @@ fn appendWord(alloc: Allocator, inlines: *ArrayList(zd.Inline), words: *ArrayLis
     }
 }
 
-fn mergeConsecutiveWhitespace(words: *ArrayList([]const u8)) !void {
-    // TODO
-    _ = words;
+fn mergeConsecutiveWhitespace(words: *ArrayList([]const u8)) void {
+    var i: usize = 0;
+    var is_ws: bool = false;
+    while (i < words.items.len) : (i += 1) {
+        if (std.mem.eql(u8, " ", words.items[i])) {
+            if (is_ws) {
+                // Extra whitespace to be removed
+                _ = words.orderedRemove(i);
+                i -= 1;
+            }
+            is_ws = true;
+        } else {
+            is_ws = false;
+        }
+    }
 }
+
 fn parseOneInline(alloc: Allocator, tokens: []const Token) ?zd.Inline {
     if (tokens.len < 1) return null;
 
