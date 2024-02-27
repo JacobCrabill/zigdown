@@ -368,6 +368,10 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             const start: usize = list.content.List.start;
             var buffer: [16]u8 = undefined;
             for (list.children.items, 0..) |item, i| {
+                self.column = 0; // TODO: Why was this not reset already??
+                self.writeLeaders();
+                self.needs_leaders = false;
+
                 const num: usize = start + i;
                 const marker = try std.fmt.bufPrint(&buffer, " {d}. ", .{num});
                 self.write(marker);
