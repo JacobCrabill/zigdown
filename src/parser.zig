@@ -557,7 +557,7 @@ fn closeBlock(block: *Block) void {
                 // .Break => return closeBlockBreak(block),
                 .Code => return closeBlockCode(block),
                 // .Heading => return closeBlockHeading(block),
-                // .Paragraph => return closeBlockParagraph(block),
+                .Paragraph => return closeBlockParagraph(block),
                 else => {},
             }
         },
@@ -579,6 +579,114 @@ fn closeBlockCode(block: *Block) void {
     code.text = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
     block.Leaf.raw_contents.clearAndFree();
 }
+
+fn closeBlockParagraph(block: *Block) void {
+    const leaf: *zd.Leaf = &block.leaf();
+    defer leaf.raw_contents.deinit();
+    const para: *zd.Paragraph = &block.Leaf.content.Paragraph;
+    const tokens = leaf.raw_contents.items;
+    parseInlines(block.allocator(), para.content, tokens) catch unreachable;
+}
+
+fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []const Token) !void {
+    // while (parseOneInline(alloc, tokens)) |inl| {
+    //     try inlines.append(inl);
+    // }
+    var style = zd.TextStyle{};
+    var words = ArrayList([]const u8).init(alloc);
+    defer words.deinit();
+
+    var prev_type: TokenType = .BREAK;
+    var next_type: TokenType = .BREAK;
+
+    for (tokens, 0..) |tok, i| {
+        if (i + 1 < tokens.len) {
+            next_type = tokens[i + 1].kind;
+        } else {
+            next_type = .BREAK;
+        }
+
+        switch (tok.kind) {
+            .WORD => {
+                // todo: parse (concatenate) all following words until a change
+                // For now, just take the lazy approach
+                try inlines.append(zd.Inline.initWithContent(
+                    alloc,
+                    zd.InlineData{ .text = zd.Text{ .text = tok.text } },
+                ));
+            },
+            .EMBOLD => {
+                try appendWord(alloc, inlines, &words, style);
+                style.bold = !style.bold;
+                style.italic = !style.italic;
+            },
+            .STAR, .BOLD => {
+                // TODO: Properly handle emphasis between *, **, ***, * word ** word***, etc.
+                try appendWord(alloc, inlines, &words, style);
+                style.bold = !style.bold;
+            },
+            .USCORE => {
+                // If it's an underscore in the middle of a word, don't toggle style with it
+                if (prev_type == .WORD and next_type == .WORD) {
+                    try words.append(tok.text);
+                } else {
+                    try appendWord(alloc, inlines, &words, style);
+                    style.italic = !style.italic;
+                }
+            },
+            .TILDE => {
+                try appendWord(alloc, inlines, &words, style);
+                style.underline = !style.underline;
+            },
+            .BANG => try self.parseLinkOrImage(true),
+            .LBRACK => try self.parseLinkOrImage(false),
+            else => {
+                std.debug.print("Unhandled token: {any}\n", .{tok});
+            },
+        }
+
+        prev_type = tok.kind;
+    }
+}
+
+/// Append a list of words to the given TextBlock as a Text
+fn appendWord(alloc: Allocator, inlines: *ArrayList(zd.Inline), words: *ArrayList([]const u8), style: zd.TextStyle) Allocator.Error!void {
+    if (words.items.len > 0) {
+        mergeConsecutiveWhitespace(words);
+
+        // End the current Text object with the current style
+        const text = zd.Text{
+            .style = style,
+            .text = try std.mem.concat(alloc, u8, words.items),
+        };
+        try inlines.append(zd.Inline.initWithContent(alloc, zd.InlineData{ .text = text }));
+        words.clearRetainingCapacity();
+    }
+}
+
+fn mergeConsecutiveWhitespace(words: *ArrayList([]const u8)) !void {
+    // TODO
+    _ = words;
+}
+fn parseOneInline(alloc: Allocator, tokens: []const Token) ?zd.Inline {
+    if (tokens.len < 1) return null;
+
+    for (tokens, 0..) |tok, i| {
+        _ = i;
+        switch (tok.kind) {
+            .WORD => {
+                // todo: parse (concatenate) all following words until a change
+                // For now, just take the lazy approach
+                return zd.Inline.initWithContent(alloc, .{ .text = zd.Text{ .text = tok.text } });
+            },
+        }
+    }
+}
+
+// TODO: don't take the lazy approach
+// fn parsePlainText(tokens: []const Token) zd.Text {
+//     return zd.Text{}
+// }
 
 ///////////////////////////////////////////////////////////////////////////////
 // Parser Struct
