@@ -81,7 +81,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             if (style.hide) self.writeno(cons.text_hide);
             if (style.strike) self.writeno(cons.text_strike);
 
-            switch (style.color) {
+            switch (style.fg_color) {
                 .Black => self.writeno(cons.fg_black),
                 .Red => self.writeno(cons.fg_red),
                 .Green => self.writeno(cons.fg_green),
@@ -89,6 +89,15 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 .Blue => self.writeno(cons.fg_blue),
                 .Cyan => self.writeno(cons.fg_cyan),
                 .White => self.writeno(cons.fg_white),
+            }
+            switch (style.bg_color) {
+                .Black => self.writeno(cons.bg_black),
+                .Red => self.writeno(cons.bg_red),
+                .Green => self.writeno(cons.bg_green),
+                .Yellow => self.writeno(cons.bg_yellow),
+                .Blue => self.writeno(cons.bg_blue),
+                .Cyan => self.writeno(cons.bg_cyan),
+                .White => self.writeno(cons.bg_white),
             }
         }
 
@@ -112,8 +121,18 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             };
         }
 
+        /// Print the format and args to the output stream, updating the current column
+        pub fn print(self: *Self, comptime fmt: []const u8, args: anytype) void {
+            const text: []const u8 = std.fmt.allocPrint(self.alloc, fmt, args) catch |err| blk: {
+                std.debug.print("[ERROR] Unable to print! {s}\n", .{@errorName(err)});
+                break :blk "";
+            };
+            defer self.alloc.free(text);
+            self.write(text);
+        }
+
         /// Print the format and args to the output stream, without updating the current column
-        pub fn print(self: Self, comptime fmt: []const u8, args: anytype) void {
+        pub fn printno(self: *Self, comptime fmt: []const u8, args: anytype) void {
             self.stream.print(fmt, args) catch |err| {
                 std.debug.print("[ERROR] Unable to print! {s}\n", .{@errorName(err)});
             };
@@ -137,7 +156,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 // indent
                 self.write_n("  ", item.level);
                 // marker
-                self.startStyle(.{ .color = .Blue });
+                self.startStyle(.{ .fg_color = .Blue });
                 self.write(" * ");
                 self.resetStyle();
                 // item
@@ -170,20 +189,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 self.render_text(text, indent, leader);
             }
             //self.render_break();
-        }
-
-        fn render_link(self: *Self, link: zd.Link) void {
-            // \e]8;; + URL + \e\\ + Text + \e]8;; + \e\\
-            self.writeno(cons.fg_cyan);
-            self.writeno(cons.hyperlink);
-            self.print("{s}", .{link.url});
-            self.writeno(cons.link_end);
-
-            self.render_textblock(link.text, 0, "");
-            self.writeno(cons.hyperlink);
-            self.writeno(cons.link_end);
-            self.writeno(cons.ansi_end);
-            self.print(" ", .{});
         }
 
         /// TODO
@@ -236,9 +241,11 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
 
             // backup over the trailing " " if the text didn't have one
+            // TODO: this smells fishy
+            // const trimmed_len: usize = std.mem.trimRight(u8, text, " ").len;
             if (!std.mem.endsWith(u8, text, " ") and self.column > 0) {
-                self.print(cons.ansi_back, .{1});
-                self.column -= 1; // + cons.ansi_back.len;
+                self.printno(cons.ansi_back, .{1});
+                self.column -= 1;
             }
         }
 
@@ -276,9 +283,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 self.writeLeaders(); // HACK - TESTING
                 self.needs_leaders = true;
             }
-            for (block.raw_contents.items) |item| {
-                self.write_wrap(item.text); // HACK - TESTING
-            }
+            // for (block.raw_contents.items) |item| {
+            //     self.write_wrap(item.text); // HACK - TESTING
+            // }
             switch (block.content) {
                 .Break => self.renderBreak(),
                 .Code => |c| try self.renderCode(c),
@@ -320,9 +327,12 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         fn renderUnorderedList(self: *Self, list: zd.Container) !void {
             for (list.children.items) |item| {
+                if (self.column > 0)
+                    self.renderBreak();
+
                 // print out list bullet
                 self.writeLeaders();
-                self.startStyle(.{ .color = .Blue, .bold = true });
+                self.startStyle(.{ .fg_color = .Blue, .bold = true });
                 self.write(" * "); // todo: fancier bullet char?
                 self.resetStyle();
 
@@ -339,7 +349,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             const start: usize = list.content.List.start;
             var buffer: [16]u8 = undefined;
             for (list.children.items, 0..) |item, i| {
-                self.column = 0; // TODO: Why was this not reset already??
+                if (self.column > 0)
+                    self.renderBreak();
+
                 self.writeLeaders();
                 self.needs_leaders = false;
 
@@ -399,7 +411,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Render a raw block of code
         fn renderCode(self: *Self, c: zd.Code) !void {
             // TODO: Proper indent / leaders
-            const style = zd.TextStyle{ .color = .Yellow, .bold = true };
+            const style = zd.TextStyle{ .fg_color = .Yellow, .bold = true };
             self.startStyle(style);
             self.print("━━━━━━━━━━━━━━━━━━━━ <{s}>", .{c.tag orelse "none"});
             self.renderBreak();
@@ -453,8 +465,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         fn renderLink(self: *Self, link: zd.Link) !void {
-            self.startStyle(.{ .color = .Cyan });
+            self.startStyle(.{ .fg_color = .Cyan });
 
+            // \e]8;; + URL + \e\\ + Text + \e]8;; + \e\\
             // Write the URL inside the special hyperlink escape sequence
             self.writeno(cons.hyperlink);
             self.writeno(link.url);

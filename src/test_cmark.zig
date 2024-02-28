@@ -28,7 +28,7 @@ pub fn main() !void {
         \\```
     ;
 
-    var style: zd.TextStyle = zd.TextStyle{ .color = .Green, .bold = true };
+    var style: zd.TextStyle = zd.TextStyle{ .fg_color = .Green, .bold = true };
     cons.printStyled(style, "\n────────────────── Test Document ──────────────────\n", .{});
     std.debug.print("{s}\n", .{text});
     cons.printStyled(style, "───────────────────────────────────────────────────\n", .{});
@@ -41,19 +41,19 @@ pub fn main() !void {
     defer p.deinit();
     try p.parseMarkdown(text);
 
-    style.color = .Blue;
+    style.fg_color = .Blue;
     cons.printStyled(style, "─────────────────── Parsed AST ────────────────────\n", .{});
     p.document.print(0);
     cons.printStyled(style, "───────────────────────────────────────────────────\n", .{});
 
     const stdout = std.io.getStdOut().writer();
     var hrenderer = htmlRenderer(stdout, alloc);
-    style.color = .Cyan;
+    style.fg_color = .Cyan;
     cons.printStyled(style, "────────────────── Rendered HTML ──────────────────\n", .{});
     try hrenderer.renderBlock(p.document);
     cons.printStyled(style, "───────────────────────────────────────────────────\n", .{});
 
-    style.color = .Red;
+    style.fg_color = .Red;
     cons.printStyled(style, "────────────────── Rendered Text ──────────────────\n", .{});
     var crenderer = consoleRenderer(stdout, alloc, .{ .width = 70 });
     defer crenderer.deinit();

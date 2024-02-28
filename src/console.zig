@@ -51,7 +51,7 @@ pub const text_strike = ansi ++ "[9m";
 pub const hyperlink = ansi ++ "]8;;";
 pub const link_end = ansi ++ "\\";
 
-/// Configure the terminal to start printing with the given color
+/// Configure the terminal to start printing with the given foreground color
 pub fn startColor(color: Color) void {
     switch (color) {
         .Black => std.debug.print(fg_black, .{}),
@@ -88,7 +88,7 @@ pub fn startStyles(style: TextStyle) void {
     if (style.reverse) std.debug.print(text_reverse, .{});
     if (style.hide) std.debug.print(text_hide, .{});
     if (style.strike) std.debug.print(text_strike, .{});
-    startColor(style.color);
+    startColor(style.fg_color);
 }
 
 /// Reset all style in the terminal

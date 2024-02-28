@@ -577,12 +577,12 @@ fn closeBlockCode(block: *Block) void {
         words.append(tok.text) catch unreachable;
     }
     code.text = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
-    block.Leaf.raw_contents.clearAndFree();
+    // block.Leaf.raw_contents.clearRetainingCapacity();
 }
 
 fn closeBlockParagraph(block: *Block) void {
     const leaf: *zd.Leaf = block.leaf();
-    defer leaf.raw_contents.deinit();
+    // defer leaf.raw_contents.clearRetainingCapacity();
     const para: *zd.Paragraph = &block.Leaf.content.Paragraph;
     const tokens = leaf.raw_contents.items;
     parseInlines(block.allocator(), &para.content, tokens) catch unreachable;
@@ -657,7 +657,7 @@ fn appendWord(alloc: Allocator, inlines: *ArrayList(zd.Inline), words: *ArrayLis
         // End the current Text object with the current style
         const text = zd.Text{
             .style = style,
-            .text = try std.mem.concat(alloc, u8, words.items),
+            .text = try std.mem.join(alloc, " ", words.items),
         };
         try inlines.append(zd.Inline.initWithContent(alloc, zd.InlineData{ .text = text }));
         words.clearRetainingCapacity();

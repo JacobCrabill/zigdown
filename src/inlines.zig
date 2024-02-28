@@ -109,14 +109,13 @@ pub const Text = struct {
     pub fn print(self: Text, depth: u8) void {
         printIndent(depth);
         std.debug.print("Text: '{s}' [Style: ", .{self.text});
+        std.debug.print("fg: {s}, bg: {s} ", .{ @tagName(self.style.fg_color), @tagName(self.style.bg_color) });
         inline for (@typeInfo(zd.TextStyle).Struct.fields) |field| {
             const T: type = @TypeOf(@field(self.style, field.name));
             if (T == bool) {
                 if (@field(self.style, field.name)) {
                     std.debug.print("{s}", .{field.name});
                 }
-            } else if (T == zd.Color) {
-                std.debug.print("{s}", .{@tagName(@field(self.style, field.name))});
             }
         }
         std.debug.print("]\n", .{});

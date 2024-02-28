@@ -182,41 +182,37 @@ pub const Leaf = struct {
     alloc: Allocator,
     content: LeafData,
     raw_contents: ArrayList(Token),
+    inlines: ArrayList(Inline),
     open: bool = true,
-    // inlines: ArrayList(Inline),
 
     pub fn init(alloc: Allocator, kind: LeafType) Leaf {
-        var leaf = Leaf{
+        return Leaf{
             .alloc = alloc,
-            .content = undefined,
             .raw_contents = ArrayList(Token).init(alloc),
-            // .inlines = ArrayList(Inline).init(alloc),
+            .inlines = ArrayList(Inline).init(alloc),
+            .content = blk: {
+                switch (kind) {
+                    .Break => break :blk .{ .Break = {} },
+                    .Code => break :blk .{ .Code = zd.Code.init(alloc) },
+                    .Heading => break :blk .{ .Heading = zd.Heading{} },
+                    .Paragraph => break :blk .{ .Paragraph = zd.Paragraph.init(alloc) },
+                }
+            },
         };
-
-        leaf.content = blk: {
-            switch (kind) {
-                .Break => break :blk .{ .Break = {} },
-                .Code => break :blk .{ .Code = zd.Code{} },
-                .Heading => break :blk .{ .Heading = zd.Heading{} },
-                .Paragraph => break :blk .{ .Paragraph = zd.Paragraph.init(alloc) },
-            }
-        };
-
-        return leaf;
     }
 
     pub fn deinit(self: *Self) void {
         self.content.deinit();
         self.raw_contents.deinit();
-        // for (self.inlines.items) |*item| {
-        //     item.deinit();
-        // }
-        // self.inlines.deinit();
+        for (self.inlines.items) |*item| {
+            item.deinit();
+        }
+        self.inlines.deinit();
     }
 
-    // pub fn addInline(self: *Self, item: Inline) !void {
-    //     try self.inlines.append(item);
-    // }
+    pub fn addInline(self: *Self, item: Inline) !void {
+        try self.inlines.append(item);
+    }
 
     pub fn close(self: *Self) void {
         self.open = false;
