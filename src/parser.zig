@@ -583,9 +583,8 @@ fn closeBlockCode(block: *Block) void {
 fn closeBlockParagraph(block: *Block) void {
     const leaf: *zd.Leaf = block.leaf();
     // defer leaf.raw_contents.clearRetainingCapacity();
-    const para: *zd.Paragraph = &block.Leaf.content.Paragraph;
     const tokens = leaf.raw_contents.items;
-    parseInlines(block.allocator(), &para.content, tokens) catch unreachable;
+    parseInlines(block.allocator(), &leaf.inlines, tokens) catch unreachable;
 }
 
 fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []const Token) !void {
@@ -612,7 +611,7 @@ fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []cons
                 // For now, just take the lazy approach
                 try inlines.append(zd.Inline.initWithContent(
                     alloc,
-                    zd.InlineData{ .text = zd.Text{ .text = tok.text } },
+                    zd.InlineData{ .text = zd.Text{ .text = tok.text, .style = style } },
                 ));
             },
             .EMBOLD => {
@@ -946,7 +945,7 @@ fn parseNewBlock(alloc: Allocator, line: []const Token) !Block {
         else => {
             // Fallback - parse paragraph
             b = Block.initLeaf(alloc, .Paragraph);
-            b.Leaf.content.Paragraph = zd.Paragraph.init(alloc);
+            b.Leaf.content.Paragraph = zd.Paragraph{};
             if (!handleLineParagraph(&b, line))
                 try errorReturn("Cannot parse line as paragraph: {any}", .{line});
         },
@@ -974,9 +973,9 @@ fn createAST() !Block {
     text3.style.bold = true;
     text3.style.italic = true;
 
-    try paragraph.Leaf.content.Paragraph.addText(text1);
-    try paragraph.Leaf.content.Paragraph.addText(text2);
-    try paragraph.Leaf.content.Paragraph.addText(text3);
+    try paragraph.Leaf.inlines.append(text1);
+    try paragraph.Leaf.inlines.append(text2);
+    try paragraph.Leaf.inlines.append(text3);
 
     try list_item.addChild(paragraph);
     try list.addChild(list_item);

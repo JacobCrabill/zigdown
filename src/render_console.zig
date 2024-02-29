@@ -289,8 +289,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             switch (block.content) {
                 .Break => self.renderBreak(),
                 .Code => |c| try self.renderCode(c),
-                .Heading => |h| try self.renderHeading(h),
-                .Paragraph => |p| try self.renderParagraph(p),
+                .Heading => try self.renderHeading(block),
+                .Paragraph => try self.renderParagraph(block),
             }
         }
 
@@ -391,7 +391,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Render an ATX Heading
-        fn renderHeading(self: *Self, h: zd.Heading) !void {
+        fn renderHeading(self: *Self, leaf: zd.Leaf) !void {
+            const h: zd.Heading = leaf.content.Heading;
             const text = std.mem.trimLeft(u8, h.text, " \t");
 
             // Pad to place text in center of console
@@ -427,8 +428,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Render a standard paragraph of text
-        fn renderParagraph(self: *Self, p: zd.Paragraph) !void {
-            for (p.content.items) |item| {
+        fn renderParagraph(self: *Self, leaf: zd.Leaf) !void {
+            for (leaf.inlines.items) |item| {
                 try self.renderInline(item);
             }
         }

@@ -39,7 +39,7 @@ pub const LeafData = union(LeafType) {
 
     pub fn deinit(self: *LeafData) void {
         switch (self.*) {
-            .Paragraph => |*p| p.deinit(),
+            // .Paragraph => |*p| p.deinit(),
             .Heading => |*h| h.deinit(),
             .Code => |*c| c.deinit(),
             inline else => {},
@@ -48,7 +48,7 @@ pub const LeafData = union(LeafType) {
 
     pub fn print(self: LeafData, depth: u8) void {
         switch (self) {
-            .Paragraph => |p| p.print(depth),
+            // .Paragraph => |p| p.print(depth),
             .Heading => |h| h.print(depth),
             .Code => |c| c.print(depth),
             inline else => {},
@@ -108,62 +108,62 @@ pub const Code = struct {
 ///   plain and **bold** text, as well as [links](example.com) and `code`
 pub const Paragraph = struct {
     const Self = @This();
-    alloc: Allocator,
-    content: ArrayList(zd.Inline),
+    // alloc: Allocator,
+    // content: ArrayList(zd.Inline),
 
-    /// Instantiate a Paragraph
-    pub fn init(alloc: std.mem.Allocator) Paragraph {
-        return .{
-            .alloc = alloc,
-            .content = ArrayList(zd.Inline).init(alloc),
-        };
-    }
+    // /// Instantiate a Paragraph
+    // pub fn init(alloc: std.mem.Allocator) Paragraph {
+    //     return .{
+    //         .alloc = alloc,
+    //         .content = ArrayList(zd.Inline).init(alloc),
+    //     };
+    // }
 
-    /// Free allocated memory
-    pub fn deinit(self: *Self) void {
-        for (self.content.items) |*item| {
-            item.deinit();
-        }
-        self.content.deinit();
-    }
+    // /// Free allocated memory
+    // pub fn deinit(self: *Self) void {
+    //     for (self.content.items) |*item| {
+    //         item.deinit();
+    //     }
+    //     self.content.deinit();
+    // }
 
-    /// Append a chunk of Text to the contents of the Paragraph
-    pub fn addText(self: *Self, text: Text) !void {
-        try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .text = text }));
-    }
+    // /// Append a chunk of Text to the contents of the Paragraph
+    // pub fn addText(self: *Self, text: Text) !void {
+    //     try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .text = text }));
+    // }
 
-    /// Append a Link to the contents Paragraph
-    pub fn addLink(self: *Self, link: Link) !void {
-        try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .link = link }));
-    }
+    // /// Append a Link to the contents Paragraph
+    // pub fn addLink(self: *Self, link: Link) !void {
+    //     try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .link = link }));
+    // }
 
-    /// Append an Image to the contents Paragraph
-    pub fn addImage(self: *Self, image: zd.Image) !void {
-        try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .image = image }));
-    }
+    // /// Append an Image to the contents Paragraph
+    // pub fn addImage(self: *Self, image: zd.Image) !void {
+    //     try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .image = image }));
+    // }
 
-    /// Append an inline code span to the contents Paragraph
-    pub fn addCode(self: *Self, code: zd.Codespan) !void {
-        try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .codespan = code }));
-    }
+    // /// Append an inline code span to the contents Paragraph
+    // pub fn addCode(self: *Self, code: zd.Codespan) !void {
+    //     try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .codespan = code }));
+    // }
 
-    /// Append a line break to the contents Paragraph
-    pub fn addBreak(self: *Self) !void {
-        try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .newline = {} }));
-    }
+    // /// Append a line break to the contents Paragraph
+    // pub fn addBreak(self: *Self) !void {
+    //     try self.content.append(zd.Inline.initWithContent(self.alloc, .{ .newline = {} }));
+    // }
 
-    /// Append the elements of 'other' to this Paragraph
-    pub fn join(self: *Self, other: *Self) void {
-        try self.text.appendSlice(other.text.items);
-        other.text.deinit();
-    }
+    // /// Append the elements of 'other' to this Paragraph
+    // pub fn join(self: *Self, other: *Self) void {
+    //     try self.text.appendSlice(other.text.items);
+    //     other.text.deinit();
+    // }
 
-    /// Pretty-print the Paragraph's contents
-    pub fn print(self: Self, depth: u8) void {
-        for (self.content.items) |item| {
-            item.print(depth);
-        }
-    }
+    // /// Pretty-print the Paragraph's contents
+    // pub fn print(self: Self, depth: u8) void {
+    //     for (self.content.items) |item| {
+    //         item.print(depth);
+    //     }
+    // }
 };
 
 pub const Reference = struct {};

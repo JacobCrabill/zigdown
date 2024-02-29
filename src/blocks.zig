@@ -195,7 +195,7 @@ pub const Leaf = struct {
                     .Break => break :blk .{ .Break = {} },
                     .Code => break :blk .{ .Code = zd.Code.init(alloc) },
                     .Heading => break :blk .{ .Heading = zd.Heading{} },
-                    .Paragraph => break :blk .{ .Paragraph = zd.Paragraph.init(alloc) },
+                    .Paragraph => break :blk .{ .Paragraph = zd.Paragraph{} },
                 }
             },
         };
@@ -212,6 +212,16 @@ pub const Leaf = struct {
 
     pub fn addInline(self: *Self, item: Inline) !void {
         try self.inlines.append(item);
+    }
+
+    /// Append a chunk of Text to our inlines
+    pub fn addText(self: *Self, text: Text) !void {
+        try self.inlines.append(zd.Inline.initWithContent(self.alloc, .{ .text = text }));
+    }
+
+    /// Append a Link to the contents Paragraph
+    pub fn addLink(self: *Self, link: Link) !void {
+        try self.inlines.append(zd.Inline.initWithContent(self.alloc, .{ .link = link }));
     }
 
     pub fn close(self: *Self) void {
@@ -312,10 +322,10 @@ fn createTestAst(alloc: Allocator) !Block {
 
     // Add the Text and the Link to the Paragraph
     try std.testing.expect(isLeaf(paragraph));
-    try paragraph.Leaf.content.Paragraph.addText(text1);
-    try paragraph.Leaf.content.Paragraph.addText(text2);
-    try paragraph.Leaf.content.Paragraph.addText(text3);
-    try paragraph.Leaf.content.Paragraph.addLink(link);
+    try paragraph.Leaf.addText(text1);
+    try paragraph.Leaf.addText(text2);
+    try paragraph.Leaf.addText(text3);
+    try paragraph.Leaf.addLink(link);
 
     // Add the Paragraph to the ListItem
     try std.testing.expect(isContainer(list_item));
