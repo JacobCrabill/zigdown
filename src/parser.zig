@@ -196,15 +196,19 @@ pub fn handleLineDocument(block: *Block, line: []const Token) bool {
     var cblock = block.container();
     if (cblock.children.items.len > 0) {
         const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
-        if (handleLine(child, line)) {
-            return true;
-        } else {
-            closeBlock(child);
+        if (child.isOpen()) {
+            zd.printTypes(line);
+            if (handleLine(child, line)) {
+                return true;
+            } else {
+                closeBlock(child);
+            }
         }
     }
 
     // Child did not accept this line (or no children yet)
     // Determine which kind of Block this line should be
+    std.debug.print("Parsing new block...\n", .{});
     const new_child = parseNewBlock(block.allocator(), line) catch unreachable;
     cblock.children.append(new_child) catch unreachable;
 
@@ -364,6 +368,10 @@ pub fn handleLineCode(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineHeading(block: *Block, line: []const Token) bool {
+    if (!block.isOpen()) {
+        std.debug.print("ERROR: handling Heading with closed block!!\n", .{});
+        return false;
+    }
     var level: u8 = 0;
     for (line) |tok| {
         if (tok.kind != .HASH) break;
@@ -374,17 +382,22 @@ pub fn handleLineHeading(block: *Block, line: []const Token) bool {
     var head: *zd.Heading = &block.Leaf.content.Heading;
     head.level = level;
 
-    if (line.len > level) {
-        // Concatenate all text into the Heading
-        var words = ArrayList([]const u8).init(block.allocator());
-        defer words.deinit();
-        for (trimLeadingWhitespace(line[level..])) |tok| {
-            if (tok.kind == .BREAK) continue;
-            words.append(tok.text) catch unreachable;
-        }
+    // if (line.len > level) {
+    //     // Concatenate all text into the Heading
+    //     var words = ArrayList([]const u8).init(block.allocator());
+    //     defer words.deinit();
+    //     for (trimLeadingWhitespace(line[level..])) |tok| {
+    //         if (tok.kind == .BREAK) continue;
+    //         words.append(tok.text) catch unreachable;
+    //     }
 
-        head.text = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
-    }
+    //     head.text = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
+    // }
+
+    std.debug.print("HEADING: {d}: {any}\n", .{ level, line });
+    const end: usize = findFirstOf(line, level, &.{.BREAK}) orelse line.len;
+    block.Leaf.raw_contents.appendSlice(line[level..end]) catch unreachable;
+    closeBlock(block);
 
     return true;
 }
@@ -544,6 +557,7 @@ fn closeBlock(block: *Block) void {
     // TODO
     switch (block.*) {
         .Container => |c| {
+            // Are any of these needed?
             switch (c.content) {
                 // .Document => return closeBlockDocument(block),
                 // .Quote => return closeBlockQuote(block),
@@ -552,13 +566,15 @@ fn closeBlock(block: *Block) void {
                 inline else => {},
             }
         },
-        .Leaf => |l| {
+        .Leaf => |*l| {
             switch (l.content) {
                 // .Break => return closeBlockBreak(block),
-                .Code => return closeBlockCode(block),
-                // .Heading => return closeBlockHeading(block),
-                .Paragraph => return closeBlockParagraph(block),
-                else => {},
+                .Code => closeBlockCode(block),
+                // .Heading => // closeBlockHeading(block),
+                // .Paragraph => return closeBlockParagraph(block),
+                else => {
+                    parseInlines(block.allocator(), &l.inlines, l.raw_contents.items) catch unreachable;
+                },
             }
         },
     }
@@ -640,7 +656,7 @@ fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []cons
             .BANG => {}, //try self.parseLinkOrImage(true),
             .LBRACK => {}, //try self.parseLinkOrImage(false),
             else => {
-                std.debug.print("Unhandled token: {any}\n", .{tok});
+                // std.debug.print("Unhandled token: {any}\n", .{tok});
             },
         }
 
@@ -773,9 +789,12 @@ pub const Parser = struct {
         try self.tokenize();
 
         // TODO: take text in here, not in init
+        var lino: usize = 1;
         loop: while (self.getLine()) |line| {
+            std.debug.print("Line {d}: ", .{lino});
             if (!handleLine(&self.document, line))
                 return error.ParseError;
+            lino += 1;
             self.advanceCursor(line.len);
             continue :loop;
         }
@@ -1141,8 +1160,12 @@ test "Top-level parsing" {
     //     return error.EmptyDocument;
 
     while (getLine(tokens, cursor)) |line| {
-        // First see if the current open block of the document can accept this line
-        if (!handleLine(&open_block, line)) {
+        if (!open_block.isOpen()) {
+            // Try to open a new block
+            open_block = try parseNewBlock(alloc, line);
+            try document.addChild(open_block);
+        } else if (!handleLine(&open_block, line)) {
+            // First see if the current open block of the document can accept this line
             // This line cannot continue the current open block; close and continue
             closeBlock(&open_block);
 

@@ -280,7 +280,7 @@ pub fn printBox(stream: anytype, str: []const u8, width: usize, height: usize, s
         printC(stream, style.hb);
     }
     printC(stream, style.br);
-    print(stream, "{s}\n", .{ansi_end});
+    print(stream, "{s}", .{ansi_end});
 }
 
 // ====================================================

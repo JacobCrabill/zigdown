@@ -15,7 +15,10 @@ pub const consoleRenderer = zd.consoleRenderer;
 
 pub fn main() !void {
     const text: []const u8 =
-        \\# Heading
+        \\# Heading 1
+        \\## Heading 2
+        \\### Heading 3
+        \\#### Heading 4
         \\
         \\Foo Bar baz. Hi!
         \\> > Double-nested Quote

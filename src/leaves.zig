@@ -67,12 +67,14 @@ pub const Heading = struct {
     }
 
     pub fn deinit(h: *Heading) void {
-        h.alloc.free(h.text);
+        _ = h;
+        // h.alloc.free(h.text);
     }
 
     pub fn print(h: Heading, depth: u8) void {
         printIndent(depth);
-        std.debug.print("[H{d}] '{s}'\n", .{ h.level, h.text });
+        // std.debug.print("[H{d}] '{s}'\n", .{ h.level, h.text });
+        std.debug.print("[H{d}]\n", .{h.level});
     }
 };
 

@@ -287,7 +287,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             //     self.write_wrap(item.text); // HACK - TESTING
             // }
             switch (block.content) {
-                .Break => self.renderBreak(),
+                .Break => {}, //self.renderBreak(),
                 .Code => |c| try self.renderCode(c),
                 .Heading => try self.renderHeading(block),
                 .Paragraph => try self.renderParagraph(block),
@@ -301,6 +301,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             try self.renderBegin();
             for (doc.children.items) |block| {
                 try self.renderBlock(block);
+                self.renderBreak();
             }
             try self.renderEnd();
         }
@@ -308,6 +309,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Render a Quote block
         pub fn renderQuote(self: *Self, block: zd.Container) !void {
             try self.leader_stack.append(quote_indent);
+
+            self.writeLeaders();
+            self.needs_leaders = false;
 
             for (block.children.items) |child| {
                 try self.renderBlock(child);
@@ -393,18 +397,34 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Render an ATX Heading
         fn renderHeading(self: *Self, leaf: zd.Leaf) !void {
             const h: zd.Heading = leaf.content.Heading;
-            const text = std.mem.trimLeft(u8, h.text, " \t");
+            // const text = std.mem.trimLeft(u8, h.text, " \t");
+            const text = "<placeholder>";
 
             // Pad to place text in center of console
             const lpad: usize = (self.opts.width - text.len) / 2;
-            if (lpad > 0 and h.level > 2)
-                self.write_n(" ", lpad);
 
             switch (h.level) {
                 1 => cons.printBox(self.stream, text, self.opts.width, 3, cons.DoubleBox, cons.text_bold ++ cons.fg_blue),
                 2 => cons.printBox(self.stream, text, self.opts.width, 3, cons.BoldBox, cons.text_bold ++ cons.fg_green),
-                3 => self.print("{s}{s}{s}{s}\n", .{ cons.text_italic, cons.text_underline, text, cons.ansi_end }),
-                else => self.print("{s}{s}{s}\n", .{ cons.text_underline, text, cons.ansi_end }),
+                3 => {
+                    self.startStyle(zd.TextStyle{
+                        .italic = true,
+                        .underline = true,
+                        .bg_color = .White,
+                        .fg_color = .Black,
+                    });
+                    if (lpad > 0) self.write_n(" ", lpad);
+                    self.write(text);
+                    if (lpad > 0) self.write_n(" ", lpad);
+                    self.resetStyle();
+                },
+                else => {
+                    self.startStyle(zd.TextStyle{ .underline = true });
+                    if (lpad > 0) self.write_n(" ", lpad);
+                    self.write(text);
+                    if (lpad > 0) self.write_n(" ", lpad);
+                    self.resetStyle();
+                },
             }
             self.column = 0;
         }
@@ -441,7 +461,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 .autolink => |l| try self.renderAutolink(l),
                 .codespan => |c| try self.renderInlineCode(c),
                 .image => |i| try self.renderImage(i),
-                .linebreak => self.renderBreak(),
+                .linebreak => {}, //self.renderBreak(),
                 .link => |l| try self.renderLink(l),
                 .text => |t| try self.renderText(t),
             }
