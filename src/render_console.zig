@@ -246,7 +246,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             // TODO: this smells fishy
             // const trimmed_len: usize = std.mem.trimRight(u8, text, " ").len;
             if (!std.mem.endsWith(u8, text, " ") and self.column > 0) {
-                self.printno(cons.ansi_back, .{1});
+                self.printno(cons.move_left, .{1});
                 self.column -= 1;
             }
         }
@@ -416,7 +416,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     if (lpad > 0) self.write_n(" ", lpad);
                     //self.write(text);
                     for (leaf.inlines.items) |item| {
-                        try self.renderInline(item);
+                        try self.renderInline(item, style);
                     }
                     if (rpad > 0) self.write_n(" ", rpad);
                     self.resetStyle();
@@ -428,7 +428,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     // self.write(text);
                     // TODO: Style override so it doesn't get reset
                     for (leaf.inlines.items) |item| {
-                        try self.renderInline(item);
+                        try self.renderInline(item, style);
                     }
                     if (rpad > 0) self.write_n(" ", rpad);
                     self.resetStyle();

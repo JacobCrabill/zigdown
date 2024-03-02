@@ -12,10 +12,28 @@ pub const ansi = [1]u8{0x1b};
 pub const ansi_end = ansi ++ "[m";
 
 // ANSI cursor movements
-pub const ansi_back = ansi ++ "[{}D";
-pub const ansi_up = ansi ++ "[{}A";
-pub const ansi_setcol = ansi ++ "[{}G";
-pub const ansi_home = ansi ++ "[0G";
+pub const move_up = ansi ++ "[{d}A";
+pub const move_down = ansi ++ "[{d}B";
+pub const move_right = ansi ++ "[{d}C";
+pub const move_left = ansi ++ "[{d}D";
+pub const move_setcol = ansi ++ "[{d}G";
+pub const move_home = ansi ++ "[0G";
+
+pub const set_col = ansi ++ "[{d}G";
+pub const set_row_col = ansi ++ "[{d};{d}H"; // Row, Column
+
+pub const save_position = ansi ++ "[s";
+pub const restore_position = ansi ++ "[u";
+
+// ANSI Clear Screen Command
+pub const clear_screen_end = ansi ++ "[0J"; // Clear from cursor to end of screen
+pub const clear_screen_beg = ansi ++ "[1J"; // Clear from cursor to beginning of screen
+pub const clear_screen = ansi ++ "[2J"; // Clear entire screen
+
+// ANSI Clear Line Command
+pub const clear_line_end = ansi ++ "[0K"; // Clear from cursor to end of line
+pub const clear_line_beg = ansi ++ "[1K"; // Clear from cursor to beginning of line
+pub const clear_line = ansi ++ "[2K"; // Clear entire line
 
 // ====================================================
 // ANSI display codes (colors, styles, etc.)
@@ -48,67 +66,82 @@ pub const text_reverse = ansi ++ "[7m";
 pub const text_hide = ansi ++ "[8m";
 pub const text_strike = ansi ++ "[9m";
 
+// TODO: 256 color mode foregrounds: [38;5;{d}m
+// TODO: 256 color mode backgrounds: [48;5;{d}m
+
 pub const hyperlink = ansi ++ "]8;;";
 pub const link_end = ansi ++ "\\";
 
+const DebugStream = struct {
+    pub fn print(_: DebugStream, comptime fmt: []const u8, args: anytype) void {
+        std.debug.print(fmt, args);
+    }
+};
+
 /// Configure the terminal to start printing with the given foreground color
-pub fn startColor(color: Color) void {
+pub fn startColor(stream: anytype, color: Color) void {
     switch (color) {
-        .Black => std.debug.print(fg_black, .{}),
-        .Red => std.debug.print(fg_red, .{}),
-        .Green => std.debug.print(fg_green, .{}),
-        .Yellow => std.debug.print(fg_yellow, .{}),
-        .Blue => std.debug.print(fg_blue, .{}),
-        .Cyan => std.debug.print(fg_cyan, .{}),
-        .White => std.debug.print(fg_white, .{}),
-        .Magenta => std.debug.print(fg_magenta, .{}),
+        .Black => stream.print(fg_black, .{}),
+        .Red => stream.print(fg_red, .{}),
+        .Green => stream.print(fg_green, .{}),
+        .Yellow => stream.print(fg_yellow, .{}),
+        .Blue => stream.print(fg_blue, .{}),
+        .Cyan => stream.print(fg_cyan, .{}),
+        .White => stream.print(fg_white, .{}),
+        .Magenta => stream.print(fg_magenta, .{}),
     }
 }
 
 /// Configure the terminal to start printing with the given (single) style
-pub fn startStyle(style: Style) void {
+pub fn startStyle(stream: anytype, style: Style) void {
     switch (style) {
-        .Bold => std.debug.print(text_bold, .{}),
-        .Italic => std.debug.print(text_italic, .{}),
-        .Underline => std.debug.print(text_underline, .{}),
-        .Blink => std.debug.print(text_blink, .{}),
-        .FastBlink => std.debug.print(text_fastblink, .{}),
-        .Reverse => std.debug.print(text_reverse, .{}),
-        .Hide => std.debug.print(text_hide, .{}),
-        .Strike => std.debug.print(text_strike, .{}),
+        .Bold => stream.print(text_bold, .{}),
+        .Italic => stream.print(text_italic, .{}),
+        .Underline => stream.print(text_underline, .{}),
+        .Blink => stream.print(text_blink, .{}),
+        .FastBlink => stream.print(text_fastblink, .{}),
+        .Reverse => stream.print(text_reverse, .{}),
+        .Hide => stream.print(text_hide, .{}),
+        .Strike => stream.print(text_strike, .{}),
     }
 }
 
 /// Configure the terminal to start printing one or more styles with color
-pub fn startStyles(style: TextStyle) void {
-    if (style.bold) std.debug.print(text_bold, .{});
-    if (style.italic) std.debug.print(text_italic, .{});
-    if (style.underline) std.debug.print(text_underline, .{});
-    if (style.blink) std.debug.print(text_blink, .{});
-    if (style.fastblink) std.debug.print(text_fastblink, .{});
-    if (style.reverse) std.debug.print(text_reverse, .{});
-    if (style.hide) std.debug.print(text_hide, .{});
-    if (style.strike) std.debug.print(text_strike, .{});
-    startColor(style.fg_color);
+pub fn startStyles(stream: anytype, style: TextStyle) void {
+    if (style.bold) stream.print(text_bold, .{});
+    if (style.italic) stream.print(text_italic, .{});
+    if (style.underline) stream.print(text_underline, .{});
+    if (style.blink) stream.print(text_blink, .{});
+    if (style.fastblink) stream.print(text_fastblink, .{});
+    if (style.reverse) stream.print(text_reverse, .{});
+    if (style.hide) stream.print(text_hide, .{});
+    if (style.strike) stream.print(text_strike, .{});
+    startColor(stream, style.fg_color);
 }
 
 /// Reset all style in the terminal
-pub fn resetStyle() void {
-    std.debug.print(ansi_end, .{});
+pub fn resetStyle(stream: anytype) void {
+    stream.print(ansi_end, .{});
 }
 
 /// Print the text using the given color
-pub fn printColor(color: Color, comptime fmt: []const u8, args: anytype) void {
-    startColor(color);
-    std.debug.print(fmt, args);
-    resetStyle();
+pub fn printColor(stream: anytype, color: Color, comptime fmt: []const u8, args: anytype) void {
+    startColor(stream, color);
+    stream.print(fmt, args);
+    resetStyle(stream);
 }
 
 /// Print the text using the given style description
-pub fn printStyled(style: TextStyle, comptime fmt: []const u8, args: anytype) void {
-    startStyles(style);
-    std.debug.print(fmt, args);
-    resetStyle();
+pub fn printStyled(stream: anytype, style: TextStyle, comptime fmt: []const u8, args: anytype) void {
+    startStyles(stream, style);
+    stream.print(fmt, args);
+    resetStyle(stream);
+}
+
+test "styled printing" {
+    const stream = DebugStream{};
+    const style = TextStyle{ .bg_color = .Yellow, .fg_color = .Black, .blink = true, .bold = true };
+    printStyled(stream, style, "Hello, {s} World!\n", .{"Cruel"});
 }
 
 // ====================================================
@@ -343,11 +376,11 @@ inline fn printANSITable() !void {
 
     // Give ourselves some lines to play with right here-o
     try stdout.print("\n" ** 12, .{});
-    try stdout.print(ansi_up, .{1});
+    try stdout.print(move_up, .{1});
 
     inline for (options) |option| {
-        try stdout.print(ansi_back, .{100});
-        try stdout.print(ansi_up, .{10});
+        try stdout.print(move_left, .{100});
+        try stdout.print(move_up, .{10});
 
         const fmt = ansi ++ "[" ++ option ++ "m {d:>3}" ++ ansi ++ "[m";
 
