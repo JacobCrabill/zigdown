@@ -61,6 +61,7 @@ pub fn startColor(color: Color) void {
         .Blue => std.debug.print(fg_blue, .{}),
         .Cyan => std.debug.print(fg_cyan, .{}),
         .White => std.debug.print(fg_white, .{}),
+        .Magenta => std.debug.print(fg_magenta, .{}),
     }
 }
 

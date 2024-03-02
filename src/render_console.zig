@@ -87,6 +87,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 .Green => self.writeno(cons.fg_green),
                 .Yellow => self.writeno(cons.fg_yellow),
                 .Blue => self.writeno(cons.fg_blue),
+                .Magenta => self.writeno(cons.fg_magenta),
                 .Cyan => self.writeno(cons.fg_cyan),
                 .White => self.writeno(cons.fg_white),
             }
@@ -96,6 +97,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 .Green => self.writeno(cons.bg_green),
                 .Yellow => self.writeno(cons.bg_yellow),
                 .Blue => self.writeno(cons.bg_blue),
+                .Magenta => self.writeno(cons.bg_magenta),
                 .Cyan => self.writeno(cons.bg_cyan),
                 .White => self.writeno(cons.bg_white),
             }
@@ -402,31 +404,37 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             // Pad to place text in center of console
             const lpad: usize = (self.opts.width - text.len) / 2;
+            const rpad: usize = self.opts.width - text.len - lpad;
 
             switch (h.level) {
+                // TODO: consolidate this struct w/ console.zig
                 1 => cons.printBox(self.stream, text, self.opts.width, 3, cons.DoubleBox, cons.text_bold ++ cons.fg_blue),
                 2 => cons.printBox(self.stream, text, self.opts.width, 3, cons.BoldBox, cons.text_bold ++ cons.fg_green),
                 3 => {
-                    self.startStyle(zd.TextStyle{
-                        .italic = true,
-                        .underline = true,
-                        .bg_color = .White,
-                        .fg_color = .Black,
-                    });
+                    const style = zd.TextStyle{ .italic = true, .underline = true, .fg_color = .Black, .bg_color = .Cyan };
+                    self.startStyle(style);
                     if (lpad > 0) self.write_n(" ", lpad);
-                    self.write(text);
-                    if (lpad > 0) self.write_n(" ", lpad);
+                    //self.write(text);
+                    for (leaf.inlines.items) |item| {
+                        try self.renderInline(item);
+                    }
+                    if (rpad > 0) self.write_n(" ", rpad);
                     self.resetStyle();
                 },
                 else => {
-                    self.startStyle(zd.TextStyle{ .underline = true });
+                    const style = zd.TextStyle{ .underline = true, .reverse = true };
+                    self.startStyle(style);
                     if (lpad > 0) self.write_n(" ", lpad);
-                    self.write(text);
-                    if (lpad > 0) self.write_n(" ", lpad);
+                    // self.write(text);
+                    // TODO: Style override so it doesn't get reset
+                    for (leaf.inlines.items) |item| {
+                        try self.renderInline(item);
+                    }
+                    if (rpad > 0) self.write_n(" ", rpad);
                     self.resetStyle();
                 },
             }
-            self.column = 0;
+            self.renderBreak();
         }
 
         /// Render a raw block of code

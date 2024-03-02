@@ -8,6 +8,7 @@ pub const Color = enum(u8) {
     Green,
     Yellow,
     Blue,
+    Magenta,
     Cyan,
     White,
 };
@@ -18,7 +19,7 @@ pub const Style = enum(u8) {
     Underline,
     Blink,
     FastBlink,
-    Reverse,
+    Reverse, // Invert the foreground and background colors
     Hide,
     Strike,
 };

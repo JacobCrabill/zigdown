@@ -656,6 +656,7 @@ fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []cons
             .BANG => {}, //try self.parseLinkOrImage(true),
             .LBRACK => {}, //try self.parseLinkOrImage(false),
             else => {
+                try words.append(tok.text);
                 // std.debug.print("Unhandled token: {any}\n", .{tok});
             },
         }
