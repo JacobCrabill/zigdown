@@ -56,6 +56,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         leader_stack: ArrayList(zd.Text),
         needs_leaders: bool = true,
         opts: RenderOpts = undefined,
+        style_override: ?zd.TextStyle = null,
 
         pub fn init(stream: OutStream, alloc: Allocator, opts: RenderOpts) Self {
             return Self{
@@ -71,7 +72,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Configure the terminal to start printing with the given (single) style
-        pub fn startStyle(self: Self, style: zd.TextStyle) void {
+        pub fn startStyleImpl(self: Self, style: zd.TextStyle) void {
             if (style.bold) self.writeno(cons.text_bold);
             if (style.italic) self.writeno(cons.text_italic);
             if (style.underline) self.writeno(cons.text_underline);
@@ -101,6 +102,13 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 .Cyan => self.writeno(cons.bg_cyan),
                 .White => self.writeno(cons.bg_white),
             }
+        }
+
+        /// Configure the terminal to start printing with the given style,
+        /// applying the global style overrides afterwards
+        pub fn startStyle(self: Self, style: zd.TextStyle) void {
+            self.startStyleImpl(style);
+            if (self.style_override) |override| self.startStyleImpl(override);
         }
 
         /// Reset all style in the terminal
@@ -399,7 +407,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Render an ATX Heading
         fn renderHeading(self: *Self, leaf: zd.Leaf) !void {
             const h: zd.Heading = leaf.content.Heading;
-            // const text = std.mem.trimLeft(u8, h.text, " \t");
+            // TODO: determine length of rendered inlines
             const text = "<placeholder>";
 
             // Pad to place text in center of console
@@ -411,27 +419,55 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 1 => cons.printBox(self.stream, text, self.opts.width, 3, cons.DoubleBox, cons.text_bold ++ cons.fg_blue),
                 2 => cons.printBox(self.stream, text, self.opts.width, 3, cons.BoldBox, cons.text_bold ++ cons.fg_green),
                 3 => {
+                    // TODO: 'renderCentered()' fn
                     const style = zd.TextStyle{ .italic = true, .underline = true, .fg_color = .Black, .bg_color = .Cyan };
-                    self.startStyle(style);
-                    if (lpad > 0) self.write_n(" ", lpad);
-                    //self.write(text);
-                    for (leaf.inlines.items) |item| {
-                        try self.renderInline(item, style);
+                    var overridden: bool = false;
+                    if (self.style_override == null) {
+                        self.style_override = style;
+                        overridden = true;
                     }
+                    self.startStyle(style);
+
+                    // Left pad
+                    if (lpad > 0) self.write_n(" ", lpad);
+
+                    // Content
+                    for (leaf.inlines.items) |item| {
+                        try self.renderInline(item);
+                    }
+
+                    // Right pad
+                    self.startStyleImpl(style);
                     if (rpad > 0) self.write_n(" ", rpad);
+
                     self.resetStyle();
+                    if (overridden)
+                        self.style_override = null;
                 },
                 else => {
                     const style = zd.TextStyle{ .underline = true, .reverse = true };
-                    self.startStyle(style);
-                    if (lpad > 0) self.write_n(" ", lpad);
-                    // self.write(text);
-                    // TODO: Style override so it doesn't get reset
-                    for (leaf.inlines.items) |item| {
-                        try self.renderInline(item, style);
+                    var overridden: bool = false;
+                    if (self.style_override == null) {
+                        self.style_override = style;
+                        overridden = true;
                     }
+                    self.startStyle(style);
+
+                    // Left pad
+                    if (lpad > 0) self.write_n(" ", lpad);
+
+                    // Content
+                    for (leaf.inlines.items) |item| {
+                        try self.renderInline(item);
+                    }
+                    self.startStyle(style);
+
+                    // Right pad
                     if (rpad > 0) self.write_n(" ", rpad);
                     self.resetStyle();
+
+                    if (overridden)
+                        self.style_override = null;
                 },
             }
             self.renderBreak();

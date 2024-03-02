@@ -72,6 +72,10 @@ pub const text_strike = ansi ++ "[9m";
 pub const hyperlink = ansi ++ "]8;;";
 pub const link_end = ansi ++ "\\";
 
+/// TODO: Turn this file into a module with a global stream instance
+/// so we can do:
+///   const Console = @import("console.zig");
+///   const cons = Console{ .stream = std.debug };
 const DebugStream = struct {
     pub fn print(_: DebugStream, comptime fmt: []const u8, args: anytype) void {
         std.debug.print(fmt, args);
@@ -321,48 +325,6 @@ pub fn printBox(stream: anytype, str: []const u8, width: usize, height: usize, s
 // Tests of ANSI Escape Codes
 // ----------------------------------------------------
 
-// Print a box with a given width and height, using the given style
-inline fn printABox(comptime str: []const u8, comptime width: u8, comptime height: u8, comptime style: Box) void {
-    const len: usize = str.len;
-    const w: usize = if (len + 2 < width) width else len + 2;
-    const w2: usize = w - 2;
-    const h: usize = if (height > 3) height else 3;
-
-    const lpad: usize = (w - len - 2) / 2;
-    const rpad: usize = w - len - lpad - 2;
-    const mid: usize = (h - 2) / 2 + 1;
-    const tpad: usize = mid - 1;
-    const bpad: usize = (h - 1) - (mid + 1);
-
-    // Top row     (┌─...─┐)
-    // Middle rows (│ ... │)
-    // Bottom row  (└─...─┘)
-    const top_line = style.tl ++ (style.hb ** (w2)) ++ style.tr ++ "\n";
-    const empty_line = style.vb ++ (" " ** (w2)) ++ style.vb ++ "\n";
-    const text_line = style.vb ++ (" " ** lpad) ++ str ++ (" " ** rpad) ++ style.vb ++ "\n";
-    const btm_line = style.bl ++ (style.hb ** (w2)) ++ style.br ++ "\n";
-
-    const full_str = top_line ++ (empty_line ** tpad) ++ text_line ++ (empty_line ** bpad) ++ btm_line;
-
-    std.debug.print("{s}", .{full_str});
-}
-
-// test "print cwd" {
-//     var buffer: [1024]u8 = .{0} ** 1024;
-//     const path = std.fs.selfExeDirPath(&buffer) catch unreachable;
-//     std.debug.print("\ncwd: {s}\n", .{path});
-// }
-//
-// test "Print a text box" {
-//     const box_style = BoldBox;
-//     std.debug.print("\n", .{});
-//     printABox("I'm computed at compile time!", 25, 5, box_style);
-// }
-//
-// test "Print ANSI char demo table" {
-//     try printANSITable();
-// }
-
 inline fn printANSITable() !void {
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
@@ -402,4 +364,8 @@ inline fn printANSITable() !void {
 
     try stdout.print(bg_red ++ text_blink ++ " hello! " ++ ansi_end ++ "\n", .{});
     try bw.flush(); // don't forget to flush!
+}
+
+test "ANSI codepoint table" {
+    try printANSITable();
 }

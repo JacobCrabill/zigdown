@@ -56,6 +56,7 @@ pub const InlineData = union(InlineType) {
         switch (self.*) {
             .link => |*l| l.deinit(),
             .image => |*i| i.deinit(),
+            .text => |*t| t.deinit(),
             else => {},
         }
     }
@@ -103,6 +104,7 @@ pub const Inline = struct {
 /// Section of formatted text (single style)
 /// Example: "plain text" or "**bold text**"
 pub const Text = struct {
+    alloc: ?Allocator = null,
     style: zd.TextStyle = zd.TextStyle{},
     text: []const u8 = undefined, // The Text does not own the string(??)
 
@@ -119,6 +121,12 @@ pub const Text = struct {
             }
         }
         std.debug.print("]\n", .{});
+    }
+
+    pub fn deinit(self: *Text) void {
+        if (self.alloc) |alloc| {
+            alloc.free(self.text);
+        }
     }
 };
 

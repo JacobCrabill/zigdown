@@ -622,13 +622,15 @@ fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []cons
         }
 
         switch (tok.kind) {
-            .WORD => {
+            .WORD, .DIGIT => {
                 // todo: parse (concatenate) all following words until a change
                 // For now, just take the lazy approach
-                try inlines.append(zd.Inline.initWithContent(
-                    alloc,
-                    zd.InlineData{ .text = zd.Text{ .text = tok.text, .style = style } },
-                ));
+                try words.append(tok.text);
+                try appendWord(alloc, inlines, &words, style);
+                // try inlines.append(zd.Inline.initWithContent(
+                //     alloc,
+                //     zd.InlineData{ .text = zd.Text{ .text = tok.text, .style = style } },
+                // ));
             },
             .EMBOLD => {
                 try appendWord(alloc, inlines, &words, style);
@@ -672,6 +674,7 @@ fn appendWord(alloc: Allocator, inlines: *ArrayList(zd.Inline), words: *ArrayLis
 
         // End the current Text object with the current style
         const text = zd.Text{
+            .alloc = alloc,
             .style = style,
             .text = try std.mem.join(alloc, " ", words.items),
         };
