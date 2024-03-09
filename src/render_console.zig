@@ -408,6 +408,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         fn renderHeading(self: *Self, leaf: zd.Leaf) !void {
             const h: zd.Heading = leaf.content.Heading;
             // TODO: determine length of rendered inlines
+            // Render to buffer, tracking displayed length of text, then
+            // dump buffer out to stream
             const text = "<placeholder>";
 
             // Pad to place text in center of console

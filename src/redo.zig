@@ -80,9 +80,9 @@ test "line types" {
         \\- List
         \\-not a list
     ;
-    var alloc = std.testing.allocator;
-    var lex = Lexer.init(alloc, data);
-    var tok_array = try lex.tokenize();
+    const alloc = std.testing.allocator;
+    var lex = Lexer{};
+    var tok_array = try lex.tokenize(alloc, data);
     defer tok_array.deinit();
 
     var types = std.ArrayList(BasicBlockType).init(alloc);

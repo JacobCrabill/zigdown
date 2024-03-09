@@ -52,7 +52,7 @@ pub const Parser = struct {
         var parser = Parser{
             .alloc = alloc,
             .opts = opts,
-            .lexer = Lexer.init(alloc, p_input),
+            .lexer = Lexer{},
             .text = p_input,
             .tokens = ArrayList(Token).init(alloc),
             .cursor = 0,
@@ -79,7 +79,7 @@ pub const Parser = struct {
     fn tokenize(self: *Self) !void {
         self.tokens.clearRetainingCapacity();
 
-        self.tokens = try self.lexer.tokenize();
+        self.tokens = try self.lexer.tokenize(self.alloc, self.text);
 
         // Initialize current and next tokens
         self.cur_token = zd.Eof;

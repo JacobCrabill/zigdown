@@ -20,21 +20,20 @@ const TokenList = zd.TokenList;
 
 /// Convert Markdown text into a stream of tokens
 pub const Lexer = struct {
-    alloc: Allocator = undefined,
     data: []const u8 = undefined,
     cursor: usize = 0,
 
-    /// Create a new Lexer from the text of a document
-    pub fn init(alloc: Allocator, text: []const u8) Lexer {
-        return Lexer{
-            .alloc = alloc,
-            .data = text,
-            .cursor = 0,
-        };
+    /// Store the text and reset the cursor position
+    pub fn setText(self: *Lexer, text: []const u8) void {
+        self.data = text;
+        self.cursor = 0;
     }
 
-    pub fn tokenize(self: *Lexer) !std.ArrayList(Token) {
-        var tokens = std.ArrayList(Token).init(self.alloc);
+    /// Tokenize the given input text
+    pub fn tokenize(self: *Lexer, alloc: Allocator, text: []const u8) !std.ArrayList(Token) {
+        self.setText(text);
+
+        var tokens = std.ArrayList(Token).init(alloc);
         var token = self.next();
         try tokens.append(token);
         while (token.kind != .EOF) {
@@ -138,7 +137,8 @@ test "test lexer" {
         .{ .kind = .TILDE, .text = "~" },
     };
 
-    var lex = Lexer.init(std.testing.allocator, test_input);
+    var lex = Lexer{};
+    lex.setText(test_input);
 
     for (expected_tokens) |token| {
         try compareTokens(token, lex.next());

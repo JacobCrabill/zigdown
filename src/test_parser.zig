@@ -23,6 +23,9 @@ pub fn main() !void {
         \\Foo Bar baz. Hi!
         \\> > Double-nested Quote
         \\
+        \\![Alt Text](image-source.png)
+        \\[Alt Text](www.example.com)
+        \\
         \\- And now a list!
         \\- more items
         \\```c++

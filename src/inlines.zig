@@ -13,17 +13,8 @@ const Allocator = std.mem.Allocator;
 const Token = zd.Token;
 const printIndent = zd.printIndent;
 
+/// Inlines are considered Phrasing content
 /// Phrasing content represents the text in a document, and its markup
-pub const PhrasingContent = union(enum(u8)) {
-    // autolink: Autolink,
-    codespan: Codespan,
-    link: Link,
-    image: Image,
-    newline: void,
-    // reference: Reference,
-    text: Text,
-};
-
 pub const InlineType = enum(u8) {
     autolink,
     codespan,
@@ -133,7 +124,7 @@ pub const Text = struct {
 /// Hyperlink
 pub const Link = struct {
     alloc: Allocator,
-    url: []const u8,
+    url: []const u8, // Note: Heap-allocated TODO: optional
     text: ArrayList(Text),
 
     pub fn init(alloc: Allocator) Link {
@@ -146,6 +137,8 @@ pub const Link = struct {
 
     pub fn deinit(self: *Link) void {
         self.text.deinit();
+        if (self.url.len > 0)
+            self.alloc.free(self.url);
     }
 
     pub fn print(self: Link, depth: u8) void {
@@ -165,7 +158,7 @@ pub const Codespan = struct {
 /// Image Link
 pub const Image = struct {
     alloc: Allocator,
-    src: []const u8 = undefined,
+    src: []const u8 = undefined, // Note: Heap-allocated TODO: optional
     alt: ArrayList(Text),
 
     pub fn init(alloc: Allocator) Image {
@@ -178,6 +171,8 @@ pub const Image = struct {
 
     pub fn deinit(self: *Image) void {
         self.alt.deinit();
+        if (self.src.len > 0)
+            self.alloc.free(self.src);
     }
 
     pub fn print(self: Image, depth: u8) void {

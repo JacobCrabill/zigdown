@@ -25,8 +25,8 @@ pub const Style = enum(u8) {
 };
 
 pub const TextStyle = struct {
-    fg_color: Color = .White,
-    bg_color: Color = .Black,
+    fg_color: Color = .White, // TODO: Make optional, default null
+    bg_color: Color = .Black, // TODO: Make optional, default null
     bold: bool = false,
     italic: bool = false,
     underline: bool = false,
