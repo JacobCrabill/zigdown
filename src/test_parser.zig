@@ -23,8 +23,13 @@ pub fn main() !void {
         \\Foo Bar baz. Hi!
         \\> > Double-nested Quote
         \\
-        \\![Some Image](image-source.png)
-        \\[Click Me!](https://google.com)
+        \\Image: ![Some Image](image-source.png)
+        \\
+        \\Link: [Click Me!](https://google.com)
+        \\
+        \\1. Numlist
+        \\   - With child list
+        \\1. item
         \\
         \\- And now a list!
         \\- more items

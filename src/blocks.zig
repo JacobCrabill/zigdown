@@ -194,8 +194,8 @@ pub const Leaf = struct {
                 switch (kind) {
                     .Break => break :blk .{ .Break = {} },
                     .Code => break :blk .{ .Code = zd.Code.init(alloc) },
-                    .Heading => break :blk .{ .Heading = zd.Heading{} },
-                    .Paragraph => break :blk .{ .Paragraph = zd.Paragraph{} },
+                    .Heading => break :blk .{ .Heading = zd.Heading.init(alloc) },
+                    .Paragraph => break :blk .{ .Paragraph = {} },
                 }
             },
         };

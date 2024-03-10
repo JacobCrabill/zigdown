@@ -190,7 +190,8 @@ fn handleLine(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineDocument(block: *Block, line: []const Token) bool {
-    if (!block.isContainer()) return false;
+    std.debug.assert(block.isOpen());
+    std.debug.assert(block.isContainer());
 
     // Check for an open child
     var cblock = block.container();
@@ -216,7 +217,8 @@ pub fn handleLineDocument(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineQuote(block: *Block, line: []const Token) bool {
-    if (!block.isContainer()) return false;
+    std.debug.assert(block.isOpen());
+    std.debug.assert(block.isContainer());
 
     var cblock = &block.Container;
 
@@ -258,6 +260,9 @@ pub fn handleLineQuote(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineList(block: *Block, line: []const Token) bool {
+    std.debug.assert(block.isOpen());
+    std.debug.assert(block.isContainer());
+
     if (!isLazyContinuationLineList(line))
         return false;
 
@@ -271,6 +276,7 @@ pub fn handleLineList(block: *Block, line: []const Token) bool {
         // If so, close the current ListItem (if any) and start a new one
         child = &cblock.children.items[cblock.children.items.len - 1];
         if (isListItem(line) or !child.isOpen()) {
+            std.debug.print("Closing child ListItem\n", .{});
             closeBlock(child);
             block.addChild(Block.initContainer(block.allocator(), .ListItem)) catch unreachable;
         }
@@ -281,6 +287,7 @@ pub fn handleLineList(block: *Block, line: []const Token) bool {
     if (handleLineListItem(child, line)) {
         return true;
     } else {
+        std.debug.print("Closing child ListItem\n", .{});
         closeBlock(child);
     }
 
@@ -288,7 +295,8 @@ pub fn handleLineList(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineListItem(block: *Block, line: []const Token) bool {
-    if (!block.isContainer()) return false;
+    std.debug.assert(block.isOpen());
+    std.debug.assert(block.isContainer());
 
     var trimmed_line = line;
     if (isContinuationLineList(line)) {
@@ -368,10 +376,9 @@ pub fn handleLineCode(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineHeading(block: *Block, line: []const Token) bool {
-    if (!block.isOpen()) {
-        std.debug.print("ERROR: handling Heading with closed block!!\n", .{});
-        return false;
-    }
+    std.debug.assert(block.isOpen());
+    std.debug.assert(block.isLeaf());
+
     var level: u8 = 0;
     for (line) |tok| {
         if (tok.kind != .HASH) break;
@@ -394,7 +401,6 @@ pub fn handleLineHeading(block: *Block, line: []const Token) bool {
     //     head.text = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
     // }
 
-    std.debug.print("HEADING: {d}: {any}\n", .{ level, line });
     const end: usize = findFirstOf(line, level, &.{.BREAK}) orelse line.len;
     block.Leaf.raw_contents.appendSlice(line[level..end]) catch unreachable;
     closeBlock(block);
@@ -403,7 +409,8 @@ pub fn handleLineHeading(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineParagraph(block: *Block, line: []const Token) bool {
-    if (!block.isLeaf()) return false;
+    std.debug.assert(block.isOpen());
+    std.debug.assert(block.isLeaf());
 
     if (!isContinuationLineParagraph(line)) {
         return false;
@@ -554,16 +561,11 @@ fn trimContinuationMarkersOrderedList(line: []const Token) []const Token {
 
 /// Close the block and parse its raw text content into inline content
 fn closeBlock(block: *Block) void {
-    // TODO
+    if (!block.isOpen()) return;
     switch (block.*) {
-        .Container => |c| {
-            // Are any of these needed?
-            switch (c.content) {
-                // .Document => return closeBlockDocument(block),
-                // .Quote => return closeBlockQuote(block),
-                // .List => return closeBlockList(block),
-                // .ListItem => return closeBlockListItem(block),
-                inline else => {},
+        .Container => |*c| {
+            for (c.children.items) |*child| {
+                closeBlock(child);
             }
         },
         .Leaf => |*l| {
@@ -602,7 +604,7 @@ fn closeBlockParagraph(block: *Block) void {
 }
 
 fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []const Token) !void {
-    std.debug.print(">>> Parsing inlines! <<<\n", .{});
+    // std.debug.print(">>> Parsing inlines! <<<\n", .{});
     var style = zd.TextStyle{};
     var words = ArrayList([]const u8).init(alloc);
     defer words.deinit();
@@ -618,19 +620,9 @@ fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []cons
         } else {
             next_type = .BREAK;
         }
-        std.debug.print(">{s}< ", .{@tagName(tok.kind)});
+        // std.debug.print(">{s}< ", .{@tagName(tok.kind)});
 
         switch (tok.kind) {
-            .WORD, .DIGIT => {
-                // todo: parse (concatenate) all following words until a change
-                // For now, just take the lazy approach
-                try words.append(tok.text);
-                try appendWords(alloc, inlines, &words, style);
-                // try inlines.append(zd.Inline.initWithContent(
-                //     alloc,
-                //     zd.InlineData{ .text = zd.Text{ .text = tok.text, .style = style } },
-                // ));
-            },
             .EMBOLD => {
                 try appendWords(alloc, inlines, &words, style);
                 style.bold = !style.bold;
@@ -656,27 +648,26 @@ fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []cons
             },
             .BANG, .LBRACK => {
                 // TODO: return Inline instead of taking *inlines
+                try appendWords(alloc, inlines, &words, style);
                 if (try parseLinkOrImage(alloc, inlines, tokens[i..], tok.kind == .BANG)) |n| {
                     i += n - 1;
-                    std.debug.print("Next token is now: {s} -> {s}\n", .{ @tagName(tokens[i - 1].kind), @tagName(tokens[i].kind) });
                 } else {
-                    // TODO: Parse as paragraph text
+                    // TODO: Parse as paragraph text...?
                     try words.append(tok.text);
                 }
             },
             else => {
                 try words.append(tok.text);
-                // std.debug.print("Unhandled token: {any}\n", .{tok});
             },
         }
 
         prev_type = tok.kind;
     }
-    std.debug.print("\nParsed {d} inlines\n", .{inlines.items.len});
+    try appendWords(alloc, inlines, &words, style);
 }
 
 fn parseInlineText(alloc: Allocator, tokens: []const Token) !ArrayList(zd.Text) {
-    std.debug.print("~~~ Parsing Inline Text! ~~~n", .{});
+    // std.debug.print("~~~ Parsing Inline Text! ~~~n", .{});
     var style = zd.TextStyle{};
     var words = ArrayList([]const u8).init(alloc);
     defer words.deinit();
@@ -1066,7 +1057,7 @@ fn parseNewBlock(alloc: Allocator, line: []const Token) !Block {
             if (line.len > 1 and line[1].kind == .PERIOD) {
                 // Parse numbered list block
                 b = Block.initContainer(alloc, .List);
-                b.Container.content.List = zd.List{ .ordered = true };
+                b.Container.content.List.ordered = true;
                 // todo: consider parsing and setting the start number here
                 if (!handleLineList(&b, line))
                     try errorReturn("Cannot parse line as numlist: {any}", .{line});
@@ -1074,13 +1065,11 @@ fn parseNewBlock(alloc: Allocator, line: []const Token) !Block {
         },
         .HASH => {
             b = Block.initLeaf(alloc, .Heading);
-            b.Leaf.content.Heading = zd.Heading.init(alloc);
             if (!handleLineHeading(&b, line))
                 try errorReturn("Cannot parse line as heading: {any}", .{line});
         },
         .CODE_BLOCK => {
             b = Block.initLeaf(alloc, .Code);
-            b.Leaf.content.Code = zd.Code.init(alloc);
             if (!handleLineCode(&b, line))
                 try errorReturn("Cannot parse line as code: {any}", .{line});
         },
@@ -1091,7 +1080,6 @@ fn parseNewBlock(alloc: Allocator, line: []const Token) !Block {
         else => {
             // Fallback - parse paragraph
             b = Block.initLeaf(alloc, .Paragraph);
-            b.Leaf.content.Paragraph = zd.Paragraph{};
             if (!handleLineParagraph(&b, line))
                 try errorReturn("Cannot parse line as paragraph: {any}", .{line});
         },

@@ -347,8 +347,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         pub fn renderQuote(self: *Self, block: zd.Container) !void {
             try self.leader_stack.append(quote_indent);
 
-            self.writeLeaders();
-            self.needs_leaders = false;
+            // self.writeLeaders();
+            // self.needs_leaders = false;
 
             for (block.children.items) |child| {
                 try self.renderBlock(child);
@@ -368,13 +368,14 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         fn renderUnorderedList(self: *Self, list: zd.Container) !void {
             for (list.children.items) |item| {
-                if (self.column > 0)
-                    self.renderBreak();
+                // TODO: was this ever needed?
+                // if (self.column > 0)
+                //     self.renderBreak();
 
                 // print out list bullet
                 self.writeLeaders();
                 self.startStyle(.{ .fg_color = .Blue, .bold = true });
-                self.write(" * "); // todo: fancier bullet char?
+                self.write(" ‣ ");
                 self.resetStyle();
 
                 // Print out the contents; note the first line doesn't
@@ -390,15 +391,18 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             const start: usize = list.content.List.start;
             var buffer: [16]u8 = undefined;
             for (list.children.items, 0..) |item, i| {
-                if (self.column > 0)
-                    self.renderBreak();
+                // TODO: was this ever needed?
+                // if (self.column > 0)
+                //     self.renderBreak();
 
                 self.writeLeaders();
                 self.needs_leaders = false;
 
                 const num: usize = start + i;
                 const marker = try std.fmt.bufPrint(&buffer, " {d}. ", .{num});
+                self.startStyle(.{ .fg_color = .Blue, .bold = true });
                 self.write(marker);
+                self.resetStyle();
 
                 // Hacky, but makes life easier, and what are you doing with
                 // a 10,000-line-long numbered Markdown list anyways?
