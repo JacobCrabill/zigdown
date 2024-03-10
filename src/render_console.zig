@@ -293,6 +293,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         pub fn writeLeaders(self: *Self) void {
+            // Trying something new - reset to column 0
+            self.column = 0;
+            self.writeno(cons.clear_line);
             for (self.leader_stack.items) |text| {
                 self.startStyle(text.style);
                 self.write(text.text);
@@ -444,74 +447,104 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.column = 0;
         }
 
+        fn renderCentered(self: *Self, text: []const u8, style: zd.TextStyle, pad_char: []const u8) !void {
+            const lpad: usize = (self.opts.width - text.len) / 2;
+            const rpad: usize = self.opts.width - text.len - lpad;
+            var overridden: bool = false;
+            if (self.style_override == null) {
+                self.style_override = style;
+                overridden = true;
+            }
+            self.startStyle(style);
+
+            // Left pad
+            if (lpad > 0) {
+                self.write_n(pad_char, lpad - 1);
+                self.write(" ");
+            }
+
+            self.write(text);
+            // Content TODO
+            // for (leaf.inlines.items) |item| {
+            //     try self.renderInline(item);
+            // }
+
+            // Right pad
+            self.startStyleImpl(style);
+            if (rpad > 0) {
+                self.write(" ");
+                self.write_n("═", rpad - 1);
+            }
+
+            self.resetStyle();
+            if (overridden)
+                self.style_override = null;
+        }
+
         /// Render an ATX Heading
         fn renderHeading(self: *Self, leaf: zd.Leaf) !void {
             const h: zd.Heading = leaf.content.Heading;
             // TODO: determine length of rendered inlines
             // Render to buffer, tracking displayed length of text, then
             // dump buffer out to stream
-            const text = "<placeholder>";
 
-            // Pad to place text in center of console
-            const lpad: usize = (self.opts.width - text.len) / 2;
-            const rpad: usize = self.opts.width - text.len - lpad;
+            var style = zd.TextStyle{};
+            var pad_char: []const u8 = " ";
 
             switch (h.level) {
                 // TODO: consolidate this struct w/ console.zig
-                1 => cons.printBox(self.stream, text, self.opts.width, 3, cons.DoubleBox, cons.text_bold ++ cons.fg_blue),
-                2 => cons.printBox(self.stream, text, self.opts.width, 3, cons.BoldBox, cons.text_bold ++ cons.fg_green),
+                // 1 => cons.printBox(self.stream, text, self.opts.width, 3, cons.DoubleBox, cons.text_bold ++ cons.fg_blue),
+                // 2 => cons.printBox(self.stream, text, self.opts.width, 3, cons.BoldBox, cons.text_bold ++ cons.fg_green),
+                1 => {
+                    style = zd.TextStyle{ .fg_color = .Blue, .bold = true };
+                    pad_char = "═";
+                },
+                2 => {
+                    style = zd.TextStyle{ .fg_color = .Green, .bold = true };
+                    pad_char = "─";
+                },
                 3 => {
-                    // TODO: 'renderCentered()' fn
-                    const style = zd.TextStyle{ .italic = true, .underline = true, .fg_color = .Black, .bg_color = .Cyan };
-                    var overridden: bool = false;
-                    if (self.style_override == null) {
-                        self.style_override = style;
-                        overridden = true;
-                    }
-                    self.startStyle(style);
-
-                    // Left pad
-                    if (lpad > 0) self.write_n(" ", lpad);
-
-                    // Content
-                    for (leaf.inlines.items) |item| {
-                        try self.renderInline(item);
-                    }
-
-                    // Right pad
-                    self.startStyleImpl(style);
-                    if (rpad > 0) self.write_n(" ", rpad);
-
-                    self.resetStyle();
-                    if (overridden)
-                        self.style_override = null;
+                    style = zd.TextStyle{ .bold = true, .italic = true, .underline = true };
                 },
                 else => {
-                    const style = zd.TextStyle{ .underline = true, .reverse = true };
-                    var overridden: bool = false;
-                    if (self.style_override == null) {
-                        self.style_override = style;
-                        overridden = true;
-                    }
-                    self.startStyle(style);
-
-                    // Left pad
-                    if (lpad > 0) self.write_n(" ", lpad);
-
-                    // Content
-                    for (leaf.inlines.items) |item| {
-                        try self.renderInline(item);
-                    }
-                    self.startStyle(style);
-
-                    // Right pad
-                    if (rpad > 0) self.write_n(" ", rpad);
-                    self.resetStyle();
-
-                    if (overridden)
-                        self.style_override = null;
+                    style = zd.TextStyle{ .underline = true };
                 },
             }
+
+            var overridden: bool = false;
+            if (self.style_override == null) {
+                self.style_override = style;
+                overridden = true;
+            }
+            self.startStyle(style);
+
+            // Indent
+            self.write_n(pad_char, 4);
+            self.write(" ");
+            if (pad_char.len > 1) {
+                // Handle Unicode characters whose visible size is 1 but byte size is > 1
+                self.column -= 4 * (pad_char.len - 1);
+            }
+
+            // Content
+            for (leaf.inlines.items) |item| {
+                try self.renderInline(item);
+            }
+
+            // Right Pad
+            if (self.column < self.opts.width - 1) {
+                self.write(" ");
+                while (self.column < self.opts.width) {
+                    self.write(pad_char);
+                    self.column -= pad_char.len - 1; // For Unicode characters
+                }
+            }
+
+            // Reset
+            self.resetStyle();
+            if (overridden)
+                self.style_override = null;
+
             self.renderBreak();
         }
 
