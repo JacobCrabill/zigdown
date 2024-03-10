@@ -331,38 +331,31 @@ pub fn handleLineDocument(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineQuote(block: *Block, line: []const Token) bool {
-    logger.depth += 1;
-    defer logger.depth -= 1;
     std.debug.assert(block.isOpen());
     std.debug.assert(block.isContainer());
+
+    logger.depth += 1;
+    defer logger.depth -= 1;
+    logger.log("Handling Quote: ", .{});
+    logger.printText(line, false);
 
     var cblock = &block.Container;
 
     var trimmed_line = line;
     if (isContinuationLineQuote(line)) {
-        // If the line is a valid continuation line for our type, trim the continuation
-        // marker(s) off and pass it on to our last child
-        // e.g.:  line         = "   > foo bar" [ indent, GT, space, word, space, word ]
-        //        trimmed_line = "foo bar"  [ word, space, word ]
         trimmed_line = trimContinuationMarkersQuote(line);
     } else if (!isLazyContinuationLineQuote(trimmed_line)) {
-        // Otherwise, check if the the line can be appended to this block or not
-        // Example for false:
-        //   "> First line: Quote"
-        //   "- 2nd line: List (NOT quote)"
-        // Example for true:
-        //   "> First line: Quote"
-        //   "2nd line: can lazily continue the quote"
         return false;
     }
 
     // Check for an open child
     if (cblock.children.items.len > 0) {
         const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
-        // TODO: implement the generic handleLine that switches on child type
         if (handleLine(child, trimmed_line)) {
+            logger.log("Quote child handled line\n", .{});
             return true;
         } else {
+            logger.log("Quote child cannot handle line\n", .{});
             closeBlock(child);
         }
     }
@@ -376,10 +369,11 @@ pub fn handleLineQuote(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineList(block: *Block, line: []const Token) bool {
-    logger.depth += 1;
-    defer logger.depth -= 1;
     std.debug.assert(block.isOpen());
     std.debug.assert(block.isContainer());
+
+    logger.depth += 1;
+    defer logger.depth -= 1;
 
     if (!isLazyContinuationLineList(line))
         return false;
@@ -393,10 +387,23 @@ pub fn handleLineList(block: *Block, line: []const Token) bool {
     if (cblock.children.items.len == 0) {
         block.addChild(Block.initContainer(block.allocator(), .ListItem)) catch unreachable;
     } else {
+        child = &cblock.children.items[cblock.children.items.len - 1];
+
+        // Check if the line starts a new item of the wrong type
+        // In that case, we must close and return false (A new List must be started)
+        const ordered: bool = block.Container.content.List.ordered;
+        const is_ol: bool = isOrderedListItem(line);
+        const is_ul: bool = isUnorderedListItem(line);
+        const wrong_type: bool = (ordered and is_ul) or (!ordered and is_ol);
+        if (wrong_type) {
+            logger.log("Mismatched list type; ending List.\n", .{});
+            closeBlock(child);
+            return false;
+        }
+
         // Check for the start of a new ListItem
         // If so, close the current ListItem (if any) and start a new one
-        child = &cblock.children.items[cblock.children.items.len - 1];
-        if (isListItem(line) or !child.isOpen()) {
+        if ((is_ul or is_ol) or !child.isOpen()) {
             closeBlock(child);
             block.addChild(Block.initContainer(block.allocator(), .ListItem)) catch unreachable;
         }
@@ -414,27 +421,23 @@ pub fn handleLineList(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineListItem(block: *Block, line: []const Token) bool {
-    logger.depth += 1;
-    defer logger.depth -= 1;
-
     std.debug.assert(block.isOpen());
     std.debug.assert(block.isContainer());
 
-    var trimmed_line = line;
+    logger.depth += 1;
+    defer logger.depth -= 1;
     logger.log("Handling ListItem: ", .{});
     logger.printText(line, false);
+
+    var trimmed_line = line;
     if (isContinuationLineList(line)) {
         trimmed_line = trimContinuationMarkersList(line);
-        logger.log("Trimmed continuation markers: ", .{});
-        logger.printText(trimmed_line, false);
     } else {
         trimmed_line = removeIndent(line, 2);
-        logger.log("Trimmed line unindented: ", .{});
-        logger.printText(trimmed_line, false);
 
         // Otherwise, check if the trimmed line can be appended to the current block or not
         if (!isLazyContinuationLineList(trimmed_line)) {
-            logger.log("!! ListItem cannot handle line\n", .{});
+            logger.log("ListItem cannot handle line\n", .{});
             return false;
         }
     }
@@ -471,6 +474,7 @@ pub fn handleLineBreak(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineCode(block: *Block, line: []const Token) bool {
+    // TODO: We need access to the complete raw line, w/o removing indents!
     logger.depth += 1;
     defer logger.depth -= 1;
     var code: *zd.Code = &block.Leaf.content.Code;

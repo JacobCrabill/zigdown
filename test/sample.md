@@ -8,28 +8,27 @@ previous line is...
 
 ...blank like above
 
-Indented text should also work a 2-space indent should have no effect
+Indented text should also work
+  a 2-space indent should have no effect
 
 - Unordered list
 - Foobar
-   1. nested list
-    1. Numbers auto-increment
-       - more nesting!
-       - > nested quote
+   1. Nested numbered list
+   1. Numbers auto-increment
+      - more nesting!
+      - > nested quote
 -
 - ^ Empty list item
-- with **formatting**!
-
-1. Ordered list
-1.
-1. Item 2
-1. Item 3
+- with **_simple_ formatting**!
 
 ## Quotes
 
 > Quote Block
 >
 > > With line breaks and **_Formatting_**.
+>
+> - item
+>  1. other item
 
 A C++ code block.
 

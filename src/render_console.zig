@@ -76,6 +76,34 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.leader_stack.deinit();
         }
 
+        pub fn startFgColor(self: *Self, fg_color: zd.Color) void {
+            switch (fg_color) {
+                .Black => self.writeno(cons.fg_black),
+                .Red => self.writeno(cons.fg_red),
+                .Green => self.writeno(cons.fg_green),
+                .Yellow => self.writeno(cons.fg_yellow),
+                .Blue => self.writeno(cons.fg_blue),
+                .Magenta => self.writeno(cons.fg_magenta),
+                .Cyan => self.writeno(cons.fg_cyan),
+                .White => self.writeno(cons.fg_white),
+                .Default => self.writeno(cons.fg_default),
+            }
+        }
+
+        pub fn startBgColor(self: *Self, bg_color: zd.Color) void {
+            switch (bg_color) {
+                .Black => self.writeno(cons.bg_black),
+                .Red => self.writeno(cons.bg_red),
+                .Green => self.writeno(cons.bg_green),
+                .Yellow => self.writeno(cons.bg_yellow),
+                .Blue => self.writeno(cons.bg_blue),
+                .Magenta => self.writeno(cons.bg_magenta),
+                .Cyan => self.writeno(cons.bg_cyan),
+                .White => self.writeno(cons.bg_white),
+                .Default => self.writeno(cons.bg_default),
+            }
+        }
+
         /// Configure the terminal to start printing with the given (single) style
         /// Attempts to be 'minimally invasive' by monitoring current style and
         /// changing only what is necessary
@@ -106,34 +134,41 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
 
             if (style.fg_color) |fg_color| {
-                switch (fg_color) {
-                    .Black => self.writeno(cons.fg_black),
-                    .Red => self.writeno(cons.fg_red),
-                    .Green => self.writeno(cons.fg_green),
-                    .Yellow => self.writeno(cons.fg_yellow),
-                    .Blue => self.writeno(cons.fg_blue),
-                    .Magenta => self.writeno(cons.fg_magenta),
-                    .Cyan => self.writeno(cons.fg_cyan),
-                    .White => self.writeno(cons.fg_white),
-                    .Default => self.writeno(cons.fg_default),
-                }
+                self.startFgColor(fg_color);
             }
 
             if (style.bg_color) |bg_color| {
-                switch (bg_color) {
-                    .Black => self.writeno(cons.bg_black),
-                    .Red => self.writeno(cons.bg_red),
-                    .Green => self.writeno(cons.bg_green),
-                    .Yellow => self.writeno(cons.bg_yellow),
-                    .Blue => self.writeno(cons.bg_blue),
-                    .Magenta => self.writeno(cons.bg_magenta),
-                    .Cyan => self.writeno(cons.bg_cyan),
-                    .White => self.writeno(cons.bg_white),
-                    .Default => self.writeno(cons.bg_default),
-                }
+                self.startFgColor(bg_color);
             }
 
             self.cur_style = style;
+        }
+
+        pub fn endStyle(self: *Self, style: zd.TextStyle) void {
+            if (style.bold) self.writeno(cons.end_bold);
+            if (style.italic) self.writeno(cons.end_italic);
+            if (style.underline) self.writeno(cons.end_underline);
+            if (style.blink) self.writeno(cons.end_blink);
+            if (style.fastblink) self.writeno(cons.end_blink);
+            if (style.reverse) self.writeno(cons.end_reverse);
+            if (style.hide) self.writeno(cons.end_hide);
+            if (style.strike) self.writeno(cons.end_strike);
+
+            if (style.fg_color) {
+                if (style.style_override.fg_color) |fg_color| {
+                    self.startFgColor(fg_color);
+                } else {
+                    self.startFgColor(.Default);
+                }
+            }
+
+            if (style.bg_color) {
+                if (style.style_override.bg_color) |bg_color| {
+                    self.startBgColor(bg_color);
+                } else {
+                    self.startBgColor(.Default);
+                }
+            }
         }
 
         /// Configure the terminal to start printing with the given style,
@@ -283,11 +318,12 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 self.write(" ");
             }
 
-            // backup over the trailing " " if the text didn't have one
-            // TODO: this smells fishy
-            // const trimmed_len: usize = std.mem.trimRight(u8, text, " ").len;
+            // TODO: This still feels fishy
+            // backup over the trailing " " we added if the given text didn't have one
             if (!std.mem.endsWith(u8, text, " ") and self.column > 0) {
+                // if (self.column > 0) {
                 self.printno(cons.move_left, .{1});
+                self.writeno(cons.clear_line_end);
                 self.column -= 1;
             }
         }
@@ -353,8 +389,11 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Render a Quote block
         pub fn renderQuote(self: *Self, block: zd.Container) !void {
             try self.leader_stack.append(quote_indent);
-
-            self.needs_leaders = true;
+            if (!self.needs_leaders) {
+                self.startStyle(quote_indent.style);
+                self.write(quote_indent.text);
+                self.resetStyle();
+            }
 
             for (block.children.items, 0..) |child, i| {
                 try self.renderBlock(child);
@@ -443,7 +482,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a single line break
         fn renderBreak(self: *Self) void {
-            self.write("\n");
+            self.write(" \n");
             self.column = 0;
         }
 
@@ -542,6 +581,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             // Reset
             self.resetStyle();
+            self.writeno(cons.clear_line_end);
             if (overridden)
                 self.style_override = null;
 

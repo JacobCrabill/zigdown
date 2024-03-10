@@ -36,8 +36,8 @@ pub fn main() !void {
         \\
         \\1. Numlist
         \\ 2. Foobar
-        \\    - With child list
-        \\    - this should work?
+        \\   - With child list
+        \\  - this should work?
         \\     1. and this?
         \\      2. Wohooo!!!
         \\1. 2nd item
@@ -61,10 +61,11 @@ pub fn main() !void {
         \\    - this should work?
         \\     1. and this?
         \\      2. Wohooo!!!
+        \\     3. > Quote block
         \\1. 2nd item
     ;
-    _ = text1;
-    const text = text2;
+    _ = text2;
+    const text = text1;
 
     var style: zd.TextStyle = zd.TextStyle{ .fg_color = .Green, .bold = true };
     cons.printStyled(std.debug, style, "\n────────────────── Test Document ──────────────────\n", .{});

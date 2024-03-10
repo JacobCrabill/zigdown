@@ -44,6 +44,7 @@ pub fn main() !void {
     var do_html: bool = false;
     var filename: ?[]const u8 = null;
     var outfile: ?[]const u8 = null;
+    var timeit: bool = false;
     var i: usize = 1;
     while (i < args.len) : (i += 1) {
         const arg: []const u8 = args[i];
@@ -61,6 +62,8 @@ pub fn main() !void {
 
             i += 1;
             outfile = args[i];
+        } else if (std.mem.eql(u8, "-t", arg)) {
+            timeit = true;
         } else {
             filename = arg;
         }
@@ -79,9 +82,14 @@ pub fn main() !void {
     const md_text = try md_file.readToEndAlloc(alloc, 1e9);
     defer alloc.free(md_text);
 
+    var timer = try std.time.Timer.start();
+
     // Parse the input text
     var parser = try zd.Parser.init(alloc, .{});
+    timer.reset();
     try parser.parseMarkdown(md_text);
+    const t1 = timer.read();
+
     const md: zd.Block = parser.document;
 
     if (outfile) |outname| {
@@ -92,6 +100,12 @@ pub fn main() !void {
         try render(out_file.writer(), md, do_console, do_html);
     } else {
         try render(stdout, md, do_console, do_html);
+    }
+
+    const t2 = timer.read();
+    if (timeit) {
+        std.debug.print("  Parsed in:   {d}us\n", .{t1 / 1000});
+        std.debug.print("  Rendered in: {d}us\n", .{(t2 - t1) / 1000});
     }
 }
 
