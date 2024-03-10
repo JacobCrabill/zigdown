@@ -97,7 +97,7 @@ pub const Inline = struct {
 pub const Text = struct {
     alloc: ?Allocator = null,
     style: zd.TextStyle = zd.TextStyle{},
-    text: []const u8 = undefined, // The Text does not own the string(??)
+    text: []const u8 = undefined, // The Text is assumed to own the string if 'alloc' is not null
 
     pub fn print(self: Text, depth: u8) void {
         printIndent(depth);
@@ -136,6 +136,9 @@ pub const Link = struct {
     }
 
     pub fn deinit(self: *Link) void {
+        for (self.text.items) |*text| {
+            text.deinit();
+        }
         self.text.deinit();
         if (self.url.len > 0)
             self.alloc.free(self.url);
@@ -170,6 +173,9 @@ pub const Image = struct {
     }
 
     pub fn deinit(self: *Image) void {
+        for (self.alt.items) |*text| {
+            text.deinit();
+        }
         self.alt.deinit();
         if (self.src.len > 0)
             self.alloc.free(self.src);

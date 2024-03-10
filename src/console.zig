@@ -66,6 +66,14 @@ pub const text_reverse = ansi ++ "[7m";
 pub const text_hide = ansi ++ "[8m";
 pub const text_strike = ansi ++ "[9m";
 
+pub const end_bold = ansi ++ "[22m";
+pub const end_italic = ansi ++ "[23m";
+pub const end_underline = ansi ++ "[24m";
+pub const end_blink = ansi ++ "[25m";
+pub const end_reverse = ansi ++ "[27m";
+pub const end_hide = ansi ++ "[28m";
+pub const end_strike = ansi ++ "[29m";
+
 // TODO: 256 color mode foregrounds: [38;5;{d}m
 // TODO: 256 color mode backgrounds: [48;5;{d}m
 
@@ -83,7 +91,7 @@ const DebugStream = struct {
 };
 
 /// Configure the terminal to start printing with the given foreground color
-pub fn startColor(stream: anytype, color: Color) void {
+pub fn startFgColor(stream: anytype, color: Color) void {
     switch (color) {
         .Black => stream.print(fg_black, .{}),
         .Red => stream.print(fg_red, .{}),
@@ -93,6 +101,20 @@ pub fn startColor(stream: anytype, color: Color) void {
         .Cyan => stream.print(fg_cyan, .{}),
         .White => stream.print(fg_white, .{}),
         .Magenta => stream.print(fg_magenta, .{}),
+    }
+}
+
+/// Configure the terminal to start printing with the given background color
+pub fn startBgColor(stream: anytype, color: Color) void {
+    switch (color) {
+        .Black => stream.print(bg_black, .{}),
+        .Red => stream.print(bg_red, .{}),
+        .Green => stream.print(bg_green, .{}),
+        .Yellow => stream.print(bg_yellow, .{}),
+        .Blue => stream.print(bg_blue, .{}),
+        .Cyan => stream.print(bg_cyan, .{}),
+        .White => stream.print(bg_white, .{}),
+        .Magenta => stream.print(bg_magenta, .{}),
     }
 }
 
@@ -120,7 +142,14 @@ pub fn startStyles(stream: anytype, style: TextStyle) void {
     if (style.reverse) stream.print(text_reverse, .{});
     if (style.hide) stream.print(text_hide, .{});
     if (style.strike) stream.print(text_strike, .{});
-    startColor(stream, style.fg_color);
+
+    if (style.fg_color) |fg_color| {
+        startFgColor(stream, fg_color);
+    }
+
+    if (style.bg_color) |bg_color| {
+        startBgColor(stream, bg_color);
+    }
 }
 
 /// Reset all style in the terminal
@@ -130,7 +159,7 @@ pub fn resetStyle(stream: anytype) void {
 
 /// Print the text using the given color
 pub fn printColor(stream: anytype, color: Color, comptime fmt: []const u8, args: anytype) void {
-    startColor(stream, color);
+    startFgColor(stream, color);
     stream.print(fmt, args);
     resetStyle(stream);
 }

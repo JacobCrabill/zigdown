@@ -57,6 +57,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         needs_leaders: bool = true,
         opts: RenderOpts = undefined,
         style_override: ?zd.TextStyle = null,
+        cur_style: zd.TextStyle = .{},
 
         pub fn init(stream: OutStream, alloc: Allocator, opts: RenderOpts) Self {
             return Self{
@@ -72,48 +73,74 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Configure the terminal to start printing with the given (single) style
-        pub fn startStyleImpl(self: Self, style: zd.TextStyle) void {
-            if (style.bold) self.writeno(cons.text_bold);
-            if (style.italic) self.writeno(cons.text_italic);
-            if (style.underline) self.writeno(cons.text_underline);
-            if (style.blink) self.writeno(cons.text_blink);
-            if (style.fastblink) self.writeno(cons.text_fastblink);
-            if (style.reverse) self.writeno(cons.text_reverse);
-            if (style.hide) self.writeno(cons.text_hide);
-            if (style.strike) self.writeno(cons.text_strike);
+        /// Attempts to be 'minimally invasive' by monitoring current style and
+        /// changing only what is necessary
+        pub fn startStyleImpl(self: *Self, style: zd.TextStyle) void {
+            if (style.bold != self.cur_style.bold) {
+                if (style.bold) self.writeno(cons.text_bold) else self.writeno(cons.end_bold);
+            }
+            if (style.italic != self.cur_style.italic) {
+                if (style.italic) self.writeno(cons.text_italic) else self.writeno(cons.end_italic);
+            }
+            if (style.underline != self.cur_style.underline) {
+                if (style.underline) self.writeno(cons.text_underline) else self.writeno(cons.end_underline);
+            }
+            if (style.blink != self.cur_style.blink) {
+                if (style.blink) self.writeno(cons.text_blink) else self.writeno(cons.end_blink);
+            }
+            if (style.fastblink != self.cur_style.fastblink) {
+                if (style.fastblink) self.writeno(cons.text_underline) else self.writeno(cons.end_blink);
+            }
+            if (style.reverse != self.cur_style.reverse) {
+                if (style.reverse) self.writeno(cons.text_reverse) else self.writeno(cons.end_reverse);
+            }
+            if (style.hide != self.cur_style.hide) {
+                if (style.hide) self.writeno(cons.text_hide) else self.writeno(cons.end_hide);
+            }
+            if (style.strike != self.cur_style.strike) {
+                if (style.strike) self.writeno(cons.text_strike) else self.writeno(cons.end_strike);
+            }
 
-            switch (style.fg_color) {
-                .Black => self.writeno(cons.fg_black),
-                .Red => self.writeno(cons.fg_red),
-                .Green => self.writeno(cons.fg_green),
-                .Yellow => self.writeno(cons.fg_yellow),
-                .Blue => self.writeno(cons.fg_blue),
-                .Magenta => self.writeno(cons.fg_magenta),
-                .Cyan => self.writeno(cons.fg_cyan),
-                .White => self.writeno(cons.fg_white),
+            if (style.fg_color) |fg_color| {
+                switch (fg_color) {
+                    .Black => self.writeno(cons.fg_black),
+                    .Red => self.writeno(cons.fg_red),
+                    .Green => self.writeno(cons.fg_green),
+                    .Yellow => self.writeno(cons.fg_yellow),
+                    .Blue => self.writeno(cons.fg_blue),
+                    .Magenta => self.writeno(cons.fg_magenta),
+                    .Cyan => self.writeno(cons.fg_cyan),
+                    .White => self.writeno(cons.fg_white),
+                }
             }
-            switch (style.bg_color) {
-                .Black => self.writeno(cons.bg_black),
-                .Red => self.writeno(cons.bg_red),
-                .Green => self.writeno(cons.bg_green),
-                .Yellow => self.writeno(cons.bg_yellow),
-                .Blue => self.writeno(cons.bg_blue),
-                .Magenta => self.writeno(cons.bg_magenta),
-                .Cyan => self.writeno(cons.bg_cyan),
-                .White => self.writeno(cons.bg_white),
+
+            if (style.bg_color) |bg_color| {
+                switch (bg_color) {
+                    .Black => self.writeno(cons.bg_black),
+                    .Red => self.writeno(cons.bg_red),
+                    .Green => self.writeno(cons.bg_green),
+                    .Yellow => self.writeno(cons.bg_yellow),
+                    .Blue => self.writeno(cons.bg_blue),
+                    .Magenta => self.writeno(cons.bg_magenta),
+                    .Cyan => self.writeno(cons.bg_cyan),
+                    .White => self.writeno(cons.bg_white),
+                }
             }
+
+            self.cur_style = style;
         }
 
         /// Configure the terminal to start printing with the given style,
         /// applying the global style overrides afterwards
-        pub fn startStyle(self: Self, style: zd.TextStyle) void {
+        pub fn startStyle(self: *Self, style: zd.TextStyle) void {
             self.startStyleImpl(style);
             if (self.style_override) |override| self.startStyleImpl(override);
         }
 
         /// Reset all style in the terminal
-        pub fn resetStyle(self: Self) void {
+        pub fn resetStyle(self: *Self) void {
             self.writeno(cons.ansi_end);
+            self.cur_style = zd.TextStyle{};
         }
 
         /// Write an array of bytes to the underlying writer, and update the current column
@@ -524,11 +551,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         fn renderText(self: *Self, text: zd.Text) !void {
-            // TODO
-            // for style in style => add style tag
             self.startStyle(text.style);
             self.write(text.text);
-            self.resetStyle();
         }
 
         fn renderLink(self: *Self, link: zd.Link) !void {
@@ -542,7 +566,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             // Render the visible text of the link, followed by the end of the escape sequence
             for (link.text.items) |text| {
-                // TODO: I think rendering style will screw up the link
                 try self.renderText(text);
             }
             self.writeno(cons.hyperlink);

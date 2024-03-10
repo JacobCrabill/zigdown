@@ -602,9 +602,6 @@ fn closeBlockParagraph(block: *Block) void {
 }
 
 fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []const Token) !void {
-    // while (parseOneInline(alloc, tokens)) |inl| {
-    //     try inlines.append(inl);
-    // }
     std.debug.print(">>> Parsing inlines! <<<\n", .{});
     var style = zd.TextStyle{};
     var words = ArrayList([]const u8).init(alloc);
@@ -613,13 +610,15 @@ fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []cons
     var prev_type: TokenType = .BREAK;
     var next_type: TokenType = .BREAK;
 
-    for (tokens, 0..) |tok, i| {
+    var i: usize = 0;
+    while (i < tokens.len) : (i += 1) {
+        const tok = tokens[i];
         if (i + 1 < tokens.len) {
             next_type = tokens[i + 1].kind;
         } else {
             next_type = .BREAK;
         }
-        std.debug.print("{s} ", .{@tagName(tok.kind)});
+        std.debug.print(">{s}< ", .{@tagName(tok.kind)});
 
         switch (tok.kind) {
             .WORD, .DIGIT => {
@@ -655,17 +654,12 @@ fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []cons
                 try appendWords(alloc, inlines, &words, style);
                 style.underline = !style.underline;
             },
-            .BANG => {
+            .BANG, .LBRACK => {
                 // TODO: return Inline instead of taking *inlines
-                const res = try parseLinkOrImage(alloc, inlines, tokens[i..], true);
-                if (!res) {
-                    // TODO: Parse as paragraph text
-                    try words.append(tok.text);
-                }
-            },
-            .LBRACK => {
-                const res = try parseLinkOrImage(alloc, inlines, tokens[i..], false);
-                if (!res) {
+                if (try parseLinkOrImage(alloc, inlines, tokens[i..], tok.kind == .BANG)) |n| {
+                    i += n - 1;
+                    std.debug.print("Next token is now: {s} -> {s}\n", .{ @tagName(tokens[i - 1].kind), @tagName(tokens[i].kind) });
+                } else {
                     // TODO: Parse as paragraph text
                     try words.append(tok.text);
                 }
@@ -681,7 +675,69 @@ fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []cons
     std.debug.print("\nParsed {d} inlines\n", .{inlines.items.len});
 }
 
-/// Append a list of words to the given TextBlock as Text objects
+fn parseInlineText(alloc: Allocator, tokens: []const Token) !ArrayList(zd.Text) {
+    std.debug.print("~~~ Parsing Inline Text! ~~~n", .{});
+    var style = zd.TextStyle{};
+    var words = ArrayList([]const u8).init(alloc);
+    defer words.deinit();
+
+    var prev_type: TokenType = .BREAK;
+    var next_type: TokenType = .BREAK;
+
+    var text_parts = ArrayList(zd.Text).init(alloc);
+
+    var i: usize = 0;
+    while (i < tokens.len) : (i += 1) {
+        const tok = tokens[i];
+        if (i + 1 < tokens.len) {
+            next_type = tokens[i + 1].kind;
+        } else {
+            next_type = .BREAK;
+        }
+        std.debug.print(">{s}< ", .{@tagName(tok.kind)});
+
+        switch (tok.kind) {
+            .EMBOLD => {
+                try appendText(alloc, &text_parts, &words, style);
+                style.bold = !style.bold;
+                style.italic = !style.italic;
+            },
+            .STAR, .BOLD => {
+                // TODO: Properly handle emphasis between *, **, ***, * word ** word***, etc.
+                try appendText(alloc, &text_parts, &words, style);
+                style.bold = !style.bold;
+            },
+            .USCORE => {
+                // If it's an underscore in the middle of a word, don't toggle style with it
+                if (prev_type == .WORD and next_type == .WORD) {
+                    try words.append(tok.text);
+                } else {
+                    try appendText(alloc, &text_parts, &words, style);
+                    style.italic = !style.italic;
+                }
+            },
+            .TILDE => {
+                try appendText(alloc, &text_parts, &words, style);
+                style.underline = !style.underline;
+            },
+            else => {
+                try words.append(tok.text);
+                // std.debug.print("Adding token: '{s}'\n", .{tok.text});
+            },
+        }
+
+        prev_type = tok.kind;
+    }
+
+    // Add any last parsed words
+    try appendText(alloc, &text_parts, &words, style);
+
+    std.debug.print("\nParsed {d} text parts\n", .{text_parts.items.len});
+
+    return text_parts;
+}
+
+/// Append a list of words to the given TextBlock as Text Inline objects
 fn appendWords(alloc: Allocator, inlines: *ArrayList(zd.Inline), words: *ArrayList([]const u8), style: zd.TextStyle) Allocator.Error!void {
     if (words.items.len > 0) {
         // Merge all words into a single string
@@ -697,6 +753,26 @@ fn appendWords(alloc: Allocator, inlines: *ArrayList(zd.Inline), words: *ArrayLi
             .text = try alloc.dupe(u8, new_text_ws),
         };
         try inlines.append(zd.Inline.initWithContent(alloc, zd.InlineData{ .text = text }));
+        words.clearRetainingCapacity();
+    }
+}
+
+/// Append a list of words to the given TextBlock as Text Inline objects
+fn appendText(alloc: Allocator, text_parts: *ArrayList(zd.Text), words: *ArrayList([]const u8), style: zd.TextStyle) Allocator.Error!void {
+    if (words.items.len > 0) {
+        // Merge all words into a single string
+        // Merge duplicate ' ' characters
+        const new_text: []u8 = try std.mem.join(alloc, " ", words.items);
+        defer alloc.free(new_text);
+        const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
+
+        // End the current Text object with the current style
+        const text = zd.Text{
+            .alloc = alloc,
+            .style = style,
+            .text = try alloc.dupe(u8, new_text_ws),
+        };
+        try text_parts.append(text);
         words.clearRetainingCapacity();
     }
 }
@@ -749,28 +825,29 @@ fn validateLink(in_line: []const Token) bool {
 }
 
 /// Parse a Hyperlink (Image or normal Link)
-fn parseLinkOrImage(alloc: Allocator, inlines: *ArrayList(Inline), tokens: []const Token, bang: bool) Allocator.Error!bool {
+fn parseLinkOrImage(alloc: Allocator, inlines: *ArrayList(Inline), tokens: []const Token, bang: bool) Allocator.Error!?usize {
     // If an image, skip the '!'; the rest should be a valid link
     const start: usize = if (bang) 1 else 0;
 
     // Validate link syntax; we assume the link is on a single line
-    var line: []const Token = getLine(tokens, start) orelse return false;
+    var line: []const Token = getLine(tokens, start) orelse return null;
     if (!validateLink(line)) {
-        return false;
+        return null;
     }
 
     // Find the separating characters: '[', ']', '(', ')'
     // We already know the 1st token is '[' and that the '(' lies immediately after the '['
     // The Alt text lies between '[' and ']'
     // The URI liex between '(' and ')'
-    const rb: usize = findFirstOf(line, 0, &.{.RBRACK}).?;
-    const alt_text = line[1..rb];
-    const uri_start: usize = rb + 2;
-    const uri_end: usize = findFirstOf(line, 0, &.{.RPAREN}).?;
-    const uri_text = line[uri_start..uri_end];
+    const alt_start: usize = 1;
+    const rb_idx: usize = findFirstOf(line, 0, &.{.RBRACK}).?;
+    const lp_idx: usize = rb_idx + 2;
+    const rp_idx: usize = findFirstOf(line, 0, &.{.RPAREN}).?;
+    const alt_text: []const Token = line[alt_start..rb_idx];
+    const uri_text: []const Token = line[lp_idx..rp_idx];
 
     // TODO: Parse line of Text
-    // const link_text_block = try self.parseLine(alt_text);
+    const link_text_block = try parseInlineText(alloc, alt_text);
     std.debug.print("\n== Parsed link text: ", .{});
     for (alt_text) |tok| {
         std.debug.print("'{s}', ", .{tok.text});
@@ -788,19 +865,19 @@ fn parseLinkOrImage(alloc: Allocator, inlines: *ArrayList(Inline), tokens: []con
         var img = zd.Image.init(alloc);
         img.src = try std.mem.concat(alloc, u8, words.items); // TODO
         std.debug.print("Parsed img src: {s}\n", .{img.src});
-        // img.alt = link_text_block; // TODO
+        img.alt = link_text_block;
         inl = Inline.initWithContent(alloc, .{ .image = img });
     } else {
         var link = zd.Link.init(alloc);
         link.url = try std.mem.concat(alloc, u8, words.items);
         std.debug.print("Parsed link url: {s}\n", .{link.url});
-        // link.text = link_text_block; // TODO
+        link.text = link_text_block;
         inl = Inline.initWithContent(alloc, .{ .link = link });
     }
     try inlines.append(inl);
-    std.debug.print("----- Parsed Link Or Image ------\n", .{});
+    std.debug.print("----- Parsed Link Or Image | {d} tokens ------\n", .{start + rp_idx + 1});
 
-    return true;
+    return start + rp_idx + 1;
 }
 ///////////////////////////////////////////////////////////////////////////////
 // Parser Struct
