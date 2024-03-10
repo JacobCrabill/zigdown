@@ -126,6 +126,7 @@ pub const Link = struct {
     alloc: Allocator,
     url: []const u8, // Note: Heap-allocated TODO: optional
     text: ArrayList(Text),
+    heap_url: bool = false,
 
     pub fn init(alloc: Allocator) Link {
         return .{
@@ -140,7 +141,8 @@ pub const Link = struct {
             text.deinit();
         }
         self.text.deinit();
-        if (self.url.len > 0)
+
+        if (self.heap_url and self.url.len > 0)
             self.alloc.free(self.url);
     }
 
@@ -163,6 +165,7 @@ pub const Image = struct {
     alloc: Allocator,
     src: []const u8 = undefined, // Note: Heap-allocated TODO: optional
     alt: ArrayList(Text),
+    heap_src: bool = false,
 
     pub fn init(alloc: Allocator) Image {
         return .{
@@ -177,7 +180,8 @@ pub const Image = struct {
             text.deinit();
         }
         self.alt.deinit();
-        if (self.src.len > 0)
+
+        if (self.heap_src and self.src.len > 0)
             self.alloc.free(self.src);
     }
 

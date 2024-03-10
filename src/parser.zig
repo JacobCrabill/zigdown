@@ -1012,11 +1012,13 @@ fn parseLinkOrImage(alloc: Allocator, inlines: *ArrayList(Inline), tokens: []con
     var inl: Inline = undefined;
     if (bang) {
         var img = zd.Image.init(alloc);
+        img.heap_src = true;
         img.src = try std.mem.concat(alloc, u8, words.items); // TODO
         img.alt = link_text_block;
         inl = Inline.initWithContent(alloc, .{ .image = img });
     } else {
         var link = zd.Link.init(alloc);
+        link.heap_url = true;
         link.url = try std.mem.concat(alloc, u8, words.items);
         link.text = link_text_block;
         inl = Inline.initWithContent(alloc, .{ .link = link });

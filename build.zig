@@ -53,7 +53,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .target = target,
     });
-    // lib.emit_docs = .emit;
     b.installArtifact(lib);
     const lib_step = b.step("lib", "Build Zigdown as a shared library (and also build HTML docs)");
     lib_step.dependOn(&lib.step);
@@ -63,9 +62,6 @@ pub fn build(b: *std.Build) void {
     addTest(b, "test-parser", "Run the new paresr tests", "src/parser.zig", optimize);
     addTest(b, "test-render", "Run renderer unit tests", "src/render.zig", optimize);
     addTest(b, "test-image", "Run the image rendering tests", "src/image.zig", optimize);
-
-    addTest(b, "test-parser-old", "Run parser unit tests", "src/old_parser.zig", optimize);
-
     addTest(b, "test-all", "Run all unit tests", "src/test.zig", optimize);
 
     // Add custom test executables
