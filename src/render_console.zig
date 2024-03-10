@@ -320,11 +320,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 self.writeLeaders(); // HACK - TESTING
                 self.needs_leaders = true;
             }
-            // for (block.raw_contents.items) |item| {
-            //     self.write_wrap(item.text); // HACK - TESTING
-            // }
             switch (block.content) {
-                .Break => {}, //self.renderBreak(),
+                .Break => {},
                 .Code => |c| try self.renderCode(c),
                 .Heading => try self.renderHeading(block),
                 .Paragraph => try self.renderParagraph(block),

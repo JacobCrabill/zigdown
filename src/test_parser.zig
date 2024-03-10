@@ -20,8 +20,9 @@ pub fn main() !void {
         \\### Heading 3
         \\#### Heading 4
         \\
-        \\Foo Bar baz. Hi!
-        \\> > Double-nested Quote
+        \\Foo **Bar _baz_**. ~Hi!~
+        \\> > Double-nested ~Quote~
+        \\> > ...which supports multiple lines
         \\
         \\Image: ![Some Image](image-source.png)
         \\
@@ -37,6 +38,7 @@ pub fn main() !void {
         \\  Some raw code here...
         \\And some more here.
         \\```
+        \\para
     ;
 
     var style: zd.TextStyle = zd.TextStyle{ .fg_color = .Green, .bold = true };
