@@ -32,6 +32,54 @@ const Block = zd.Block;
 const ContainerBlock = zd.ContainerBlock;
 const LeafBlock = zd.LeafBlock;
 
+const Logger = struct {
+    const Self = @This();
+    depth: usize = 0,
+    enabled: bool = true,
+
+    pub fn log(self: Self, comptime fmt: []const u8, args: anytype) void {
+        self.doIndent();
+        self.raw(fmt, args);
+    }
+
+    pub fn raw(self: Self, comptime fmt: []const u8, args: anytype) void {
+        if (self.enabled) {
+            std.debug.print(fmt, args);
+        }
+    }
+
+    pub fn printTypes(self: Self, tokens: []const Token, indent: bool) void {
+        if (indent) self.doIndent();
+        for (tokens) |tok| {
+            self.raw("{s}, ", .{@tagName(tok.kind)});
+        }
+        self.raw("\n", .{});
+    }
+
+    pub fn printText(self: Self, tokens: []const Token, indent: bool) void {
+        if (indent) self.doIndent();
+        self.raw("\"", .{});
+        for (tokens) |tok| {
+            if (tok.kind == .BREAK) {
+                self.raw("\\n", .{});
+                continue;
+            }
+            self.raw("{s}", .{tok.text});
+        }
+        self.raw("\"\n", .{});
+    }
+
+    fn doIndent(self: Self) void {
+        var i: usize = 0;
+        while (i < self.depth) : (i += 1) {
+            self.raw("  ", .{});
+        }
+    }
+};
+
+/// Global logger
+var logger = Logger{ .enabled = false };
+
 ///////////////////////////////////////////////////////////////////////////////
 // Helper Functions
 ///////////////////////////////////////////////////////////////////////////////
@@ -46,6 +94,36 @@ fn trimLeadingWhitespace(line: []const Token) []const Token {
         }
     }
     return line[start..];
+}
+
+/// Remove up to max_ws leading whitespace characters from the start of the line
+fn removeIndent(line: []const Token, max_ws: usize) []const Token {
+    var start: usize = 0;
+    var ws_count: usize = 0;
+    for (line, 0..) |tok, i| {
+        switch (tok.kind) {
+            .SPACE => {
+                ws_count += 1;
+                if (ws_count > max_ws) {
+                    start = i;
+                    break;
+                }
+            },
+            .INDENT => {
+                ws_count += 2;
+                if (ws_count > max_ws) {
+                    start = i;
+                    break;
+                }
+            },
+            else => {
+                start = i;
+                break;
+            },
+        }
+    }
+    start = @min(start, max_ws);
+    return line[@min(max_ws, start)..];
 }
 
 /// Find the index of the next token of any of type 'kind' at or beyond 'idx'
@@ -89,7 +167,9 @@ fn isEmptyLine(line: []const Token) bool {
 /// Check for the pattern "[ ]*[0-9]*[.][ ]+"
 fn isOrderedListItem(line: []const Token) bool {
     var have_period: bool = false;
-    for (trimLeadingWhitespace(line)) |tok| {
+    // var ws_count: usize = 0;
+    //for (trimLeadingWhitespace(line)) |tok| {
+    for (line) |tok| {
         switch (tok.kind) {
             .DIGIT => {
                 if (have_period) return false;
@@ -97,8 +177,16 @@ fn isOrderedListItem(line: []const Token) bool {
             .PERIOD => {
                 have_period = true;
             },
-            .SPACE, .INDENT => {
+            .SPACE => {
                 if (have_period) return true;
+                // ws_count += 1;
+                // if (ws_count > 2) return false;
+                return false;
+            },
+            .INDENT => {
+                if (have_period) return true;
+                // ws_count += 2;
+                // if (ws_count > 2) return false;
                 return false;
             },
             else => return false,
@@ -111,10 +199,20 @@ fn isOrderedListItem(line: []const Token) bool {
 /// Check for the pattern "[ ]*[-+*][ ]+"
 fn isUnorderedListItem(line: []const Token) bool {
     var have_bullet: bool = false;
+    // var ws_count: usize = 0;
     for (line) |tok| {
         switch (tok.kind) {
-            .SPACE, .INDENT => {
+            .SPACE => {
                 if (have_bullet) return true;
+                return false;
+                // ws_count += 1;
+                // if (ws_count > 2) return false;
+            },
+            .INDENT => {
+                if (have_bullet) return true;
+                return false;
+                // ws_count += 2;
+                // if (ws_count > 2) return false;
             },
             .PLUS, .MINUS, .STAR => {
                 if (have_bullet) return false; // Can only have one bullet character
@@ -207,6 +305,7 @@ fn handleLine(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineDocument(block: *Block, line: []const Token) bool {
+    logger.log("Document Scope\n", .{});
     std.debug.assert(block.isOpen());
     std.debug.assert(block.isContainer());
 
@@ -215,7 +314,7 @@ pub fn handleLineDocument(block: *Block, line: []const Token) bool {
     if (cblock.children.items.len > 0) {
         const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
         if (child.isOpen()) {
-            if (handleLine(child, line)) {
+            if (handleLine(child, removeIndent(line, 2))) {
                 return true;
             } else {
                 closeBlock(child);
@@ -232,6 +331,8 @@ pub fn handleLineDocument(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineQuote(block: *Block, line: []const Token) bool {
+    logger.depth += 1;
+    defer logger.depth -= 1;
     std.debug.assert(block.isOpen());
     std.debug.assert(block.isContainer());
 
@@ -275,11 +376,16 @@ pub fn handleLineQuote(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineList(block: *Block, line: []const Token) bool {
+    logger.depth += 1;
+    defer logger.depth -= 1;
     std.debug.assert(block.isOpen());
     std.debug.assert(block.isContainer());
 
     if (!isLazyContinuationLineList(line))
         return false;
+
+    logger.log("Handling List: ", .{});
+    logger.printText(line, false);
 
     // Ensure we have at least 1 open ListItem child
     var cblock = block.container();
@@ -308,16 +414,29 @@ pub fn handleLineList(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineListItem(block: *Block, line: []const Token) bool {
+    logger.depth += 1;
+    defer logger.depth -= 1;
+
     std.debug.assert(block.isOpen());
     std.debug.assert(block.isContainer());
 
     var trimmed_line = line;
+    logger.log("Handling ListItem: ", .{});
+    logger.printText(line, false);
     if (isContinuationLineList(line)) {
         trimmed_line = trimContinuationMarkersList(line);
-    }
-    // Otherwise, check if the trimmed line can be appended to the current block or not
-    else if (!isLazyContinuationLineList(trimmed_line)) {
-        return false;
+        logger.log("Trimmed continuation markers: ", .{});
+        logger.printText(trimmed_line, false);
+    } else {
+        trimmed_line = removeIndent(line, 2);
+        logger.log("Trimmed line unindented: ", .{});
+        logger.printText(trimmed_line, false);
+
+        // Otherwise, check if the trimmed line can be appended to the current block or not
+        if (!isLazyContinuationLineList(trimmed_line)) {
+            logger.log("!! ListItem cannot handle line\n", .{});
+            return false;
+        }
     }
 
     // Check for an open child
@@ -325,15 +444,17 @@ pub fn handleLineListItem(block: *Block, line: []const Token) bool {
     if (cblock.children.items.len > 0) {
         const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
         if (handleLine(child, trimmed_line)) {
+            logger.log("ListItem's child handled line\n", .{});
             return true;
         } else {
+            logger.log("ListItem's child did *not* handle line\n", .{});
             closeBlock(child);
         }
     }
 
     // Child did not accept this line (or no children yet)
     // Determine which kind of Block this line should be
-    const child = parseNewBlock(block.allocator(), trimmed_line) catch unreachable;
+    const child = parseNewBlock(block.allocator(), removeIndent(trimmed_line, 2)) catch unreachable;
     cblock.children.append(child) catch unreachable;
 
     return true;
@@ -350,6 +471,8 @@ pub fn handleLineBreak(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineCode(block: *Block, line: []const Token) bool {
+    logger.depth += 1;
+    defer logger.depth -= 1;
     var code: *zd.Code = &block.Leaf.content.Code;
 
     if (code.opener == null) {
@@ -389,6 +512,8 @@ pub fn handleLineCode(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineHeading(block: *Block, line: []const Token) bool {
+    logger.depth += 1;
+    defer logger.depth -= 1;
     std.debug.assert(block.isOpen());
     std.debug.assert(block.isLeaf());
 
@@ -402,18 +527,6 @@ pub fn handleLineHeading(block: *Block, line: []const Token) bool {
     var head: *zd.Heading = &block.Leaf.content.Heading;
     head.level = level;
 
-    // if (line.len > level) {
-    //     // Concatenate all text into the Heading
-    //     var words = ArrayList([]const u8).init(block.allocator());
-    //     defer words.deinit();
-    //     for (trimLeadingWhitespace(line[level..])) |tok| {
-    //         if (tok.kind == .BREAK) continue;
-    //         words.append(tok.text) catch unreachable;
-    //     }
-
-    //     head.text = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
-    // }
-
     const end: usize = findFirstOf(line, level, &.{.BREAK}) orelse line.len;
     block.Leaf.raw_contents.appendSlice(line[level..end]) catch unreachable;
     closeBlock(block);
@@ -422,12 +535,23 @@ pub fn handleLineHeading(block: *Block, line: []const Token) bool {
 }
 
 pub fn handleLineParagraph(block: *Block, line: []const Token) bool {
+    logger.depth += 1;
+    defer logger.depth -= 1;
     std.debug.assert(block.isOpen());
     std.debug.assert(block.isLeaf());
+    logger.log("Handling Paragraph: ", .{});
+    logger.printText(line, false);
 
-    if (!isContinuationLineParagraph(line)) {
+    // Note that we allow some wiggle room in leading whitespace
+    // If the line (minus up to 2 spaces) is another block type, it's not Paragraph content
+    // Example:
+    // > Normal paragraph text on this line
+    // >  - This starts a list, and should not be a paragraph
+    if (!isContinuationLineParagraph(removeIndent(line, 2))) {
+        logger.log("~~ line does not continue paragraph\n", .{});
         return false;
     }
+    logger.log("~~ line continues paragraph!\n", .{});
 
     block.Leaf.raw_contents.appendSlice(line) catch unreachable;
 
@@ -491,6 +615,7 @@ fn isLazyContinuationLineList(line: []const Token) bool {
     if (line.len == 0) return true; // TODO: blank line - allow?
     if (isEmptyLine(line) or isQuote(line) or isHeading(line) or isCodeBlock(line))
         return false;
+
     return true;
 }
 
@@ -518,9 +643,22 @@ fn trimContinuationMarkersList(line: []const Token) []const Token {
 }
 
 fn trimContinuationMarkersUnorderedList(line: []const Token) []const Token {
+    // const trimmed = trimLeadingWhitespace(line);
     // Find the first list-item marker (*, -, +)
-    const trimmed = trimLeadingWhitespace(line);
+    var ws_count: usize = 0;
+    for (line) |tok| {
+        if (tok.kind == .SPACE) {
+            ws_count += 1;
+        } else if (tok.kind == .INDENT) {
+            ws_count += 2;
+        } else {
+            break;
+        }
+    }
+    std.debug.assert(ws_count < line.len);
+    const trimmed = line[@min(ws_count, 2)..];
     std.debug.assert(trimmed.len > 0);
+
     switch (trimmed[0].kind) {
         .MINUS, .PLUS, .STAR => {
             return trimLeadingWhitespace(trimmed[1..]);
@@ -536,8 +674,21 @@ fn trimContinuationMarkersUnorderedList(line: []const Token) []const Token {
 
 fn trimContinuationMarkersOrderedList(line: []const Token) []const Token {
     // Find the first list-item marker "[0-9]+[.]"
-    const trimmed = trimLeadingWhitespace(line);
+    // const trimmed = trimLeadingWhitespace(line);
+    var ws_count: usize = 0;
+    for (line) |tok| {
+        if (tok.kind == .SPACE) {
+            ws_count += 1;
+        } else if (tok.kind == .INDENT) {
+            ws_count += 2;
+        } else {
+            break;
+        }
+    }
+    std.debug.assert(ws_count < line.len);
+    const trimmed = line[@min(ws_count, 2)..];
     std.debug.assert(trimmed.len > 0);
+
     var have_dot: bool = false;
     for (trimmed, 0..) |tok, i| {
         switch (tok.kind) {
@@ -579,10 +730,7 @@ fn closeBlock(block: *Block) void {
         },
         .Leaf => |*l| {
             switch (l.content) {
-                // .Break => return closeBlockBreak(block),
                 .Code => closeBlockCode(block),
-                // .Heading => // closeBlockHeading(block),
-                // .Paragraph => return closeBlockParagraph(block),
                 else => {
                     parseInlines(block.allocator(), &l.inlines, l.raw_contents.items) catch unreachable;
                 },
@@ -932,6 +1080,11 @@ pub const Parser = struct {
         self.document.deinit();
     }
 
+    /// Enable/Disable trace-level logging
+    pub fn enableTracing(_: Self, enabled: bool) void {
+        logger.enabled = enabled;
+    }
+
     /// Parse the document
     pub fn parseMarkdown(self: *Self, text: []const u8) !void {
         self.reset();
@@ -950,8 +1103,9 @@ pub const Parser = struct {
         // Parse the document
         var lino: usize = 1;
         loop: while (self.getLine()) |line| {
-            std.debug.print("Line {d}: ", .{lino});
-            zd.printTypes(line);
+            logger.log("Line {d}: ", .{lino});
+            logger.printTypes(line, false);
+            // We allow some "wiggle room" in the leading whitespace, up to 2 spaces
             if (!handleLine(&self.document, line))
                 return error.ParseError;
             lino += 1;
@@ -1032,8 +1186,13 @@ pub const Parser = struct {
 };
 
 /// Parse a single line of Markdown into the start of a new Block
-fn parseNewBlock(alloc: Allocator, line: []const Token) !Block {
+fn parseNewBlock(alloc: Allocator, in_line: []const Token) !Block {
+    // We allow some "wiggle room" in the leading whitespace, up to 2 spaces
+    const line = removeIndent(in_line, 2);
+
     var b: Block = undefined;
+    logger.log("ParseNewBlock: ", .{});
+    logger.printText(line, false);
 
     switch (line[0].kind) {
         .GT => {
@@ -1044,11 +1203,18 @@ fn parseNewBlock(alloc: Allocator, line: []const Token) !Block {
                 return error.ParseError;
         },
         .MINUS => {
-            // Parse unorderd list block
-            b = Block.initContainer(alloc, .List);
-            b.Container.content.List = zd.List{ .ordered = false };
-            if (!handleLineList(&b, line))
-                return error.ParseError;
+            if (isListItem(line)) {
+                // Parse unorderd list block
+                b = Block.initContainer(alloc, .List);
+                b.Container.content.List = zd.List{ .ordered = false };
+                if (!handleLineList(&b, line))
+                    return error.ParseError;
+            } else {
+                // Fallback - parse paragraph
+                b = Block.initLeaf(alloc, .Paragraph);
+                if (!handleLineParagraph(&b, line))
+                    try errorReturn(@src(), "Cannot parse line as paragraph: {any}", .{line});
+            }
         },
         .STAR => {
             if (line.len > 1 and line[1].kind == .SPACE) {
@@ -1060,13 +1226,19 @@ fn parseNewBlock(alloc: Allocator, line: []const Token) !Block {
             }
         },
         .DIGIT => {
-            if (line.len > 1 and line[1].kind == .PERIOD) {
+            if (isListItem(line)) {
+                // if (line.len > 1 and line[1].kind == .PERIOD) {
                 // Parse numbered list block
                 b = Block.initContainer(alloc, .List);
                 b.Container.content.List.ordered = true;
                 // todo: consider parsing and setting the start number here
                 if (!handleLineList(&b, line))
                     try errorReturn(@src(), "Cannot parse line as numlist: {any}", .{line});
+            } else {
+                // Fallback - parse paragraph
+                b = Block.initLeaf(alloc, .Paragraph);
+                if (!handleLineParagraph(&b, line))
+                    try errorReturn(@src(), "Cannot parse line as paragraph: {any}", .{line});
             }
         },
         .HASH => {
@@ -1091,6 +1263,11 @@ fn parseNewBlock(alloc: Allocator, line: []const Token) !Block {
         },
     }
 
+    if (b.isContainer()) {
+        logger.log("Parsed new Container: {s}\n", .{@tagName(b.Container.content)});
+    } else {
+        logger.log("Parsed new Leaf: {s}\n", .{@tagName(b.Leaf.content)});
+    }
     return b;
 }
 

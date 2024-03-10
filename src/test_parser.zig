@@ -14,7 +14,7 @@ pub const ConsoleRenderer = zd.ConsoleRenderer;
 pub const consoleRenderer = zd.consoleRenderer;
 
 pub fn main() !void {
-    const text: []const u8 =
+    const text1: []const u8 =
         \\# Heading 1
         \\## Heading 2
         \\### Heading 3
@@ -22,15 +22,25 @@ pub fn main() !void {
         \\
         \\Foo **Bar _baz_**. ~Hi!~
         \\> > Double-nested ~Quote~
-        \\> > ...which supports multiple lines, which will be wrapped to the appropriate width by the renderer
+        \\> > ...which supports multiple lines, which will be wrapped to the appropriate width by the renderer.
+        \\> Note that lazy continuation lines allow this to be included in the previous child.
+        \\>
+        \\> This should work, too...
+        \\> - And so should this!
+        \\>
+        \\> foo
         \\
         \\Image: ![Some Image](image-source.png)
         \\
         \\Link: [Click Me!](https://google.com)
         \\
         \\1. Numlist
-        \\   - With child list
-        \\1. item
+        \\ 2. Foobar
+        \\    - With child list
+        \\    - this should work?
+        \\     1. and this?
+        \\      2. Wohooo!!!
+        \\1. 2nd item
         \\
         \\- And now a list!
         \\- more items
@@ -40,6 +50,21 @@ pub fn main() !void {
         \\```
         \\para
     ;
+    const text2: []const u8 =
+        \\# Heading 1
+        \\
+        \\Link: [Click Me!](https://google.com)
+        \\
+        \\1. Numlist
+        \\ 2. Foobar
+        \\    - With child list
+        \\    - this should work?
+        \\     1. and this?
+        \\      2. Wohooo!!!
+        \\1. 2nd item
+    ;
+    _ = text1;
+    const text = text2;
 
     var style: zd.TextStyle = zd.TextStyle{ .fg_color = .Green, .bold = true };
     cons.printStyled(std.debug, style, "\n────────────────── Test Document ──────────────────\n", .{});
@@ -51,6 +76,7 @@ pub fn main() !void {
     const alloc = gpa.allocator();
 
     var p: zd.Parser = try zd.Parser.init(alloc, .{ .copy_input = false });
+    p.enableTracing(true);
     defer p.deinit();
     try p.parseMarkdown(text);
 
@@ -69,7 +95,7 @@ pub fn main() !void {
 
     style.fg_color = .Red;
     cons.printStyled(std.debug, style, "─────────────────────── Rendered Text ───────────────────────\n", .{});
-    var crenderer = consoleRenderer(stdout, alloc, .{ .width = 50 });
+    var crenderer = consoleRenderer(stdout, alloc, .{ .width = 70 });
     defer crenderer.deinit();
     try crenderer.renderBlock(p.document);
     cons.printStyled(std.debug, style, "─────────────────────────────────────────────────────────────\n", .{});

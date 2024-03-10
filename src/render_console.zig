@@ -351,11 +351,16 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         pub fn renderQuote(self: *Self, block: zd.Container) !void {
             try self.leader_stack.append(quote_indent);
 
-            // self.writeLeaders();
             self.needs_leaders = true;
 
-            for (block.children.items) |child| {
+            for (block.children.items, 0..) |child, i| {
                 try self.renderBlock(child);
+                if (i < block.children.items.len - 1) {
+                    // Add a blank line in between children
+                    self.renderBreak();
+                    self.writeLeaders();
+                    self.needs_leaders = false;
+                }
             }
 
             _ = self.leader_stack.pop();

@@ -144,7 +144,7 @@ pub const WordTokenizer = struct {
 pub const Tokenizers = .{
     LiteralTokenizer("\r\n", TokenType.BREAK),
     LiteralTokenizer("\n", TokenType.BREAK),
-    LiteralTokenizer("  ", TokenType.INDENT),
+    // LiteralTokenizer("  ", TokenType.INDENT),
     LiteralTokenizer("\t", TokenType.INDENT),
     LiteralTokenizer("***", TokenType.EMBOLD),
     LiteralTokenizer("_**", TokenType.EMBOLD),
@@ -240,6 +240,18 @@ pub fn printTypes(tokens: []const Token) void {
         std.debug.print("{s}, ", .{typeStr(tok.kind)});
     }
     std.debug.print("\n", .{});
+}
+
+pub fn printText(tokens: []const Token) void {
+    std.debug.print("\"", .{});
+    for (tokens) |tok| {
+        if (tok.kind == .BREAK) {
+            std.debug.print("\\n", .{});
+            continue;
+        }
+        std.debug.print("{s}", .{tok.text});
+    }
+    std.debug.print("\"\n", .{});
 }
 
 /// Concatenate the raw text of each token into a single string
