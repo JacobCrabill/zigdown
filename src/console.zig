@@ -47,6 +47,7 @@ pub const bg_blue = ansi ++ "[44m";
 pub const bg_magenta = ansi ++ "[45m";
 pub const bg_cyan = ansi ++ "[46m";
 pub const bg_white = ansi ++ "[47m";
+pub const bg_default = ansi ++ "[49m";
 
 pub const fg_black = ansi ++ "[30m";
 pub const fg_red = ansi ++ "[31m";
@@ -56,6 +57,7 @@ pub const fg_blue = ansi ++ "[34m";
 pub const fg_magenta = ansi ++ "[35m";
 pub const fg_cyan = ansi ++ "[36m";
 pub const fg_white = ansi ++ "[37m";
+pub const fg_default = ansi ++ "[39m";
 
 pub const text_bold = ansi ++ "[1m";
 pub const text_italic = ansi ++ "[3m";
@@ -101,6 +103,7 @@ pub fn startFgColor(stream: anytype, color: Color) void {
         .Cyan => stream.print(fg_cyan, .{}),
         .White => stream.print(fg_white, .{}),
         .Magenta => stream.print(fg_magenta, .{}),
+        .Default => stream.print(fg_default, .{}),
     }
 }
 
@@ -115,6 +118,7 @@ pub fn startBgColor(stream: anytype, color: Color) void {
         .Cyan => stream.print(bg_cyan, .{}),
         .White => stream.print(bg_white, .{}),
         .Magenta => stream.print(bg_magenta, .{}),
+        .Default => stream.print(bg_default, .{}),
     }
 }
 

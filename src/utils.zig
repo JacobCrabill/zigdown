@@ -11,6 +11,7 @@ pub const Color = enum(u8) {
     Magenta,
     Cyan,
     White,
+    Default,
 };
 
 pub const Style = enum(u8) {

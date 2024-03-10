@@ -22,7 +22,7 @@ pub fn main() !void {
         \\
         \\Foo **Bar _baz_**. ~Hi!~
         \\> > Double-nested ~Quote~
-        \\> > ...which supports multiple lines
+        \\> > ...which supports multiple lines, which will be wrapped to the appropriate width by the renderer
         \\
         \\Image: ![Some Image](image-source.png)
         \\
@@ -60,16 +60,17 @@ pub fn main() !void {
     cons.printStyled(std.debug, style, "───────────────────────────────────────────────────\n", .{});
 
     const stdout = std.io.getStdOut().writer();
-    var hrenderer = htmlRenderer(stdout, alloc);
-    style.fg_color = .Cyan;
-    cons.printStyled(std.debug, style, "────────────────── Rendered HTML ──────────────────\n", .{});
-    try hrenderer.renderBlock(p.document);
-    cons.printStyled(std.debug, style, "───────────────────────────────────────────────────\n", .{});
+
+    // var hrenderer = htmlRenderer(stdout, alloc);
+    // style.fg_color = .Cyan;
+    // cons.printStyled(std.debug, style, "────────────────── Rendered HTML ──────────────────\n", .{});
+    // try hrenderer.renderBlock(p.document);
+    // cons.printStyled(std.debug, style, "───────────────────────────────────────────────────\n", .{});
 
     style.fg_color = .Red;
-    cons.printStyled(std.debug, style, "────────────────── Rendered Text ──────────────────\n", .{});
-    var crenderer = consoleRenderer(stdout, alloc, .{ .width = 70 });
+    cons.printStyled(std.debug, style, "─────────────────────── Rendered Text ───────────────────────\n", .{});
+    var crenderer = consoleRenderer(stdout, alloc, .{ .width = 50 });
     defer crenderer.deinit();
     try crenderer.renderBlock(p.document);
-    cons.printStyled(std.debug, style, "───────────────────────────────────────────────────\n", .{});
+    cons.printStyled(std.debug, style, "─────────────────────────────────────────────────────────────\n", .{});
 }

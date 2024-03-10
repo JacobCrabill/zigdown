@@ -8,8 +8,12 @@ const zd = struct {
 };
 
 const cons = @import("console.zig");
+const debug = @import("debug.zig");
 const gfx = @import("image.zig");
 const stb = @import("stb_image");
+
+const errorReturn = debug.errorReturn;
+const errorMsg = debug.errorMsg;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
@@ -111,6 +115,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     .Magenta => self.writeno(cons.fg_magenta),
                     .Cyan => self.writeno(cons.fg_cyan),
                     .White => self.writeno(cons.fg_white),
+                    .Default => self.writeno(cons.fg_default),
                 }
             }
 
@@ -124,6 +129,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     .Magenta => self.writeno(cons.bg_magenta),
                     .Cyan => self.writeno(cons.bg_cyan),
                     .White => self.writeno(cons.bg_white),
+                    .Default => self.writeno(cons.bg_default),
                 }
             }
 
@@ -146,7 +152,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Write an array of bytes to the underlying writer, and update the current column
         pub fn write(self: *Self, bytes: []const u8) void {
             self.stream.writeAll(bytes) catch |err| {
-                std.debug.print("[ERROR] Unable to write! {s}\n", .{@errorName(err)});
+                errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
             };
             self.column += bytes.len;
         }
@@ -154,14 +160,14 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Write an array of bytes to the underlying writer, without updating the current column
         pub fn writeno(self: Self, bytes: []const u8) void {
             self.stream.writeAll(bytes) catch |err| {
-                std.debug.print("[ERROR] Unable to write! {s}\n", .{@errorName(err)});
+                errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
             };
         }
 
         /// Print the format and args to the output stream, updating the current column
         pub fn print(self: *Self, comptime fmt: []const u8, args: anytype) void {
             const text: []const u8 = std.fmt.allocPrint(self.alloc, fmt, args) catch |err| blk: {
-                std.debug.print("[ERROR] Unable to print! {s}\n", .{@errorName(err)});
+                errorMsg(@src(), "Unable to print! {s}\n", .{@errorName(err)});
                 break :blk "";
             };
             defer self.alloc.free(text);
@@ -171,7 +177,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Print the format and args to the output stream, without updating the current column
         pub fn printno(self: *Self, comptime fmt: []const u8, args: anytype) void {
             self.stream.print(fmt, args) catch |err| {
-                std.debug.print("[ERROR] Unable to print! {s}\n", .{@errorName(err)});
+                errorMsg(@src(), "Unable to print! {s}\n", .{@errorName(err)});
             };
         }
 
@@ -259,7 +265,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Write the text, wrapping (with the current indentation) at 'width' characters
-        fn write_wrap(self: *Self, text: []const u8) void {
+        fn wrapText(self: *Self, text: []const u8) void {
             const len = text.len;
             if (len == 0) return;
 
@@ -318,7 +324,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         pub fn renderLeaf(self: *Self, block: zd.Leaf) !void {
             if (self.needs_leaders) {
                 self.writeLeaders(); // HACK - TESTING
-                self.needs_leaders = true;
+                self.needs_leaders = false;
             }
             switch (block.content) {
                 .Break => {},
@@ -335,7 +341,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             try self.renderBegin();
             for (doc.children.items) |block| {
                 try self.renderBlock(block);
-                self.renderBreak();
+                if (self.column > 0) self.renderBreak(); // Begin new line
+                if (!zd.isBreak(block)) self.renderBreak(); // Add blank line
             }
             try self.renderEnd();
         }
@@ -345,7 +352,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             try self.leader_stack.append(quote_indent);
 
             // self.writeLeaders();
-            // self.needs_leaders = false;
+            self.needs_leaders = true;
 
             for (block.children.items) |child| {
                 try self.renderBlock(child);
@@ -365,9 +372,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         fn renderUnorderedList(self: *Self, list: zd.Container) !void {
             for (list.children.items) |item| {
-                // TODO: was this ever needed?
-                // if (self.column > 0)
-                //     self.renderBreak();
+                // Ensure we start each list item on a new line
+                if (self.column > 0)
+                    self.renderBreak();
 
                 // print out list bullet
                 self.writeLeaders();
@@ -388,9 +395,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             const start: usize = list.content.List.start;
             var buffer: [16]u8 = undefined;
             for (list.children.items, 0..) |item, i| {
-                // TODO: was this ever needed?
-                // if (self.column > 0)
-                //     self.renderBreak();
+                // Ensure we start each list item on a new line
+                if (self.column > 0)
+                    self.renderBreak();
 
                 self.writeLeaders();
                 self.needs_leaders = false;
@@ -513,7 +520,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.resetStyle();
 
             self.writeLeaders();
-            self.write_wrap(c.text orelse "");
+            self.wrapText(c.text orelse "");
 
             self.startStyle(style);
             self.print("━━━━━━━━━━━━━━━━━━━━", .{});
@@ -535,7 +542,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 .autolink => |l| try self.renderAutolink(l),
                 .codespan => |c| try self.renderInlineCode(c),
                 .image => |i| try self.renderImage(i),
-                .linebreak => {}, //self.renderBreak(),
+                .linebreak => {},
                 .link => |l| try self.renderLink(l),
                 .text => |t| try self.renderText(t),
             }
@@ -553,7 +560,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         fn renderText(self: *Self, text: zd.Text) !void {
             self.startStyle(text.style);
-            self.write(text.text);
+            self.wrapText(text.text);
         }
 
         fn renderLink(self: *Self, link: zd.Link) !void {
@@ -576,12 +583,15 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         fn renderImage(self: *Self, image: zd.Image) !void {
-            // TODO
-            try self.stream.print("<img src=\"{s}\" alt=\"", .{image.src});
+            const cur_style = self.cur_style;
+            self.startStyle(.{ .fg_color = .Blue, .bold = true });
             for (image.alt.items) |text| {
                 try self.renderText(text);
             }
-            try self.stream.print("\"/>", .{});
+            self.write(" -> ");
+            self.startStyle(.{ .fg_color = .Green, .bold = true, .underline = true });
+            self.write(image.src);
+            self.startStyle(cur_style);
         }
     };
 }

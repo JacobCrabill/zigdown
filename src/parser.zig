@@ -12,7 +12,10 @@ const zd = struct {
     usingnamespace @import("containers.zig");
     usingnamespace @import("blocks.zig");
 };
-const cons = @import("console.zig");
+const debug = @import("debug.zig");
+
+const errorReturn = debug.errorReturn;
+const errorMsg = debug.errorMsg;
 
 const Lexer = zd.Lexer;
 const TokenType = zd.TokenType;
@@ -32,19 +35,6 @@ const LeafBlock = zd.LeafBlock;
 ///////////////////////////////////////////////////////////////////////////////
 // Helper Functions
 ///////////////////////////////////////////////////////////////////////////////
-
-fn errorReturn(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) !void {
-    cons.printStyled(std.debug, .{ .fg_color = .Red, .bold = true }, "{s}-{d}: ERROR: ", .{ src.fn_name, src.line });
-    cons.printStyled(std.debug, .{ .bold = true }, fmt, args);
-    std.debug.print("\n", .{});
-    return error.ParseError;
-}
-
-fn errorMsg(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) void {
-    cons.printStyled(std.debug, .{ .fg_color = .Red, .bold = true }, "{s}-{d}: ERROR: ", .{ src.fn_name, src.line });
-    cons.printStyled(std.debug, .{ .bold = true }, fmt, args);
-    std.debug.print("\n", .{});
-}
 
 /// Remove all leading whitespace (spaces or indents) from the start of a line
 fn trimLeadingWhitespace(line: []const Token) []const Token {
@@ -674,6 +664,10 @@ fn parseInlines(alloc: Allocator, inlines: *ArrayList(zd.Inline), tokens: []cons
                     try words.append(tok.text);
                 }
             },
+            .BREAK => {
+                // Treat line breaks as spaces; Don't clear the style (The renderer deals with wrapping)
+                try words.append(" ");
+            },
             else => {
                 try words.append(tok.text);
             },
@@ -726,6 +720,10 @@ fn parseInlineText(alloc: Allocator, tokens: []const Token) !ArrayList(zd.Text) 
             .TILDE => {
                 try appendText(alloc, &text_parts, &words, style);
                 style.underline = !style.underline;
+            },
+            .BREAK => {
+                // Treat line breaks as spaces; Don't clear the style (The renderer deals with wrapping)
+                try words.append(" ");
             },
             else => {
                 try words.append(tok.text);
