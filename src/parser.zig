@@ -167,8 +167,6 @@ fn isEmptyLine(line: []const Token) bool {
 /// Check for the pattern "[ ]*[0-9]*[.][ ]+"
 fn isOrderedListItem(line: []const Token) bool {
     var have_period: bool = false;
-    // var ws_count: usize = 0;
-    //for (trimLeadingWhitespace(line)) |tok| {
     for (line) |tok| {
         switch (tok.kind) {
             .DIGIT => {
@@ -179,14 +177,10 @@ fn isOrderedListItem(line: []const Token) bool {
             },
             .SPACE => {
                 if (have_period) return true;
-                // ws_count += 1;
-                // if (ws_count > 2) return false;
                 return false;
             },
             .INDENT => {
                 if (have_period) return true;
-                // ws_count += 2;
-                // if (ws_count > 2) return false;
                 return false;
             },
             else => return false,
@@ -199,20 +193,15 @@ fn isOrderedListItem(line: []const Token) bool {
 /// Check for the pattern "[ ]*[-+*][ ]+"
 fn isUnorderedListItem(line: []const Token) bool {
     var have_bullet: bool = false;
-    // var ws_count: usize = 0;
     for (line) |tok| {
         switch (tok.kind) {
             .SPACE => {
                 if (have_bullet) return true;
                 return false;
-                // ws_count += 1;
-                // if (ws_count > 2) return false;
             },
             .INDENT => {
                 if (have_bullet) return true;
                 return false;
-                // ws_count += 2;
-                // if (ws_count > 2) return false;
             },
             .PLUS, .MINUS, .STAR => {
                 if (have_bullet) return false; // Can only have one bullet character
@@ -1027,6 +1016,7 @@ fn parseLinkOrImage(alloc: Allocator, inlines: *ArrayList(Inline), tokens: []con
 
     return start + rp_idx + 1;
 }
+
 ///////////////////////////////////////////////////////////////////////////////
 // Parser Struct
 ///////////////////////////////////////////////////////////////////////////////

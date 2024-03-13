@@ -3,9 +3,8 @@
 Inspired by [Glow](https://github.com/charmbracelet/glow), the goal is to create a simple
 terminal-based Markdown renderer just for fun.
 
-> [!NOTE]
-> This doesn't really do much... ...yet. Very simple Markdown can be rendered to HTML and
-> to the console.
+> [!NOTE] This is still a WIP, but it can currently render some basic Markdown files nicely to the
+> console, or to HTML!
 
 ## Goals
 
@@ -14,12 +13,13 @@ my own implementation (because, again, _for fun_).
 
 - [x] Headers and basic text formatting
 - [x] Quote blocks
-- [x] Code blocks
+- [x] Code blocks (mostly done)
 - [x] Unordered lists
 - [x] Ordered lists
 - [ ] Task lists
 - [ ] Tables
-- [ ] Links
+- [x] Links
+- [x] Images (basic)
 - [ ] Images (rendered to the console using the
   [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)
 - [ ] Code blocks _with syntax highlighting_
@@ -34,11 +34,18 @@ The current version of Zig this code compiles with is
 ```shell
 zig build run -- -c test/sample.md
 zig build -l # List build options
+zig build -Dtarget=x86_64-linux-musl # Compile for x86-64 Linux using statically-linked MUSL libC
 ```
 
-`zig build` will create a `zigdown` binary at `zig-out/bin/zigdown`.
+`zig build` will create a `zigdown` binary at `zig-out/bin/zigdown`. Add `-Doptimize=ReleaseSafe` to
+enable optimizations while keeping safety checks and backtraces upon errors.
 
 ## Status
 
-Implementing a new parser from scratch. Still a WIP, but nearing completion as of end of February
-2024\.
+Nearly complete! A few bugs remaining, plus some general cleanup required, but the basics are
+largely implemented.
+
+Once the basics are polished, the next steps will be to improve the rendering options, enable
+image rendering, and work on advanced features like info boxes, task lists, tables, and more.
+
+![Sample Render](sample-render-readme.png)

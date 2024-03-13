@@ -35,14 +35,14 @@ pub fn main() !void {
         \\Link: [Click Me!](https://google.com)
         \\
         \\1. Numlist
-        \\ 2. Foobar
+        \\2. Foobar
         \\   - With child list
-        \\  - this should work?
-        \\     1. and this?
+        \\   - this should work?
+        \\      1. and this?
         \\      2. Wohooo!!!
         \\1. 2nd item
         \\
-        \\- And now a list!
+        \\- Another list
         \\- more items
         \\```c++
         \\  Some raw code here...
@@ -88,11 +88,11 @@ pub fn main() !void {
 
     const stdout = std.io.getStdOut().writer();
 
-    // var hrenderer = htmlRenderer(stdout, alloc);
-    // style.fg_color = .Cyan;
-    // cons.printStyled(std.debug, style, "────────────────── Rendered HTML ──────────────────\n", .{});
-    // try hrenderer.renderBlock(p.document);
-    // cons.printStyled(std.debug, style, "───────────────────────────────────────────────────\n", .{});
+    var hrenderer = htmlRenderer(stdout, alloc);
+    style.fg_color = .Cyan;
+    cons.printStyled(std.debug, style, "────────────────── Rendered HTML ──────────────────\n", .{});
+    try hrenderer.renderBlock(p.document);
+    cons.printStyled(std.debug, style, "───────────────────────────────────────────────────\n", .{});
 
     style.fg_color = .Red;
     cons.printStyled(std.debug, style, "─────────────────────── Rendered Text ───────────────────────\n", .{});

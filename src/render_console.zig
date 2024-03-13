@@ -226,68 +226,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             // do nothing
         }
 
-        fn render_list(self: *Self, list: zd.List) void {
-            if (self.column > 0)
-                self.render_break();
-
-            for (list.lines.items) |item| {
-                // indent
-                self.write_n("  ", item.level);
-                // marker
-                self.startStyle(.{ .fg_color = .Blue });
-                self.write(" * ");
-                self.resetStyle();
-                // item
-                for (item.text.text.items) |text| {
-                    self.render_text(text, 1, "    ");
-                }
-                self.render_break();
-            }
-        }
-
-        fn render_numlist(self: *Self, list: zd.NumList) void {
-            if (self.column > 0)
-                self.render_break();
-
-            for (list.lines.items, 1..) |item, i| {
-                // TODO: level
-                self.print(cons.fg_blue ++ " {d}. " ++ cons.ansi_end, .{i});
-                self.column += 4;
-                for (item.text.text.items) |text| {
-                    self.render_text(text, 1, "    ");
-                }
-                self.render_break();
-            }
-        }
-
-        fn render_textblock(self: *Self, block: zd.TextBlock, indent: usize, leader: []const u8) void {
-            // Reset column to 0 to start a new paragraph
-            //self.render_break();
-            for (block.text.items) |text| {
-                self.render_text(text, indent, leader);
-            }
-            //self.render_break();
-        }
-
-        /// TODO
-        fn render_image(self: *Self, image: zd.Image) void {
-            // \e]8;; + URL + \e\\ + Text + \e]8;; + \e\\
-            self.writeno(cons.fg_magenta);
-            self.writeno(cons.hyperlink);
-            self.print("{s}", .{image.src});
-            self.writeno(cons.link_end);
-            self.render_textblock(image.alt, 0, "");
-            self.writeno(cons.hyperlink);
-            self.writeno(cons.link_end);
-            self.writeno(cons.ansi_end);
-            const img_file: ?stb.Image = stb.load_image(image.src) catch null; // silently fail
-            if (img_file) |img| {
-                gfx.sendImagePNG(self.stream, self.alloc, image.src, @intCast(img.width), @intCast(img.height)) catch {};
-            }
-            self.print(" ", .{});
-        }
-
-        fn write_n(self: *Self, text: []const u8, count: usize) void {
+        fn writeNTimes(self: *Self, text: []const u8, count: usize) void {
             var i: usize = 0;
             while (i < count) : (i += 1) {
                 self.write(text);
@@ -295,7 +234,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         fn write_lpad(self: *Self, text: []const u8, count: usize) void {
-            self.write_n(" ", count);
+            self.writeNTimes(" ", count);
             self.write(text);
         }
 
@@ -498,7 +437,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             // Left pad
             if (lpad > 0) {
-                self.write_n(pad_char, lpad - 1);
+                self.writeNTimes(pad_char, lpad - 1);
                 self.write(" ");
             }
 
@@ -512,7 +451,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.startStyleImpl(style);
             if (rpad > 0) {
                 self.write(" ");
-                self.write_n("═", rpad - 1);
+                self.writeNTimes("═", rpad - 1);
             }
 
             self.resetStyle();
@@ -558,7 +497,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.startStyle(style);
 
             // Indent
-            self.write_n(pad_char, 4);
+            self.writeNTimes(pad_char, 4);
             self.write(" ");
             if (pad_char.len > 1) {
                 // Handle Unicode characters whose visible size is 1 but byte size is > 1
@@ -670,6 +609,11 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.startStyle(.{ .fg_color = .Green, .bold = true, .underline = true });
             self.write(image.src);
             self.startStyle(cur_style);
+
+            const img_file: ?stb.Image = stb.load_image(image.src) catch null; // silently fail
+            if (img_file) |img| {
+                gfx.sendImagePNG(self.stream, self.alloc, image.src, @intCast(img.width), @intCast(img.height)) catch {};
+            }
         }
     };
 }

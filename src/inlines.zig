@@ -124,9 +124,9 @@ pub const Text = struct {
 /// Hyperlink
 pub const Link = struct {
     alloc: Allocator,
-    url: []const u8, // Note: Heap-allocated TODO: optional
+    url: []const u8,
     text: ArrayList(Text),
-    heap_url: bool = false,
+    heap_url: bool = false, // Whether the URL string has been Heap-allocated
 
     pub fn init(alloc: Allocator) Link {
         return .{
@@ -163,9 +163,9 @@ pub const Codespan = struct {
 /// Image Link
 pub const Image = struct {
     alloc: Allocator,
-    src: []const u8 = undefined, // Note: Heap-allocated TODO: optional
+    src: []const u8,
     alt: ArrayList(Text),
-    heap_src: bool = false,
+    heap_src: bool = false, // Whether the src string has been Heap-allocated
 
     pub fn init(alloc: Allocator) Image {
         return .{
