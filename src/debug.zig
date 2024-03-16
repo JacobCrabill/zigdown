@@ -18,7 +18,7 @@ pub fn errorMsg(comptime src: std.builtin.SourceLocation, comptime fmt: []const 
 }
 
 /// Helper struct to log debug messages
-const Logger = struct {
+pub const Logger = struct {
     const Self = @This();
     depth: usize = 0,
     enabled: bool = true,
