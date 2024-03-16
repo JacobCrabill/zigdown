@@ -3,6 +3,12 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
+const debug = @import("debug.zig");
+
+const errorReturn = debug.errorReturn;
+const errorMsg = debug.errorMsg;
+const Logger = debug.Logger;
+
 const zd = struct {
     usingnamespace @import("utils.zig");
     usingnamespace @import("tokens.zig");
@@ -12,10 +18,6 @@ const zd = struct {
     usingnamespace @import("containers.zig");
     usingnamespace @import("blocks.zig");
 };
-const debug = @import("debug.zig");
-
-const errorReturn = debug.errorReturn;
-const errorMsg = debug.errorMsg;
 
 const Lexer = zd.Lexer;
 const TokenType = zd.TokenType;

@@ -6,7 +6,6 @@ const ArrayList = std.ArrayList;
 
 const zd = struct {
     usingnamespace @import("utils.zig");
-    usingnamespace @import("tokens.zig");
 };
 
 pub const TokenType = enum {

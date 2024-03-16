@@ -52,7 +52,7 @@ pub fn build(b: *std.Build) !void {
         .build_cmd = "zigdown",
         .build_description = "Build the Zigdown executable",
         .run_cmd = "run",
-        .run_description = "Run the Zigdown executable (use `-- <args> to supply arguments)",
+        .run_description = "Run the Zigdown executable (use `-- <args>` to supply arguments)",
         .root_path = "src/main.zig",
     };
     addExecutable(b, exe_config, exe_opts);

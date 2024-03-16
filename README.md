@@ -3,7 +3,7 @@
 Inspired by [Glow](https://github.com/charmbracelet/glow), the goal is to create a simple
 terminal-based Markdown renderer just for fun.
 
-> [!NOTE] This is still a WIP, but it can currently render some basic Markdown files nicely to the
+> \[!NOTE\] This is still a WIP, but it can currently render some basic Markdown files nicely to the
 > console, or to HTML!
 
 ## Goals
@@ -45,7 +45,7 @@ enable optimizations while keeping safety checks and backtraces upon errors.
 Nearly complete! A few bugs remaining, plus some general cleanup required, but the basics are
 largely implemented.
 
-Once the basics are polished, the next steps will be to improve the rendering options, enable
-image rendering, and work on advanced features like info boxes, task lists, tables, and more.
+Once the basics are polished, the next steps will be to improve the rendering options, enable image
+rendering, and work on advanced features like info boxes, task lists, tables, and more.
 
 ![Sample Render](sample-render-readme.png)
