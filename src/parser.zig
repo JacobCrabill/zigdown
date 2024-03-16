@@ -516,7 +516,7 @@ pub const Parser = struct {
             .cur_token = undefined,
             .next_token = undefined,
             .cur_line = undefined,
-            .document = undefined,
+            .document = Block.initContainer(alloc, .Document),
         };
     }
 
