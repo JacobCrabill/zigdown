@@ -112,7 +112,7 @@ test "Display image" {
     const alloc = std.testing.allocator;
     std.debug.print("Rendering Zero the Ziguana here:\n", .{});
 
-    try sendImagePNG(stdout, alloc, "test/zig-zero.png");
+    try sendImagePNG(stdout, alloc, "test/zig-zero.png", 100, 60);
 
     std.debug.print("\n--------------------------------\n", .{});
 }

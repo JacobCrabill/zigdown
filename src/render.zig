@@ -1,14 +1,12 @@
 const std = @import("std");
 
-const renderers = struct {
-    usingnamespace @import("render_html.zig");
-    usingnamespace @import("render_console.zig");
-};
+pub const render_html = @import("render_html.zig");
+pub const render_console = @import("render_console.zig");
 
 const Allocator = std.mem.Allocator;
 
-pub const HtmlRenderer = renderers.HtmlRenderer;
-pub const ConsoleRenderer = renderers.ConsoleRenderer;
+pub const HtmlRenderer = render_html.HtmlRenderer;
+pub const ConsoleRenderer = render_console.ConsoleRenderer;
 
 // Constructor function for HtmlRenderer
 pub fn htmlRenderer(out_stream: anytype, alloc: Allocator) HtmlRenderer(@TypeOf(out_stream)) {
@@ -16,6 +14,6 @@ pub fn htmlRenderer(out_stream: anytype, alloc: Allocator) HtmlRenderer(@TypeOf(
 }
 
 // Constructor function for ConsoleRenderer
-pub fn consoleRenderer(out_stream: anytype, alloc: Allocator, opts: renderers.RenderOpts) ConsoleRenderer(@TypeOf(out_stream)) {
+pub fn consoleRenderer(out_stream: anytype, alloc: Allocator, opts: render_console.RenderOpts) ConsoleRenderer(@TypeOf(out_stream)) {
     return ConsoleRenderer(@TypeOf(out_stream)).init(out_stream, alloc, opts);
 }

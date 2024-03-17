@@ -48,6 +48,7 @@ pub const RenderOpts = struct {
     width: usize = 90, // Column at which to wrap all text
     indent: usize = 2, // Left indent for the entire document
     box_style: cons.Box = cons.BoldBox,
+    root_dir: ?[]const u8 = null,
 };
 
 // Render a Markdown document to the console using ANSI escape characters
@@ -630,9 +631,23 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.write(image.src);
             self.startStyle(cur_style);
 
-            const img_file: ?stb.Image = stb.load_image(image.src) catch null; // silently fail
+            // Assume the image path is relative to the Markdown file path
+            const root_dir = if (self.opts.root_dir) |rd| rd else "./";
+            const path = try std.fs.path.joinZ(self.alloc, &.{ root_dir, image.src });
+            defer self.alloc.free(path);
+
+            const img_file: ?stb.Image = stb.load_image(path) catch null; // silently fail
             if (img_file) |img| {
-                gfx.sendImagePNG(self.stream, self.alloc, image.src, @intCast(img.width), @intCast(img.height)) catch {};
+                // Scale the image to something reasonable
+                const org_width: usize = @intCast(img.width);
+                var width = org_width;
+                var height: usize = @intCast(img.height);
+                width = @min(width, self.opts.width / 3);
+                height = (width / org_width) * height;
+                gfx.sendImagePNG(self.stream, self.alloc, path, width, height) catch |err| {
+                    std.debug.print("Error rendering image: {any}\n", .{err});
+                };
+                self.renderBreak();
             }
         }
     };

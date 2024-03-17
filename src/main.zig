@@ -92,6 +92,8 @@ pub fn main() !void {
     const md_text = try md_file.readToEndAlloc(alloc, 1e9);
     defer alloc.free(md_text);
 
+    const md_dir: ?[]const u8 = std.fs.path.dirname(realpath);
+
     var timer = try std.time.Timer.start();
 
     // Parse the input text
@@ -111,9 +113,9 @@ pub fn main() !void {
         //realpath = try std.fs.realpath(outname, &path_buf);
         //var out_file: File = try std.fs.createFileAbsolute(realpath, .{ .truncate = true });
         var out_file: File = try std.fs.cwd().createFile(outname, .{ .truncate = true });
-        try render(out_file.writer(), md, do_console, do_html);
+        try render(out_file.writer(), md, do_console, do_html, md_dir);
     } else {
-        try render(stdout, md, do_console, do_html);
+        try render(stdout, md, do_console, do_html, md_dir);
     }
 
     const t2 = timer.read();
@@ -123,14 +125,17 @@ pub fn main() !void {
     }
 }
 
-fn render(stream: anytype, md: zd.Block, do_console: bool, do_html: bool) !void {
+fn render(stream: anytype, md: zd.Block, do_console: bool, do_html: bool, root: ?[]const u8) !void {
     if (do_html) {
         var h_renderer = htmlRenderer(stream, md.allocator());
         try h_renderer.renderBlock(md);
     }
 
     if (do_console or !do_html) {
-        var c_renderer = consoleRenderer(stream, md.allocator(), .{});
+        const opts = zd.render.render_console.RenderOpts{
+            .root_dir = root,
+        };
+        var c_renderer = consoleRenderer(stream, md.allocator(), opts);
         try c_renderer.renderBlock(md);
     }
 }
