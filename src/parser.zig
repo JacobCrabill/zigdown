@@ -864,7 +864,7 @@ pub const Parser = struct {
         // Append all of the current line's tokens to the block's raw_contents
         // Check if we have the closing code block token on this line
         var have_closer: bool = false;
-        for (line) |tok| {
+        for (self.cur_line) |tok| {
             if (tok.kind == .CODE_BLOCK and std.mem.eql(u8, tok.text, code.opener.?)) {
                 have_closer = true;
                 break;

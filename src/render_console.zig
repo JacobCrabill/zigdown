@@ -18,7 +18,7 @@ const errorMsg = debug.errorMsg;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
-const quote_indent = zd.Text{ .style = .{ .italic = false }, .text = "┃ " };
+const quote_indent = zd.Text{ .style = .{ .fg_color = .White }, .text = "┃ " };
 const list_indent = zd.Text{ .style = .{}, .text = "   " };
 const numlist_indent_0 = zd.Text{ .style = .{}, .text = "    " };
 const numlist_indent_10 = zd.Text{ .style = .{}, .text = "     " };
@@ -248,11 +248,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
         }
 
-        fn write_lpad(self: *Self, text: []const u8, count: usize) void {
-            self.writeNTimes(" ", count);
-            self.write(text);
-        }
-
         /// Write the text, wrapping (with the current indentation) at 'width' characters
         fn wrapText(self: *Self, text: []const u8) void {
             const len = text.len;
@@ -262,7 +257,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 self.write(" ");
             }
 
-            var words = std.mem.tokenizeAny(u8, text, " ");
+            var words = std.mem.splitAny(u8, text, " ");
             while (words.next()) |word| {
                 // idk if there's a cleaner way to do this...
                 if (self.column > 0 and self.column + 1 > self.opts.width) {
@@ -505,10 +500,10 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     pad_char = "─";
                 },
                 3 => {
-                    style = zd.TextStyle{ .bold = true, .italic = true, .underline = true };
+                    style = zd.TextStyle{ .fg_color = .White, .bold = true, .italic = true, .underline = true };
                 },
                 else => {
-                    style = zd.TextStyle{ .underline = true };
+                    style = zd.TextStyle{ .fg_color = .White, .underline = true };
                 },
             }
 
