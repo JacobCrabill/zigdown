@@ -32,11 +32,18 @@ pub fn build(b: *std.Build) !void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const optimize = b.standardOptimizeOption(.{});
 
+    ///////////////////////////////////////////////////////////////////////////
     // Dependencies from build.zig.zon
+    // ------------------------------------------------------------------------
+    // STB-Image
     const stbi = b.dependency("stbi", .{ .optimize = optimize, .target = target });
     const stbi_dep = Dependency{ .name = "stb_image", .module = stbi.module("stb_image") };
 
-    var dep_array = [_]Dependency{stbi_dep};
+    // Zig-Clap
+    const clap = b.dependency("zig_clap", .{ .optimize = optimize, .target = target });
+    const clap_dep = Dependency{ .name = "clap", .module = clap.module("clap") };
+
+    var dep_array = [_]Dependency{ stbi_dep, clap_dep };
     const deps: []Dependency = &dep_array;
 
     const exe_opts = BuildOpts{

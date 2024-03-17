@@ -235,8 +235,10 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.renderBreak();
         }
 
-        fn renderEnd(_: *Self) !void {
-            // do nothing
+        fn renderEnd(self: *Self) !void {
+            self.printno(cons.move_left, .{1000});
+            self.writeno(cons.clear_line);
+            self.column = 0;
         }
 
         fn writeNTimes(self: *Self, text: []const u8, count: usize) void {
@@ -263,16 +265,17 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             var words = std.mem.tokenizeAny(u8, text, " ");
             while (words.next()) |word| {
                 // idk if there's a cleaner way to do this...
+                if (self.column > 0 and self.column + 1 > self.opts.width) {
+                    self.renderBreak();
+                    self.writeLeaders();
+                }
                 for (word) |c| {
                     if (c == '\n') {
                         self.renderBreak();
                         self.writeLeaders();
-                    } else if (self.column > 0 and self.column + 1 > self.opts.width) {
-                        self.renderBreak();
-                        self.writeLeaders();
-                    } else {
-                        self.write(&.{c});
+                        continue;
                     }
+                    self.write(&.{c});
                 }
                 self.write(" ");
             }
@@ -280,7 +283,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             // TODO: This still feels fishy
             // backup over the trailing " " we added if the given text didn't have one
             if (!std.mem.endsWith(u8, text, " ") and self.column > 0) {
-                // if (self.column > 0) {
                 self.printno(cons.move_left, .{1});
                 self.writeno(cons.clear_line_end);
                 self.column -= 1;
@@ -550,7 +552,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a raw block of code
         fn renderCode(self: *Self, c: zd.Code) !void {
-            // TODO: Proper indent / leaders
             const bar_style = zd.TextStyle{ .fg_color = .Yellow, .bold = true };
             const text_style = zd.TextStyle{ .fg_color = .PurpleGrey };
             self.startStyle(bar_style);

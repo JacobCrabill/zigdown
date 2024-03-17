@@ -1,6 +1,8 @@
 const std = @import("std");
+const clap = @import("clap");
 
 const zd = @import("zigdown.zig");
+const cons = zd.cons;
 
 const ArrayList = std.ArrayList;
 const File = std.fs.File;
@@ -13,65 +15,79 @@ const consoleRenderer = zd.consoleRenderer;
 const Parser = zd.Parser;
 const TokenList = zd.TokenList;
 
-fn print_usage(arg0: []const u8) !void {
-    const help_text =
-        \\Usage:
-        \\    {s} [options] [filename.md]
+fn print_usage() void {
+    var argi = std.process.args();
+    const arg0: []const u8 = argi.next().?;
+
+    const usage = "    {s} [options] [filename.md]\n\n";
+    const options =
+        \\ -c, --console        Render to the console (default)
+        \\ -h, --html           Render to HTML
+        \\ -o, --output [file]  Direct output to a file, instead of stdout
+        \\ -t, --timeit         Time the parsing & rendering
         \\
-        \\Options:
-        \\ -c         Render to the console (default)
-        \\ -h         Render to HTML
-        \\ -o [file]  Direct output to a file, instead of stdout
         \\
     ;
-    try stdout.print(help_text, .{arg0});
+
+    cons.printColor(std.debug, .Green, "Usage:\n", .{});
+    cons.printColor(std.debug, .White, usage, .{arg0});
+    cons.printColor(std.debug, .Green, "Options:\n", .{});
+    cons.printColor(std.debug, .White, options, .{});
 }
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var alloc = gpa.allocator();
 
-    // Get command-line arguments
-    const args = try std.process.argsAlloc(alloc);
-    defer std.process.argsFree(alloc, args);
+    // Use Zig-Clap to parse a list of arguments
+    // Each arg has a short and/or long variant with optional type and help description
+    const params = comptime clap.parseParamsComptime(
+        \\     --help         Display help and exit
+        \\ -c, --console      Render to the console (default)
+        \\ -h, --html         Render to HTML
+        \\ -o, --output <str> Direct output to a file, instead of stdout
+        \\ -t, --timeit       Time the parsing & rendering
+        \\ <str>              Markdown file to render
+    );
 
-    if (args.len < 2) {
-        try print_usage(args[0]);
-        os.exit(1);
-    }
+    // Have Clap parse the command-line arguments
+    var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{ .allocator = alloc });
+    defer res.deinit();
 
+    // Process the command-line arguments
     var do_console: bool = false;
     var do_html: bool = false;
     var filename: ?[]const u8 = null;
     var outfile: ?[]const u8 = null;
     var timeit: bool = false;
-    var i: usize = 1;
-    while (i < args.len) : (i += 1) {
-        const arg: []const u8 = args[i];
 
-        if (std.mem.eql(u8, "-c", arg)) {
-            do_console = true;
-        } else if (std.mem.eql(u8, "-h", arg)) {
-            do_html = true;
-        } else if (std.mem.eql(u8, "-o", arg)) {
-            if (i + 1 >= args.len) {
-                std.debug.print("ERROR: File output requested but no filename given\n\n", .{});
-                try print_usage(args[0]);
-                os.exit(3);
-            }
+    if (res.args.help != 0) {
+        print_usage();
+        std.os.exit(0);
+    }
 
-            i += 1;
-            outfile = args[i];
-        } else if (std.mem.eql(u8, "-t", arg)) {
-            timeit = true;
-        } else {
-            filename = arg;
-        }
+    if (res.args.console != 0)
+        do_console = true;
+
+    if (res.args.html != 0)
+        do_html = true;
+
+    if (res.args.output) |ostr| {
+        outfile = ostr;
+    }
+
+    if (res.args.timeit != 0)
+        timeit = true;
+
+    for (res.positionals) |pstr| {
+        filename = pstr;
+        break;
     }
 
     if (filename == null) {
-        std.debug.print("ERROR: No filename provided\n\n", .{});
-        try print_usage(args[0]);
+        cons.printColor(std.debug, .Red, "ERROR: ", .{});
+        cons.printColor(std.debug, .White, "No filename provided\n\n", .{});
+        print_usage();
         os.exit(2);
     }
 

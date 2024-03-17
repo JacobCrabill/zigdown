@@ -10,5 +10,9 @@
             .url = "https://github.com/JacobCrabill/zig-stb-image/archive/7eff48498437edb93ce81604824a82b7bce41d0a.tar.gz",
             .hash = "1220a103eaa442ac108d6e678e6b9f85d34c3e06f0e939d735c055d23c08daad62fd",
         },
+        .zig_clap = .{
+            .url = "https://github.com/Hejsil/zig-clap/archive/0f2db7700b05356ebb1ccddbbf1797048925f072.tar.gz",
+            .hash = "12203896de6eedec14712f4f1eaac8b646939cfed213c56accf231a0abb05f9dbb77",
+        },
     },
 }
