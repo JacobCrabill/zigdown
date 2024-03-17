@@ -11,6 +11,10 @@ pub const Color = enum(u8) {
     Magenta,
     Cyan,
     White,
+    // Colors from the RGB range
+    DarkYellow,
+    PurpleGrey,
+    // Use terminal defaults
     Default,
 };
 

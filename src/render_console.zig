@@ -46,6 +46,7 @@ pub const RenderError = error{
 
 pub const RenderOpts = struct {
     width: usize = 90, // Column at which to wrap all text
+    indent: usize = 2, // Left indent for the entire document
     box_style: cons.Box = cons.BoldBox,
 };
 
@@ -86,6 +87,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 .Magenta => self.writeno(cons.fg_magenta),
                 .Cyan => self.writeno(cons.fg_cyan),
                 .White => self.writeno(cons.fg_white),
+                .DarkYellow => self.writeno(cons.fg_dark_yellow),
+                .PurpleGrey => self.writeno(cons.fg_purple_grey),
                 .Default => self.writeno(cons.fg_default),
             }
         }
@@ -100,6 +103,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 .Magenta => self.writeno(cons.bg_magenta),
                 .Cyan => self.writeno(cons.bg_cyan),
                 .White => self.writeno(cons.bg_white),
+                .DarkYellow => self.writeno(cons.bg_dark_yellow),
+                .PurpleGrey => self.writeno(cons.bg_purple_grey),
                 .Default => self.writeno(cons.bg_default),
             }
         }
@@ -154,17 +159,25 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             if (style.hide) self.writeno(cons.end_hide);
             if (style.strike) self.writeno(cons.end_strike);
 
-            if (style.fg_color) {
-                if (style.style_override.fg_color) |fg_color| {
-                    self.startFgColor(fg_color);
+            if (style.fg_color) |_| {
+                if (self.style_override) |so| {
+                    if (so.fg_color) |fg_color| {
+                        self.startFgColor(fg_color);
+                    } else {
+                        self.startFgColor(.Default);
+                    }
                 } else {
                     self.startFgColor(.Default);
                 }
             }
 
-            if (style.bg_color) {
-                if (style.style_override.bg_color) |bg_color| {
-                    self.startBgColor(bg_color);
+            if (style.bg_color) |_| {
+                if (self.style_override) |so| {
+                    if (so.bg_color) |bg_color| {
+                        self.startBgColor(bg_color);
+                    } else {
+                        self.startBgColor(.Default);
+                    }
                 } else {
                     self.startBgColor(.Default);
                 }
@@ -218,8 +231,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// ----------------------------------------------
         /// Private implementation methods
-        fn renderBegin(_: *Self) !void {
-            // do nothing
+        fn renderBegin(self: *Self) !void {
+            self.renderBreak();
         }
 
         fn renderEnd(_: *Self) !void {
@@ -249,11 +262,18 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             var words = std.mem.tokenizeAny(u8, text, " ");
             while (words.next()) |word| {
-                if (self.column > 0 and self.column + word.len > self.opts.width) {
-                    self.renderBreak();
-                    self.writeLeaders();
+                // idk if there's a cleaner way to do this...
+                for (word) |c| {
+                    if (c == '\n') {
+                        self.renderBreak();
+                        self.writeLeaders();
+                    } else if (self.column > 0 and self.column + 1 > self.opts.width) {
+                        self.renderBreak();
+                        self.writeLeaders();
+                    } else {
+                        self.write(&.{c});
+                    }
                 }
-                self.write(word);
                 self.write(" ");
             }
 
@@ -269,7 +289,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         pub fn writeLeaders(self: *Self) void {
             // Trying something new - reset to column 0
-            self.column = 0;
+            // self.column = 0;
             self.writeno(cons.clear_line);
             for (self.leader_stack.items) |text| {
                 self.startStyle(text.style);
@@ -421,7 +441,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a single line break
         fn renderBreak(self: *Self) void {
-            self.write(" \n");
+            self.write("\n");
+            self.writeNTimes(" ", self.opts.indent);
             self.column = 0;
         }
 
@@ -530,17 +551,20 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Render a raw block of code
         fn renderCode(self: *Self, c: zd.Code) !void {
             // TODO: Proper indent / leaders
-            const style = zd.TextStyle{ .fg_color = .Yellow, .bold = true };
-            self.startStyle(style);
+            const bar_style = zd.TextStyle{ .fg_color = .Yellow, .bold = true };
+            const text_style = zd.TextStyle{ .fg_color = .PurpleGrey };
+            self.startStyle(bar_style);
             self.print("━━━━━━━━━━━━━━━━━━━━ <{s}>", .{c.tag orelse "none"});
             self.renderBreak();
             self.resetStyle();
 
             self.writeLeaders();
+            self.startStyle(text_style);
             self.wrapText(c.text orelse "");
+            self.endStyle(text_style);
 
-            self.startStyle(style);
-            self.print("━━━━━━━━━━━━━━━━━━━━", .{});
+            self.startStyle(bar_style);
+            self.write("━━━━━━━━━━━━━━━━━━━━");
             self.resetStyle();
             self.renderBreak();
         }
