@@ -2,13 +2,13 @@ const std = @import("std");
 const clap = @import("clap");
 
 const zd = @import("zigdown.zig");
-const cons = zd.cons;
 
 const ArrayList = std.ArrayList;
 const File = std.fs.File;
 const os = std.os;
 const stdout = std.io.getStdOut().writer();
 
+const cons = zd.cons;
 const TS = zd.TextStyle;
 const htmlRenderer = zd.htmlRenderer;
 const consoleRenderer = zd.consoleRenderer;
@@ -25,6 +25,7 @@ fn print_usage() void {
         \\ -h, --html           Render to HTML
         \\ -o, --output [file]  Direct output to a file, instead of stdout
         \\ -t, --timeit         Time the parsing & rendering
+        \\ -v, --verbose        Verbose output from the parser
         \\
         \\
     ;
@@ -47,6 +48,7 @@ pub fn main() !void {
         \\ -h, --html         Render to HTML
         \\ -o, --output <str> Direct output to a file, instead of stdout
         \\ -t, --timeit       Time the parsing & rendering
+        \\ -v, --verbose      Verbose parser output
         \\ <str>              Markdown file to render
     );
 
@@ -55,29 +57,21 @@ pub fn main() !void {
     defer res.deinit();
 
     // Process the command-line arguments
-    var do_console: bool = false;
-    var do_html: bool = false;
+    const do_console: bool = res.args.console != 0;
+    const do_html: bool = res.args.html != 0;
+    const timeit: bool = res.args.timeit != 0;
+    const verbose_parsing: bool = res.args.verbose != 0;
     var filename: ?[]const u8 = null;
     var outfile: ?[]const u8 = null;
-    var timeit: bool = false;
 
     if (res.args.help != 0) {
         print_usage();
         std.os.exit(0);
     }
 
-    if (res.args.console != 0)
-        do_console = true;
-
-    if (res.args.html != 0)
-        do_html = true;
-
     if (res.args.output) |ostr| {
         outfile = ostr;
     }
-
-    if (res.args.timeit != 0)
-        timeit = true;
 
     for (res.positionals) |pstr| {
         filename = pstr;
@@ -101,7 +95,11 @@ pub fn main() !void {
     var timer = try std.time.Timer.start();
 
     // Parse the input text
-    var parser = try zd.Parser.init(alloc, .{});
+    const opts = zd.parser.ParserOpts{
+        .copy_input = false,
+        .verbose = verbose_parsing,
+    };
+    var parser = try zd.Parser.init(alloc, opts);
     timer.reset();
     try parser.parseMarkdown(md_text);
     const t1 = timer.read();
@@ -120,8 +118,8 @@ pub fn main() !void {
 
     const t2 = timer.read();
     if (timeit) {
-        std.debug.print("  Parsed in:   {d}us\n", .{t1 / 1000});
-        std.debug.print("  Rendered in: {d}us\n", .{(t2 - t1) / 1000});
+        cons.printColor(std.debug, .Green, "  Parsed in:   {d}us\n", .{t1 / 1000});
+        cons.printColor(std.debug, .Green, "  Rendered in: {d}us\n", .{(t2 - t1) / 1000});
     }
 }
 
@@ -136,22 +134,3 @@ fn render(stream: anytype, md: zd.Block, do_console: bool, do_html: bool) !void 
         try c_renderer.renderBlock(md);
     }
 }
-
-const test_data =
-    \\# Header!
-    \\## Header 2
-    \\  some *generic* text _here_, with **_formatting_**!
-    \\
-    \\after the break...
-    \\> Quote line
-    \\> Another quote line
-    \\
-    \\```
-    \\code
-    \\```
-    \\
-    \\And now a list:
-    \\+ foo
-    \\  + no indents yet
-    \\- bar
-;

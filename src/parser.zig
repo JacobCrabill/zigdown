@@ -484,6 +484,7 @@ pub const LogLevel = enum {
 pub const ParserOpts = struct {
     /// Allocate a copy of the input text (Caller may free input after creating Parser)
     copy_input: bool = false,
+    /// Fully log the output of parser to the console
     verbose: bool = false,
 };
 
@@ -889,13 +890,13 @@ pub const Parser = struct {
             level += 1;
         }
         if (level <= 0) return false;
-        const trimmed_line = trimLeadingWhitespace(line);
+        const trimmed_line = trimLeadingWhitespace(line[level..]);
 
         var head: *zd.Heading = &block.Leaf.content.Heading;
         head.level = level;
 
-        const end: usize = findFirstOf(trimmed_line, level, &.{.BREAK}) orelse trimmed_line.len;
-        block.Leaf.raw_contents.appendSlice(trimmed_line[level..end]) catch unreachable;
+        const end: usize = findFirstOf(trimmed_line, 0, &.{.BREAK}) orelse trimmed_line.len;
+        block.Leaf.raw_contents.appendSlice(trimmed_line[0..end]) catch unreachable;
         self.closeBlock(block);
 
         return true;
