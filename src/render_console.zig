@@ -636,14 +636,22 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             const path = try std.fs.path.joinZ(self.alloc, &.{ root_dir, image.src });
             defer self.alloc.free(path);
 
-            const img_file: ?stb.Image = stb.load_image(path) catch null; // silently fail
+            const img_file: ?stb.Image = stb.load_image(path) catch |err| blk: {
+                //null; // silently fail
+                std.debug.print("Error loading image: {any}\n", .{err});
+                break :blk null;
+            };
             if (img_file) |img| {
+                self.renderBreak();
+                self.renderBreak();
                 // Scale the image to something reasonable
                 const org_width: usize = @intCast(img.width);
                 var width = org_width;
                 var height: usize = @intCast(img.height);
-                width = @min(width, self.opts.width / 3);
-                height = (width / org_width) * height;
+                width = @min(width, self.opts.width - 2 * self.opts.indent);
+                const ratio: f32 = @as(f32, @floatFromInt(img.height)) / @as(f32, @floatFromInt(img.width));
+                height = @as(usize, @intFromFloat(ratio * @as(f32, @floatFromInt(width))));
+                height /= 2; // NOTE: Terminal cells are twice as tall as they are wide!
                 gfx.sendImagePNG(self.stream, self.alloc, path, width, height) catch |err| {
                     std.debug.print("Error rendering image: {any}\n", .{err});
                 };

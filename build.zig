@@ -28,9 +28,13 @@ pub fn build(b: *std.Build) !void {
     // for restricting supported target set are available.
     const target = b.standardTargetOptions(.{});
 
-    // Standard release options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
-    const optimize = b.standardOptimizeOption(.{});
+    // Default to ReleaseSafe, but allow the user to specify Debug or ReleaseFast builds
+    var optimize: std.builtin.Mode = .ReleaseSafe;
+    if (b.option(bool, "debug", "Build Debug mode") != null) {
+        optimize = .Debug;
+    } else if (b.option(bool, "fast", "Build ReleaseFast mode") != null) {
+        optimize = .ReleaseFast;
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     // Dependencies from build.zig.zon

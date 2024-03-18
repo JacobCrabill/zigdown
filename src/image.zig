@@ -79,6 +79,9 @@ fn sendImageChunk(stream: anytype, data: []const u8, last_chunk: bool, width: ?u
     const ncol = width orelse NCOL;
     const nrow = height orelse NROW;
 
+    // TODO: Need to manually scale the image to preserve the aspect ratio
+    // Kitty's 'icat' kitten uses ImageMagick to do the scaling - outputs to temporary file
+    // and sends that instead of the original file
     _ = try stream.write(esc ++ "_G");
     try stream.print("c={d},r={d},a=T,f={d},m={d}", .{ ncol, nrow, @intFromEnum(Medium.PNG), m });
 
