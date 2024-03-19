@@ -1115,6 +1115,23 @@ pub const Parser = struct {
                         try words.append(tok.text);
                     }
                 },
+                .CODE_INLINE => {
+                    try appendWords(self.alloc, inlines, &words, style);
+                    if (findFirstOf(tokens, i + 1, &.{.CODE_INLINE})) |end| {
+                        for (tokens[i + 1 .. end]) |ctok| {
+                            try words.append(ctok.text);
+                        }
+
+                        // TODO: Style for inline code
+                        // TODO: Actual "InlineCode" Inline type
+                        style.bold = false;
+                        style.italic = false;
+                        style.reverse = true;
+                        try appendWords(self.alloc, inlines, &words, style);
+                        style.reverse = false;
+                        i = end;
+                    }
+                },
                 .BREAK => {
                     // Treat line breaks as spaces; Don't clear the style (The renderer deals with wrapping)
                     try words.append(" ");
