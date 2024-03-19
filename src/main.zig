@@ -6,7 +6,6 @@ const zd = @import("zigdown.zig");
 const ArrayList = std.ArrayList;
 const File = std.fs.File;
 const os = std.os;
-const stdout = std.io.getStdOut().writer();
 
 const cons = zd.cons;
 const TS = zd.TextStyle;
@@ -15,8 +14,8 @@ const consoleRenderer = zd.consoleRenderer;
 const Parser = zd.Parser;
 const TokenList = zd.TokenList;
 
-fn print_usage() void {
-    var argi = std.process.args();
+fn print_usage(alloc: std.mem.Allocator) void {
+    var argi = std.process.argsWithAllocator(alloc) catch return;
     const arg0: []const u8 = argi.next().?;
 
     const usage = "    {s} [options] [filename.md]\n\n";
@@ -37,6 +36,8 @@ fn print_usage() void {
 }
 
 pub fn main() !void {
+    const stdout = std.io.getStdOut().writer(); // Fun fact: This must be in function scope on Windows
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var alloc = gpa.allocator();
 
@@ -65,7 +66,7 @@ pub fn main() !void {
     var outfile: ?[]const u8 = null;
 
     if (res.args.help != 0) {
-        print_usage();
+        print_usage(alloc);
         std.os.exit(0);
     }
 
@@ -81,7 +82,7 @@ pub fn main() !void {
     if (filename == null) {
         cons.printColor(std.debug, .Red, "ERROR: ", .{});
         cons.printColor(std.debug, .White, "No filename provided\n\n", .{});
-        print_usage();
+        print_usage(alloc);
         os.exit(2);
     }
 
@@ -132,8 +133,12 @@ fn render(stream: anytype, md: zd.Block, do_console: bool, do_html: bool, root: 
     }
 
     if (do_console or !do_html) {
+        // Get the terminal size; limit our width to that
+        const tsize = try zd.gfx.getTerminalSize();
         const opts = zd.render.render_console.RenderOpts{
             .root_dir = root,
+            .indent = 2,
+            .width = tsize.cols - 2,
         };
         var c_renderer = consoleRenderer(stream, md.allocator(), opts);
         try c_renderer.renderBlock(md);

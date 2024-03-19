@@ -1,5 +1,6 @@
 const std = @import("std");
 const stb = @import("stb_image");
+const builtin = @import("builtin");
 
 const Allocator = std.mem.Allocator;
 const File = std.fs.File;
@@ -9,6 +10,7 @@ const Base64Encoder = std.base64.standard.Encoder;
 
 const os = std.os;
 const linux = std.os.linux;
+const windows = std.os.windows;
 
 const esc: [1]u8 = [1]u8{0x1b}; // ANSI escape code
 
@@ -95,18 +97,43 @@ fn sendImageChunk(stream: anytype, data: []const u8, last_chunk: bool, width: ?u
     _ = try stream.write(esc ++ "\\");
 }
 
+pub const TermSize = struct {
+    rows: usize,
+    cols: usize,
+};
+
+pub fn getTerminalSize() !TermSize {
+    if (builtin.os.tag == .linux) {
+        var wsz: linux.winsize = undefined;
+        const TIOCGWINSZ: usize = 21523;
+        const stdout_fd: linux.fd_t = 0;
+
+        if (linux.ioctl(stdout_fd, TIOCGWINSZ, @intFromPtr(&wsz)) == 0) {
+            return TermSize{ .rows = wsz.ws_row, .cols = wsz.ws_col };
+        }
+
+        return error.SystemCallFailed;
+    }
+
+    if (builtin.os.tag == .windows) {
+        var binfo: windows.CONSOLE_SCREEN_BUFFER_INFO = undefined;
+        const stdio_h = windows.GetStdHandle(windows.STD_OUTPUT_HANDLE);
+
+        if (windows.kernel32.GetConsoleScreenBufferInfo(stdio_h, &binfo)) {
+            const cols: i32 = binfo.srWindow.Right - binfo.srWindow.Left + 1;
+            const rows: i32 = binfo.srWindow.Bottom - binfo.srWindow.Top + 1;
+            return TermSize{ .rows = @intCast(rows), .cols = @intCast(cols) };
+        }
+
+        return error.SystemCallFailed;
+    }
+
+    return error.UnsupportedSystem;
+}
+
 test "Get window size" {
-    var wsz: linux.winsize = undefined;
-    const TIOCGWINSZ: usize = 21523;
-
-    const stdout_fd: linux.fd_t = 0;
-    const res: usize = linux.ioctl(stdout_fd, TIOCGWINSZ, @intFromPtr(&wsz));
-
-    std.debug.print("Window Size: {any}\n", .{wsz});
-    const expected: usize = 0;
-    std.testing.expectEqual(expected, res) catch {
-        std.debug.print("Expected result 0, got {d}\n", .{res});
-    };
+    const size = try getTerminalSize();
+    std.debug.print("Window Size: {any}\n", .{size});
 }
 
 // I don't know why this can't be run as a test...

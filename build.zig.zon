@@ -14,5 +14,9 @@
             .url = "https://github.com/Hejsil/zig-clap/archive/0f2db7700b05356ebb1ccddbbf1797048925f072.tar.gz",
             .hash = "12203896de6eedec14712f4f1eaac8b646939cfed213c56accf231a0abb05f9dbb77",
         },
+        .treez = .{
+            .url = "https://github.com/ziglibs/treez/archive/82c62d738d0f5a1b32e9907f54cea2c35926814a.tar.gz",
+            .hash = "12209255c77b7f73e0f39513c4808a0fe0342e94e1288178884db62a1c3f9b2b236c",
+        },
     },
 }

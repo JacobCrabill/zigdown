@@ -42,6 +42,7 @@ pub const RenderError = error{
     WouldBlock,
     ConnectionResetByPeer,
     Unexpected,
+    SystemError,
 };
 
 pub const RenderOpts = struct {
@@ -261,7 +262,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             var words = std.mem.splitAny(u8, text, " ");
             while (words.next()) |word| {
                 // idk if there's a cleaner way to do this...
-                if (self.column > 0 and self.column + 1 > self.opts.width) {
+                if (self.column > self.opts.indent and self.column + word.len > self.opts.width) {
                     self.renderBreak();
                     self.writeLeaders();
                 }
@@ -278,7 +279,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             // TODO: This still feels fishy
             // backup over the trailing " " we added if the given text didn't have one
-            if (!std.mem.endsWith(u8, text, " ") and self.column > 0) {
+            if (!std.mem.endsWith(u8, text, " ") and self.column > self.opts.indent) {
                 self.printno(cons.move_left, .{1});
                 self.writeno(cons.clear_line_end);
                 self.column -= 1;
@@ -286,8 +287,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         pub fn writeLeaders(self: *Self) void {
-            // Trying something new - reset to column 0
-            // self.column = 0;
             self.writeno(cons.clear_line);
             for (self.leader_stack.items) |text| {
                 self.startStyle(text.style);
@@ -337,7 +336,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             try self.renderBegin();
             for (doc.children.items) |block| {
                 try self.renderBlock(block);
-                if (self.column > 0) self.renderBreak(); // Begin new line
+                if (self.column > self.opts.indent) self.renderBreak(); // Begin new line
                 if (!zd.isBreak(block)) self.renderBreak(); // Add blank line
             }
             try self.renderEnd();
@@ -377,7 +376,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         fn renderUnorderedList(self: *Self, list: zd.Container) !void {
             for (list.children.items) |item| {
                 // Ensure we start each list item on a new line
-                if (self.column > 0)
+                if (self.column > self.opts.indent)
                     self.renderBreak();
 
                 // print out list bullet
@@ -400,7 +399,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             var buffer: [16]u8 = undefined;
             for (list.children.items, 0..) |item, i| {
                 // Ensure we start each list item on a new line
-                if (self.column > 0)
+                if (self.column > self.opts.indent)
                     self.renderBreak();
 
                 self.writeLeaders();
@@ -439,9 +438,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a single line break
         fn renderBreak(self: *Self) void {
-            self.write("\n");
-            self.writeNTimes(" ", self.opts.indent);
+            self.writeno("\n");
             self.column = 0;
+            self.writeNTimes(" ", self.opts.indent);
         }
 
         fn renderCentered(self: *Self, text: []const u8, style: zd.TextStyle, pad_char: []const u8) !void {
@@ -549,7 +548,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Render a raw block of code
         fn renderCode(self: *Self, c: zd.Code) !void {
             const bar_style = zd.TextStyle{ .fg_color = .Yellow, .bold = true };
-            const text_style = zd.TextStyle{ .fg_color = .PurpleGrey };
+            const text_style = zd.TextStyle{ .fg_color = .Magenta };
             self.startStyle(bar_style);
             self.print("━━━━━━━━━━━━━━━━━━━━ <{s}>", .{c.tag orelse "none"});
             self.renderBreak();

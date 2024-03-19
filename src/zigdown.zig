@@ -8,6 +8,7 @@ pub const render = @import("render.zig");
 pub const tokens = @import("tokens.zig");
 pub const utils = @import("utils.zig");
 pub const blocks = @import("blocks.zig");
+pub const gfx = @import("image.zig");
 
 // Global public Zigdown types
 // pub const Markdown = markdown.Markdown;

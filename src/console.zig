@@ -52,7 +52,7 @@ pub const bg_default = ansi ++ "[49m";
 
 // Extended Background Colors
 pub const bg_dark_yellow = ansi ++ "[48;5;178m";
-pub const bg_purple_grey = ansi ++ "[48;5;99m";
+pub const bg_purple_grey = ansi ++ "[48;5;170m";
 
 // Basic Fackground Colors
 pub const fg_black = ansi ++ "[30m";
@@ -67,7 +67,7 @@ pub const fg_default = ansi ++ "[39m";
 
 // Extended Background Colors
 pub const fg_dark_yellow = ansi ++ "[38;5;178m";
-pub const fg_purple_grey = ansi ++ "[38;5;99m";
+pub const fg_purple_grey = ansi ++ "[38;5;170m";
 
 pub const text_bold = ansi ++ "[1m";
 pub const text_italic = ansi ++ "[3m";
