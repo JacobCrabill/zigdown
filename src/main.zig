@@ -138,7 +138,7 @@ fn render(stream: anytype, md: zd.Block, do_console: bool, do_html: bool, root: 
         const opts = zd.render.render_console.RenderOpts{
             .root_dir = root,
             .indent = 2,
-            .width = tsize.cols - 2,
+            .width = @min(tsize.cols - 2, 90),
         };
         var c_renderer = consoleRenderer(stream, md.allocator(), opts);
         try c_renderer.renderBlock(md);

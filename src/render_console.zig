@@ -438,9 +438,15 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a single line break
         fn renderBreak(self: *Self) void {
+            // Some styles fill the remainder of the line, even after a '\n'
+            // Reset all styles before wrting the newline and indent
+            const cur_style = self.cur_style;
+            self.resetStyle();
+            self.writeno(cons.clear_line_end);
             self.writeno("\n");
             self.column = 0;
             self.writeNTimes(" ", self.opts.indent);
+            self.startStyle(cur_style);
         }
 
         fn renderCentered(self: *Self, text: []const u8, style: zd.TextStyle, pad_char: []const u8) !void {
