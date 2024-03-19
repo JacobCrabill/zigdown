@@ -3,7 +3,7 @@
 Inspired by [Glow](https://github.com/charmbracelet/glow), the goal is to create a simple
 terminal-based Markdown renderer just for fun.
 
-> \[!NOTE\] This is still a WIP, but it can currently render some basic Markdown files nicely to the
+> [!NOTE] This is still a WIP, but it can currently render some basic Markdown files nicely to the
 > console, or to HTML!
 
 ## Goals
@@ -20,7 +20,7 @@ my own implementation (because, again, _for fun_).
 - [ ] Tables
 - [x] Links
 - [x] Images (basic)
-- [ ] Images (rendered to the console using the
+- [x] Images (rendered to the console using the
   [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)
 - [ ] Code blocks _with syntax highlighting_
 - [ ] NeoVim integration (w/o images)
