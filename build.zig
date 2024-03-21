@@ -46,10 +46,12 @@ pub fn build(b: *std.Build) !void {
     // STB-Image
     const stbi = b.dependency("stbi", .{ .optimize = optimize, .target = target });
     const stbi_dep = Dependency{ .name = "stb_image", .module = stbi.module("stb_image") };
+    mod.addImport(stbi_dep.name, stbi_dep.module);
 
     // Zig-Clap
     const clap = b.dependency("zig_clap", .{ .optimize = optimize, .target = target });
     const clap_dep = Dependency{ .name = "clap", .module = clap.module("clap") };
+    mod.addImport(clap_dep.name, clap_dep.module);
 
     var dep_array = [_]Dependency{ stbi_dep, clap_dep, mod_dep };
     const deps: []Dependency = &dep_array;

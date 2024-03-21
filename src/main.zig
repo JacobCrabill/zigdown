@@ -1,7 +1,6 @@
 const std = @import("std");
 const clap = @import("clap");
-
-const zd = @import("zigdown.zig");
+const zd = @import("zigdown");
 
 const ArrayList = std.ArrayList;
 const File = std.fs.File;
