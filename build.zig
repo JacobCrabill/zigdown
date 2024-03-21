@@ -36,6 +36,10 @@ pub fn build(b: *std.Build) !void {
         optimize = .ReleaseFast;
     }
 
+    // Export the zigdown module to downstream consumers
+    const mod = b.addModule("zigdown", .{ .root_source_file = .{ .path = "src/zigdown.zig" } });
+    const mod_dep = Dependency{ .name = "zigdown", .module = mod };
+
     ///////////////////////////////////////////////////////////////////////////
     // Dependencies from build.zig.zon
     // ------------------------------------------------------------------------
@@ -47,7 +51,7 @@ pub fn build(b: *std.Build) !void {
     const clap = b.dependency("zig_clap", .{ .optimize = optimize, .target = target });
     const clap_dep = Dependency{ .name = "clap", .module = clap.module("clap") };
 
-    var dep_array = [_]Dependency{ stbi_dep, clap_dep };
+    var dep_array = [_]Dependency{ stbi_dep, clap_dep, mod_dep };
     const deps: []Dependency = &dep_array;
 
     const exe_opts = BuildOpts{
@@ -55,9 +59,6 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .dependencies = deps,
     };
-
-    // Export the zigdown module to downstream consumers
-    _ = b.addModule("zigdown", .{ .root_source_file = .{ .path = "src/zigdown.zig" } });
 
     // Compile the main executable
     const exe_config = ExeConfig{
