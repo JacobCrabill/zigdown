@@ -129,6 +129,7 @@ pub fn main() !void {
 fn render(stream: anytype, md: zd.Block, do_console: bool, do_html: bool, root: ?[]const u8) !void {
     if (do_html) {
         var h_renderer = htmlRenderer(stream, md.allocator());
+        defer h_renderer.deinit();
         try h_renderer.renderBlock(md);
     }
 
@@ -141,6 +142,7 @@ fn render(stream: anytype, md: zd.Block, do_console: bool, do_html: bool, root: 
             .width = @min(tsize.cols - 2, 90),
         };
         var c_renderer = consoleRenderer(stream, md.allocator(), opts);
+        defer c_renderer.deinit();
         try c_renderer.renderBlock(md);
     }
 }

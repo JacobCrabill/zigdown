@@ -56,6 +56,9 @@ pub fn build(b: *std.Build) !void {
         .dependencies = deps,
     };
 
+    // Export the zigdown module to downstream consumers
+    _ = b.addModule("zigdown", .{ .root_source_file = .{ .path = "src/zigdown.zig" } });
+
     // Compile the main executable
     const exe_config = ExeConfig{
         .version = .{ .major = 0, .minor = 1, .patch = 0 },
