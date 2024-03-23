@@ -2,8 +2,9 @@
     .name = "zigdown",
     .version = "0.1.0",
     .paths = .{
-        "src/*.zig",
-        "build.zig.*",
+        "src",
+        "build.zig",
+        "build.zig.zon",
     },
     .dependencies = .{
         .stbi = .{
