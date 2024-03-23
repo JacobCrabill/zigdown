@@ -66,7 +66,7 @@ pub fn main() !void {
 
     if (res.args.help != 0) {
         print_usage(alloc);
-        std.os.exit(0);
+        std.process.exit(0);
     }
 
     if (res.args.output) |ostr| {
@@ -82,7 +82,7 @@ pub fn main() !void {
         cons.printColor(std.debug, .Red, "ERROR: ", .{});
         cons.printColor(std.debug, .White, "No filename provided\n\n", .{});
         print_usage(alloc);
-        os.exit(2);
+        std.process.exit(2);
     }
 
     // Read file into memory

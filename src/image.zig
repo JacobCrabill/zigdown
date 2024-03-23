@@ -154,7 +154,7 @@ pub fn main() !void {
 
     if (args.len < 2) {
         try stdout.print("Expected .png filename\n", .{});
-        os.exit(1);
+        std.process.exit(1);
     }
 
     var width: ?usize = null;
