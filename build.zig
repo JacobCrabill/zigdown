@@ -28,13 +28,18 @@ pub fn build(b: *std.Build) !void {
     // for restricting supported target set are available.
     const target = b.standardTargetOptions(.{});
 
-    // Default to ReleaseSafe, but allow the user to specify Debug or ReleaseFast builds
-    var optimize: std.builtin.Mode = .ReleaseSafe;
-    if (b.option(bool, "debug", "Build Debug mode") != null) {
-        optimize = .Debug;
-    } else if (b.option(bool, "fast", "Build ReleaseFast mode") != null) {
-        optimize = .ReleaseFast;
-    }
+    // Standard optimize options allows the user to choose the optimization mode
+    // when running 'zig build'.  This applies to downstream consumers of this package
+    // as well, e.g. when added as a dependency in build.zig.zon.
+    const optimize = b.standardOptimizeOption(.{});
+
+    // // Default to ReleaseSafe, but allow the user to specify Debug or ReleaseFast builds
+    // var optimize: std.builtin.Mode = .ReleaseSafe;
+    // if (b.option(bool, "debug", "Build Debug mode") != null) {
+    //     optimize = .Debug;
+    // } else if (b.option(bool, "fast", "Build ReleaseFast mode") != null) {
+    //     optimize = .ReleaseFast;
+    // }
 
     // Export the zigdown module to downstream consumers
     const mod = b.addModule("zigdown", .{ .root_source_file = .{ .path = "src/zigdown.zig" } });
