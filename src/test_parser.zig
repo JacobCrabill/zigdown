@@ -76,7 +76,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
-    var p: zd.Parser = try zd.Parser.init(alloc, .{ .copy_input = false, .verbose = true });
+    var p: zd.Parser = zd.Parser.init(alloc, .{ .copy_input = false, .verbose = true });
     defer p.deinit();
     try p.parseMarkdown(text);
 

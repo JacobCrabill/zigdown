@@ -11,7 +11,8 @@ const linux = os.linux;
 
 pub fn main() !u8 {
     var gpa = GPA{};
-    var alloc = gpa.allocator();
+    defer _ = gpa.deinit();
+    const alloc = gpa.allocator();
 
     var args: std.process.ArgIterator = try std.process.argsWithAllocator(alloc);
 
@@ -33,12 +34,14 @@ pub fn main() !u8 {
     var pager: Pager = Pager.init(alloc);
     try pager.pageText(text.?);
 
+    alloc.free(text.?);
+
     return 0;
 }
 
 fn readFile(alloc: std.mem.Allocator, filename: []const u8) ?[]const u8 {
     var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
-    var realpath = std.fs.realpath(filename, &path_buf) catch {
+    const realpath = std.fs.realpath(filename, &path_buf) catch {
         std.debug.print("File not found: {s}\n", .{filename});
         return null;
     };
@@ -47,7 +50,7 @@ fn readFile(alloc: std.mem.Allocator, filename: []const u8) ?[]const u8 {
         std.debug.print("File not found: {s}\n", .{realpath});
         return null;
     };
-    var text = file.readToEndAlloc(alloc, 1e9) catch |err| {
+    const text = file.readToEndAlloc(alloc, 1e9) catch |err| {
         std.debug.print("Error reading file! {any}\n", .{err});
         return null;
     };
@@ -58,7 +61,7 @@ const Pager = struct {
     const Self = @This();
     alloc: Allocator,
     tty: std.fs.File = undefined,
-    orig_termios: std.os.termios = undefined,
+    orig_termios: std.c.termios = undefined,
     writer: std.io.Writer(File, File.WriteError, File.write) = undefined,
 
     pub fn init(alloc: Allocator) Pager {
@@ -81,7 +84,7 @@ const Pager = struct {
     fn getTermSize(_: Self) linux.winsize {
         var wsz: linux.winsize = undefined;
         const stdout_fd: linux.fd_t = 0;
-        _ = linux.ioctl(stdout_fd, os.system.T.IOCGWINSZ, @ptrToInt(&wsz));
+        _ = linux.ioctl(stdout_fd, linux.T.IOCGWINSZ, @intFromPtr(&wsz));
 
         return wsz;
     }
@@ -102,7 +105,7 @@ const Pager = struct {
         var row: usize = 0;
         while (true) {
             const wsz = self.getTermSize();
-            try self.moveCursor(1, 1);
+            try self.moveCursor(0, 0);
             try self.printLines(wsz.ws_col, lines.items[row..@min(row + wsz.ws_row, n_rows)]);
 
             var buffer: [1]u8 = undefined;
@@ -139,29 +142,34 @@ const Pager = struct {
     }
 
     fn setupTTY(self: *Self) !void {
-        var tty: std.fs.File = try std.fs.cwd().openFile("/dev/tty", .{ .mode = .read_write });
+        const tty: std.fs.File = try std.fs.cwd().openFile("/dev/tty", .{ .mode = .read_write });
 
         // Store the original terminal settings for later
-        self.orig_termios = try os.tcgetattr(tty.handle);
+        _ = std.c.tcgetattr(tty.handle, &self.orig_termios);
         var raw = self.orig_termios;
-        raw.lflag &= ~@as(
-            linux.tcflag_t,
-            linux.ECHO | linux.ICANON | linux.ISIG | linux.IEXTEN,
-        );
-        raw.iflag &= ~@as(
-            linux.tcflag_t,
-            linux.IXON | linux.ICRNL | linux.BRKINT | linux.INPCK | linux.ISTRIP,
-        );
-        raw.cc[os.system.V.TIME] = 0;
-        raw.cc[os.system.V.MIN] = 1;
-        try os.tcsetattr(tty.handle, .FLUSH, raw);
+        raw.lflag = linux.tc_lflag_t{
+            .ECHO = false,
+            .ICANON = false,
+            .ISIG = false,
+            .IEXTEN = false,
+        };
+        raw.iflag = linux.tc_iflag_t{
+            .IXON = false,
+            .ICRNL = false,
+            .BRKINT = false,
+            .INPCK = false,
+            .ISTRIP = false,
+        };
+        raw.cc[@intFromEnum(linux.V.TIME)] = 0;
+        raw.cc[@intFromEnum(linux.V.MIN)] = 1;
+        _ = std.c.tcsetattr(tty.handle, .FLUSH, &raw);
 
         self.tty = tty;
         self.writer = self.tty.writer();
     }
 
     fn resetTTY(self: *Self) void {
-        os.tcsetattr(self.tty.handle, .FLUSH, self.orig_termios) catch {};
+        _ = std.c.tcsetattr(self.tty.handle, .FLUSH, &self.orig_termios);
 
         self.writer.writeAll("\x1B[?1049l") catch {}; // Disable alternative buffer
         self.writer.writeAll("\x1B[?47l") catch {}; // Restore screen

@@ -1,5 +1,9 @@
 /// Package up the entire Zigdown library
 
+// Expose dependencies to downstream consumers
+pub const clap = @import("clap");
+pub const stbi = @import("stb_image");
+
 // Expose public namespaces for building docs
 pub const cons = @import("console.zig");
 pub const lexer = @import("lexer.zig");

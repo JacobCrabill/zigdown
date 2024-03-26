@@ -101,7 +101,7 @@ pub fn main() !void {
         .copy_input = false,
         .verbose = verbose_parsing,
     };
-    var parser = try zd.Parser.init(alloc, opts);
+    var parser = zd.Parser.init(alloc, opts);
     timer.reset();
     try parser.parseMarkdown(md_text);
     const t1 = timer.read();

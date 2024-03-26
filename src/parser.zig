@@ -505,7 +505,7 @@ pub const Parser = struct {
     cur_line: []const Token,
     document: Block,
 
-    pub fn init(alloc: Allocator, opts: ParserOpts) !Self {
+    pub fn init(alloc: Allocator, opts: ParserOpts) Self {
         return Parser{
             .alloc = alloc,
             .opts = opts,
