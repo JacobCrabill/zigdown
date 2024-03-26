@@ -42,6 +42,11 @@ pub const TextStyle = struct {
     strike: bool = false,
 };
 
+pub const Vec2i = struct {
+    x: usize,
+    y: usize,
+};
+
 pub fn printIndent(depth: u8) void {
     var i: u8 = 0;
     while (i < depth) : (i += 1) {

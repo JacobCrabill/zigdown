@@ -48,6 +48,8 @@ pub const RenderError = error{
 pub const RenderOpts = struct {
     width: usize = 90, // Column at which to wrap all text
     indent: usize = 2, // Left indent for the entire document
+    max_image_rows: usize = 15,
+    max_image_cols: usize = 45,
     box_style: cons.Box = cons.BoldBox,
     root_dir: ?[]const u8 = null,
 };
@@ -649,6 +651,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             if (img_file) |img| {
                 self.renderBreak();
                 self.renderBreak();
+
                 // Scale the image to something reasonable
                 const org_width: usize = @intCast(img.width);
                 var width = org_width;
@@ -657,6 +660,13 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 const ratio: f32 = @as(f32, @floatFromInt(img.height)) / @as(f32, @floatFromInt(img.width));
                 height = @as(usize, @intFromFloat(ratio * @as(f32, @floatFromInt(width))));
                 height /= 2; // NOTE: Terminal cells are twice as tall as they are wide!
+
+                if (height > self.opts.max_image_rows) {
+                    const scale: f32 = @as(f32, @floatFromInt(self.opts.max_image_rows)) / @as(f32, @floatFromInt(height));
+                    height = @as(usize, @intFromFloat(scale * @as(f32, @floatFromInt(height))));
+                    width = @as(usize, @intFromFloat(scale * @as(f32, @floatFromInt(width))));
+                }
+
                 gfx.sendImagePNG(self.stream, self.alloc, path, width, height) catch |err| {
                     std.debug.print("Error rendering image: {any}\n", .{err});
                 };

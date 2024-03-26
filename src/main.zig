@@ -109,9 +109,6 @@ pub fn main() !void {
     const md: zd.Block = parser.document;
 
     if (outfile) |outname| {
-        // TODO: check if path is absolute or relative; join relpath to cwd if relative
-        //realpath = try std.fs.realpath(outname, &path_buf);
-        //var out_file: File = try std.fs.createFileAbsolute(realpath, .{ .truncate = true });
         var out_file: File = try std.fs.cwd().createFile(outname, .{ .truncate = true });
         try render(out_file.writer(), md, do_console, do_html, md_dir);
     } else {
