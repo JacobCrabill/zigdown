@@ -110,6 +110,16 @@ pub fn build(b: *std.Build) !void {
         .root_path = "src/test_parser.zig",
     };
     addExecutable(b, parser_test_config, exe_opts);
+
+    const image_test_config = ExeConfig{
+        .name = "image_test",
+        .build_cmd = "build-image-test",
+        .build_description = "Build (don't run) the image test executable",
+        .run_cmd = "image-test",
+        .run_description = "Run the standalone image test",
+        .root_path = "src/image.zig",
+    };
+    addExecutable(b, image_test_config, exe_opts);
 }
 
 /// Add an executable (build & run) step using the given file

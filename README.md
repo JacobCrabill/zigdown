@@ -1,5 +1,7 @@
 # Zigdown: Markdown parser in Zig
 
+![Zig is Awesome!](test/zig-zero.png)
+
 Inspired by [Glow](https://github.com/charmbracelet/glow), the goal is to create a simple
 terminal-based Markdown renderer just for fun.
 
@@ -48,4 +50,4 @@ largely implemented.
 Once the basics are polished, the next steps will be to improve the rendering options, enable image
 rendering, and work on advanced features like info boxes, task lists, tables, and more.
 
-![Sample Render](sample-render-readme.png)
+![Sample Render](sample-render-readme-2.png)

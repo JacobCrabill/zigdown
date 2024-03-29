@@ -1,0 +1,33 @@
+/* -------- Markdown Render Styling -------- */
+
+html, body {
+	height: fit-content;
+}
+
+/* Set the basic style: bg color, fg color, typeface */
+body {
+  background-image: none;
+  background-color: #3a3547;
+
+  min-height: 100%;
+  margin: 12px;
+
+  text-align: left;
+  font-family: Nova Flat, Ubuntu, Arial;
+  color: #ffffff;
+}
+
+/* Title-style header (H1) */
+.header {
+  text-align: center;
+  font-size: 24px;
+  padding: 32px;
+}
+
+/* Basic centering of simple elements */
+.center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 50%;
+}

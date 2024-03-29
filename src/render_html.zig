@@ -9,6 +9,8 @@ const zd = struct {
 
 const Allocator = std.mem.Allocator;
 
+const css = @embedFile("style.css");
+
 // Render a Markdown document to HTML to the given output stream
 pub fn HtmlRenderer(comptime OutStream: type) type {
     return struct {
@@ -130,11 +132,17 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         /// Render an ATX Heading
         fn renderHeading(self: *Self, leaf: zd.Leaf) !void {
             const h: zd.Heading = leaf.content.Heading;
+            if (h.level == 1) {
+                try self.stream.print("<div class=\"header\">", .{});
+            }
             try self.stream.print("<h{d}>", .{h.level});
             for (leaf.inlines.items) |item| {
                 try self.renderInline(item);
             }
             try self.stream.print("</h{d}>\n", .{h.level});
+            if (h.level == 1) {
+                try self.stream.print("</div>", .{});
+            }
         }
 
         /// Render a raw block of code
@@ -224,7 +232,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         fn renderImage(self: *Self, image: zd.Image) !void {
-            try self.stream.print("<img src=\"{s}\" alt=\"", .{image.src});
+            try self.stream.print("<img src=\"{s}\" class=\"center\" alt=\"", .{image.src});
             for (image.alt.items) |text| {
                 try self.renderText(text);
             }
@@ -232,7 +240,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         fn renderBegin(self: *Self) !void {
-            try self.stream.print("<html><body>\n", .{});
+            try self.stream.print("<html><body>\n<style>\n{s}</style>", .{css});
         }
 
         fn renderEnd(self: *Self) !void {

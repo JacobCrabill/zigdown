@@ -667,6 +667,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     width = @as(usize, @intFromFloat(scale * @as(f32, @floatFromInt(width))));
                 }
 
+                // Center the image by setting the cursor appropriately
+                self.writeNTimes(" ", (self.opts.width - width) / 2);
+
                 // const raw_data: []const u8 = img.data[0..@intCast(img.width * img.height * img.nchan)];
                 gfx.sendImagePNG(self.stream, self.alloc, path, width, height) catch |err| {
                     if (err == error.FileIsNotPNG and img.nchan == 3) {
