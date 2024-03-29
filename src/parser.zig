@@ -280,8 +280,9 @@ fn isLazyContinuationLineQuote(line: []const Token) bool {
 /// Check if the line can "lazily" continue an open List block
 fn isLazyContinuationLineList(line: []const Token) bool {
     if (line.len == 0) return true; // TODO: blank line - allow?
-    if (isEmptyLine(line) or isQuote(line) or isHeading(line) or isCodeBlock(line))
-        return false;
+    if (isEmptyLine(line) or isHeading(line)) return false;
+    // if (isEmptyLine(line) or isQuote(line) or isHeading(line) or isCodeBlock(line))
+    //     return false;
 
     return true;
 }

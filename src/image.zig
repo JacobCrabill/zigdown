@@ -18,10 +18,17 @@ const CHUNK_SIZE: usize = 4096;
 const NROW: usize = 40;
 const NCOL: usize = 120;
 
+/// Transmission medium options per the Kitty Terminal Graphics Protocol
 const Medium = enum(u8) {
     RGB = 24,
     RGBA = 32,
     PNG = 100,
+};
+
+const GraphicsError = error{
+    FileIsNotPNG,
+    WrongNumberOfChannels,
+    WriteError,
 };
 
 /// Check if the file is a valid PNG
@@ -44,9 +51,6 @@ pub fn sendImagePNG(stream: anytype, alloc: Allocator, file: []const u8, width: 
     const buffer = try img.readToEndAlloc(alloc, 1e9);
     defer alloc.free(buffer);
 
-    // TODO
-    // var img_file: stb.Image = try stb.loadImageFromMemory(buffer);
-
     // Check that the image is a PNG file
     if (!isPNG(buffer)) {
         return error.FileIsNotPNG;
@@ -66,14 +70,93 @@ pub fn sendImagePNG(stream: anytype, alloc: Allocator, file: []const u8, width: 
         const chunk_end = @min(pos + CHUNK_SIZE, data.len);
         const chunk = data[pos..chunk_end];
         const last_chunk: bool = (chunk_end == data.len);
-        try sendImageChunk(stream, chunk, last_chunk, width, height);
+        try sendImageChunkPNG(stream, chunk, last_chunk, width, height);
         pos = chunk_end;
         i += 1;
     }
 }
 
-/// Send a chunk of image data in a single '_G' command
-fn sendImageChunk(stream: anytype, data: []const u8, last_chunk: bool, width: ?usize, height: ?usize) !void {
+/// Send an image file to the terminal as raw RGB pixel data using the Kitty terminal graphics protocol
+pub fn sendImageRGB(stream: anytype, alloc: Allocator, file: []const u8, width: ?usize, height: ?usize) !void {
+    // Read the image into memory
+    var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+    const realpath = try std.fs.realpath(file, &path_buf);
+    var img_file: File = try std.fs.openFileAbsolute(realpath, .{});
+    const buffer = try img_file.readToEndAlloc(alloc, 1e9);
+    defer alloc.free(buffer);
+
+    var img: stb.Image = try stb.load_image_from_memory(buffer);
+    defer img.deinit();
+
+    if (img.nchan != 3)
+        return error.WrongNumberOfChannels;
+
+    const size: usize = @intCast(img.width * img.height * img.nchan);
+    const rgb: []u8 = img.data[0..size];
+
+    // Encode the image data as base64
+    const blen = Base64Encoder.calcSize(rgb.len);
+    const b64buf = try alloc.alloc(u8, blen);
+    defer alloc.free(b64buf);
+
+    const data = Base64Encoder.encode(b64buf, rgb);
+
+    // Send the image data in 4kB chunks
+    var pos: usize = 0;
+    var i: usize = 0;
+    while (pos < data.len) {
+        const chunk_end = @min(pos + CHUNK_SIZE, data.len);
+        const chunk = data[pos..chunk_end];
+        const last_chunk: bool = (chunk_end == data.len);
+        try sendImageChunkRGB(
+            stream,
+            chunk,
+            last_chunk,
+            width,
+            height,
+            @intCast(img.width),
+            @intCast(img.height),
+        );
+        pos = chunk_end;
+        i += 1;
+    }
+}
+
+/// Send an image file to the terminal as raw RGB pixel data using the Kitty terminal graphics protocol
+pub fn sendImageRGB2(stream: anytype, alloc: Allocator, img: *const stb.Image, width: ?usize, height: ?usize) !void {
+    const size: usize = @intCast(img.width * img.height * img.nchan);
+    const rgb: []u8 = img.data[0..size];
+
+    // Encode the image data as base64
+    const blen = Base64Encoder.calcSize(rgb.len);
+    const b64buf = try alloc.alloc(u8, blen);
+    defer alloc.free(b64buf);
+
+    const data = Base64Encoder.encode(b64buf, rgb);
+
+    // Send the image data in 4kB chunks
+    var pos: usize = 0;
+    var i: usize = 0;
+    while (pos < data.len) {
+        const chunk_end = @min(pos + CHUNK_SIZE, data.len);
+        const chunk = data[pos..chunk_end];
+        const last_chunk: bool = (chunk_end == data.len);
+        try sendImageChunkRGB(
+            stream,
+            chunk,
+            last_chunk,
+            width,
+            height,
+            @intCast(img.width),
+            @intCast(img.height),
+        );
+        pos = chunk_end;
+        i += 1;
+    }
+}
+
+/// Send a chunk of PNG image data in a single '_G' command
+fn sendImageChunkPNG(stream: anytype, data: []const u8, last_chunk: bool, width: ?usize, height: ?usize) !void {
     var m: u8 = 1;
     if (last_chunk)
         m = 0;
@@ -86,6 +169,43 @@ fn sendImageChunk(stream: anytype, data: []const u8, last_chunk: bool, width: ?u
     // and sends that instead of the original file
     _ = try stream.write(esc ++ "_G");
     try stream.print("c={d},r={d},a=T,f={d},m={d}", .{ ncol, nrow, @intFromEnum(Medium.PNG), m });
+
+    if (data.len > 0) {
+        // Send the image payload
+        _ = try stream.write(";");
+        _ = try stream.write(data);
+    }
+
+    // Finish the command
+    _ = try stream.write(esc ++ "\\");
+}
+
+/// Send a chunk of RGB image data in a single '_G' command
+fn sendImageChunkRGB(
+    stream: anytype,
+    data: []const u8,
+    last_chunk: bool,
+    display_width: ?usize,
+    display_height: ?usize,
+    img_width: usize,
+    img_height: usize,
+) !void {
+    const m: u8 = if (last_chunk) 0 else 1;
+    const ncol = display_width orelse NCOL;
+    const nrow = display_height orelse NROW;
+
+    // TODO: Need to manually scale the image to preserve the aspect ratio
+    // Kitty's 'icat' kitten uses ImageMagick to do the scaling - outputs to temporary file
+    // and sends that instead of the original file
+    _ = try stream.write(esc ++ "_G");
+    try stream.print("s={d},v={d},c={d},r={d},a=T,f={d},m={d}", .{
+        img_width,
+        img_height,
+        ncol,
+        nrow,
+        @intFromEnum(Medium.RGB),
+        m,
+    });
 
     if (data.len > 0) {
         // Send the image payload
@@ -167,5 +287,9 @@ pub fn main() !void {
     // The image can be shifted right by padding spaces
     // (The image is drawn from the top-left starting at the current cursor location)
     //try stdout.print("        ", .{});
-    try sendImagePNG(stdout, alloc, args[1], width, height);
+    if (std.mem.endsWith(u8, args[1], ".png")) {
+        try sendImagePNG(stdout, alloc, args[1], width, height);
+    } else {
+        try sendImageRGB(stdout, alloc, args[1], width, height);
+    }
 }

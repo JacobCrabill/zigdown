@@ -667,8 +667,15 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     width = @as(usize, @intFromFloat(scale * @as(f32, @floatFromInt(width))));
                 }
 
+                // const raw_data: []const u8 = img.data[0..@intCast(img.width * img.height * img.nchan)];
                 gfx.sendImagePNG(self.stream, self.alloc, path, width, height) catch |err| {
-                    std.debug.print("Error rendering image: {any}\n", .{err});
+                    if (err == error.FileIsNotPNG and img.nchan == 3) {
+                        gfx.sendImageRGB2(self.stream, self.alloc, &img, width, height) catch |err2| {
+                            std.debug.print("Error rendering RGB image: {any}\n", .{err2});
+                        };
+                    } else {
+                        std.debug.print("Error rendering image: {any}\n", .{err});
+                    }
                 };
                 self.renderBreak();
             }
