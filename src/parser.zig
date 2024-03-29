@@ -409,7 +409,8 @@ fn appendText(alloc: Allocator, text_parts: *ArrayList(zd.Text), words: *ArrayLi
     if (words.items.len > 0) {
         // Merge all words into a single string
         // Merge duplicate ' ' characters
-        const new_text: []u8 = try std.mem.join(alloc, " ", words.items);
+        // const new_text: []u8 = try std.mem.join(alloc, " ", words.items);
+        const new_text: []u8 = try std.mem.concat(alloc, u8, words.items);
         defer alloc.free(new_text);
         const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
 
