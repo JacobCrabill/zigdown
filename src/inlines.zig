@@ -157,7 +157,16 @@ pub const Link = struct {
 
 /// Raw text codespan
 pub const Codespan = struct {
+    const Self = @This();
+    alloc: ?Allocator = null,
     text: []const u8 = "",
+
+    pub fn deinit(self: *Self) void {
+        if (self.alloc) |alloc| {
+            alloc.free(self.text);
+            self.alloc = null;
+        }
+    }
 };
 
 /// Image Link
