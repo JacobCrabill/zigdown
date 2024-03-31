@@ -388,7 +388,6 @@ fn appendWords(alloc: Allocator, inlines: *ArrayList(zd.Inline), words: *ArrayLi
     if (words.items.len > 0) {
         // Merge all words into a single string
         // Merge duplicate ' ' characters
-        // const new_text: []u8 = try std.mem.join(alloc, " ", words.items);
         const new_text: []u8 = try std.mem.concat(alloc, u8, words.items);
         defer alloc.free(new_text);
         const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
@@ -407,9 +406,7 @@ fn appendWords(alloc: Allocator, inlines: *ArrayList(zd.Inline), words: *ArrayLi
 /// Append a list of words to the given TextBlock as Text Inline objects
 fn appendText(alloc: Allocator, text_parts: *ArrayList(zd.Text), words: *ArrayList([]const u8), style: zd.TextStyle) Allocator.Error!void {
     if (words.items.len > 0) {
-        // Merge all words into a single string
-        // Merge duplicate ' ' characters
-        // const new_text: []u8 = try std.mem.join(alloc, " ", words.items);
+        // Merge all words into a single string, merging consecutive whitespace
         const new_text: []u8 = try std.mem.concat(alloc, u8, words.items);
         defer alloc.free(new_text);
         const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
@@ -1124,13 +1121,23 @@ pub const Parser = struct {
                             try words.append(ctok.text);
                         }
 
-                        // TODO: Style for inline code
-                        // TODO: Actual "InlineCode" Inline type
-                        style.bold = false;
-                        style.italic = false;
-                        style.reverse = true;
-                        try appendWords(self.alloc, inlines, &words, style);
-                        style.reverse = false;
+                        if (words.items.len > 0) {
+                            // Merge all words into a single string
+                            // Merge duplicate ' ' characters
+                            const new_text: []u8 = try std.mem.concat(self.alloc, u8, words.items);
+                            defer self.alloc.free(new_text);
+                            const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
+
+                            const codespan = zd.Codespan{
+                                .alloc = self.alloc,
+                                .text = try self.alloc.dupe(u8, new_text_ws),
+                            };
+                            try inlines.append(zd.Inline.initWithContent(
+                                self.alloc,
+                                zd.InlineData{ .codespan = codespan },
+                            ));
+                            words.clearRetainingCapacity();
+                        }
                         i = end;
                     }
                 },
@@ -1340,6 +1347,10 @@ test "1. one-line nested blocks" {
     try std.testing.expectEqual(zd.LeafType.Paragraph, @as(zd.LeafType, para.Leaf.content));
     // try std.testing.expectEqual(1, para.Leaf.children.items.len);
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Inlines Tests
+///////////////////////////////////////////////////////////////////////////////
 
 inline fn makeTokenList(comptime kinds: []const TokenType) []const Token {
     const N: usize = kinds.len;

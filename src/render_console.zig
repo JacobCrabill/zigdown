@@ -147,7 +147,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
 
             if (style.bg_color) |bg_color| {
-                self.startFgColor(bg_color);
+                self.startBgColor(bg_color);
             }
 
             self.cur_style = style;
@@ -261,7 +261,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 self.write(" ");
             }
 
-            var words = std.mem.splitAny(u8, text, " ");
+            var words = std.mem.tokenizeAny(u8, text, " ");
             while (words.next()) |word| {
                 // idk if there's a cleaner way to do this...
                 if (self.column > self.opts.indent and self.column + word.len > self.opts.width) {
@@ -289,7 +289,10 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         pub fn writeLeaders(self: *Self) void {
+            const style = self.cur_style;
+            self.resetStyle();
             self.writeno(cons.clear_line);
+            self.startStyle(style);
             for (self.leader_stack.items) |text| {
                 self.startStyle(text.style);
                 self.write(text.text);
@@ -599,8 +602,13 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         fn renderInlineCode(self: *Self, code: zd.Codespan) !void {
-            // TODO
-            try self.stream.print("<code>{s}</code>", .{code.text});
+            const cur_style = self.cur_style;
+            self.resetStyle();
+            const style = zd.TextStyle{ .fg_color = .DarkYellow, .bg_color = .Black };
+            self.startStyle(style);
+            self.wrapText(code.text);
+            self.resetStyle();
+            self.startStyle(cur_style);
         }
 
         fn renderText(self: *Self, text: zd.Text) !void {
