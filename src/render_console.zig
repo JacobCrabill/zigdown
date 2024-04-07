@@ -93,6 +93,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 .White => self.writeno(cons.fg_white),
                 .DarkYellow => self.writeno(cons.fg_dark_yellow),
                 .PurpleGrey => self.writeno(cons.fg_purple_grey),
+                .DarkGrey => self.writeno(cons.fg_dark_grey),
                 .Default => self.writeno(cons.fg_default),
             }
         }
@@ -109,6 +110,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 .White => self.writeno(cons.bg_white),
                 .DarkYellow => self.writeno(cons.bg_dark_yellow),
                 .PurpleGrey => self.writeno(cons.bg_purple_grey),
+                .DarkGrey => self.writeno(cons.bg_dark_grey),
                 .Default => self.writeno(cons.bg_default),
             }
         }
@@ -559,7 +561,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Render a raw block of code
         fn renderCode(self: *Self, c: zd.Code) !void {
             const bar_style = zd.TextStyle{ .fg_color = .Yellow, .bold = true };
-            const text_style = zd.TextStyle{ .fg_color = .Magenta };
+            const text_style = zd.TextStyle{ .bg_color = .DarkGrey, .fg_color = .Yellow };
             self.startStyle(bar_style);
             self.print("━━━━━━━━━━━━━━━━━━━━ <{s}>", .{c.tag orelse "none"});
             self.renderBreak();
@@ -604,7 +606,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         fn renderInlineCode(self: *Self, code: zd.Codespan) !void {
             const cur_style = self.cur_style;
             self.resetStyle();
-            const style = zd.TextStyle{ .fg_color = .DarkYellow, .bg_color = .Black };
+            const style = zd.TextStyle{ .fg_color = .DarkYellow, .bg_color = .DarkGrey };
             self.startStyle(style);
             self.wrapText(code.text);
             self.resetStyle();

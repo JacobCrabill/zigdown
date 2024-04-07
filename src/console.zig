@@ -53,6 +53,7 @@ pub const bg_default = ansi ++ "[49m";
 // Extended Background Colors
 pub const bg_dark_yellow = ansi ++ "[48;5;178m";
 pub const bg_purple_grey = ansi ++ "[48;5;170m";
+pub const bg_dark_grey = ansi ++ "[48;5;235m";
 
 // Basic Fackground Colors
 pub const fg_black = ansi ++ "[30m";
@@ -68,6 +69,7 @@ pub const fg_default = ansi ++ "[39m";
 // Extended Background Colors
 pub const fg_dark_yellow = ansi ++ "[38;5;178m";
 pub const fg_purple_grey = ansi ++ "[38;5;170m";
+pub const fg_dark_grey = ansi ++ "[38;5;235m";
 
 pub const text_bold = ansi ++ "[1m";
 pub const text_italic = ansi ++ "[3m";
@@ -115,6 +117,7 @@ pub fn startFgColor(stream: anytype, color: Color) void {
         .Magenta => stream.print(fg_magenta, .{}),
         .DarkYellow => stream.print(fg_dark_yellow, .{}),
         .PurpleGrey => stream.print(fg_purple_grey, .{}),
+        .DarkGrey => stream.print(fg_dark_grey, .{}),
         .Default => stream.print(fg_default, .{}),
     }
 }
@@ -132,6 +135,7 @@ pub fn startBgColor(stream: anytype, color: Color) void {
         .Magenta => stream.print(bg_magenta, .{}),
         .DarkYellow => stream.print(bg_dark_yellow, .{}),
         .PurpleGrey => stream.print(bg_purple_grey, .{}),
+        .DarkGrey => stream.print(bg_dark_grey, .{}),
         .Default => stream.print(bg_default, .{}),
     }
 }

@@ -3,7 +3,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
-const debug = @import("debug.zig");
+const debug = @import("../debug.zig");
 
 const errorReturn = debug.errorReturn;
 const errorMsg = debug.errorMsg;
@@ -12,30 +12,22 @@ const Logger = debug.Logger;
 const zd = struct {
     usingnamespace @import("../utils.zig");
     usingnamespace @import("../tokens.zig");
-    usingnamespace @import("../lexer.zig");
     usingnamespace @import("../inlines.zig");
     usingnamespace @import("../leaves.zig");
-    usingnamespace @import("../containers.zig");
-    usingnamespace @import("../blocks.zig");
     usingnamespace @import("inlines.zig");
 };
 
+/// Parser utilities
 const utils = @import("utils.zig");
 
-const Lexer = zd.Lexer;
 const TokenType = zd.TokenType;
 const Token = zd.Token;
 const TokenList = zd.TokenList;
 
 const InlineType = zd.InlineType;
 const Inline = zd.Inline;
-const BlockType = zd.BlockType;
-const ContainerBlockType = zd.ContainerBlockType;
-const LeafBlockType = zd.LeafBlockType;
 
-const Block = zd.Block;
-const ContainerBlock = zd.ContainerBlock;
-const LeafBlock = zd.LeafBlock;
+const ParserOpts = utils.ParserOpts;
 
 /// Global logger
 var g_logger = Logger{ .enabled = false };
@@ -43,20 +35,6 @@ var g_logger = Logger{ .enabled = false };
 ///////////////////////////////////////////////////////////////////////////////
 // Parser Struct
 ///////////////////////////////////////////////////////////////////////////////
-
-pub const LogLevel = enum {
-    Verbose,
-    Normal,
-    Silent,
-};
-
-/// Options to configure the Parser
-pub const ParserOpts = struct {
-    /// Allocate a copy of the input text (Caller may free input after creating Parser)
-    copy_input: bool = false,
-    /// Fully log the output of parser to the console
-    verbose: bool = false,
-};
 
 /// Parse text into a Markdown document structure
 ///
@@ -66,19 +44,17 @@ pub const InlineParser = struct {
     alloc: Allocator,
     opts: ParserOpts,
     logger: Logger,
-    tokens: ArrayList(Token),
+    tokens: []Token,
     cursor: usize = 0,
     cur_token: Token,
     next_token: Token,
 
-    pub fn init(alloc: Allocator, opts: ParserOpts) !Self {
+    pub fn init(alloc: Allocator, opts: ParserOpts) Self {
         return Self{
             .alloc = alloc,
             .opts = opts,
-            .lexer = Lexer{},
-            .text = null,
-            .tokens = ArrayList(Token).init(alloc),
             .logger = Logger{ .enabled = opts.verbose },
+            .tokens = undefined,
             .cursor = 0,
             .cur_token = undefined,
             .next_token = undefined,
@@ -87,7 +63,9 @@ pub const InlineParser = struct {
 
     /// Reset the Parser to the default state
     pub fn reset(self: *Self) void {
-        _ = self;
+        self.cursor = 0;
+        self.cur_token = undefined;
+        self.next_token = undefined;
     }
 
     /// Free any heap allocations
@@ -150,51 +128,9 @@ pub const InlineParser = struct {
     // Inline Parsers
     ///////////////////////////////////////////////////////
 
-    /// Close the block and parse its raw text content into inline content
-    /// TODO: Create separate InlineParser struct?
-    fn closeBlock(self: *Self, block: *Block) void {
-        if (!block.isOpen()) return;
-        switch (block.*) {
-            .Container => |*c| {
-                for (c.children.items) |*child| {
-                    self.closeBlock(child);
-                }
-            },
-            .Leaf => |*l| {
-                switch (l.content) {
-                    .Code => self.closeBlockCode(block),
-                    else => {
-                        self.parseInlines(&l.inlines, l.raw_contents.items) catch unreachable;
-                    },
-                }
-            },
-        }
-        block.close();
-    }
-
-    fn closeBlockCode(_: *Self, block: *Block) void {
-        const code: *zd.Code = &block.Leaf.content.Code;
-        if (code.text) |text| {
-            code.alloc.free(text);
-            code.text = null;
-        }
-
-        // TODO: Scratch space, scratch allocator in Parser struct
-        var words = ArrayList([]const u8).init(block.allocator());
-        defer words.deinit();
-        for (block.Leaf.raw_contents.items) |tok| {
-            words.append(tok.text) catch unreachable;
-        }
-        code.text = std.mem.concat(block.allocator(), u8, words.items) catch unreachable;
-    }
-
-    fn closeBlockParagraph(self: *Self, block: *Block) void {
-        const leaf: *zd.Leaf = block.leaf();
-        const tokens = leaf.raw_contents.items;
-        self.parseInlines(&leaf.inlines, tokens) catch unreachable;
-    }
-
-    fn parseInlines(self: *Self, inlines: *ArrayList(zd.Inline), tokens: []const Token) !void {
+    /// Parse raw text content into inline content
+    pub fn parseInlines(self: *Self, tokens: []const Token) !ArrayList(Inline) {
+        var inlines = ArrayList(Inline).init(self.alloc);
         var style = zd.TextStyle{};
         // TODO: make this 'scratch workspace' part of the Parser struct
         // to avoid constant re-init (use clearRetainingCapacity() instead of deinit())
@@ -215,13 +151,13 @@ pub const InlineParser = struct {
 
             switch (tok.kind) {
                 .EMBOLD => {
-                    try utils.appendWords(self.alloc, inlines, &words, style);
+                    try utils.appendWords(self.alloc, &inlines, &words, style);
                     style.bold = !style.bold;
                     style.italic = !style.italic;
                 },
                 .STAR, .BOLD => {
                     // TODO: Properly handle emphasis between *, **, ***, * word ** word***, etc.
-                    try utils.appendWords(self.alloc, inlines, &words, style);
+                    try utils.appendWords(self.alloc, &inlines, &words, style);
                     style.bold = !style.bold;
                 },
                 .USCORE => {
@@ -229,23 +165,51 @@ pub const InlineParser = struct {
                     if (prev_type == .WORD and next_type == .WORD) {
                         try words.append(tok.text);
                     } else {
-                        try utils.appendWords(self.alloc, inlines, &words, style);
+                        try utils.appendWords(self.alloc, &inlines, &words, style);
                         style.italic = !style.italic;
                     }
                 },
                 .TILDE => {
-                    try utils.appendWords(self.alloc, inlines, &words, style);
+                    try utils.appendWords(self.alloc, &inlines, &words, style);
                     style.underline = !style.underline;
                 },
                 .BANG, .LBRACK => {
                     const bang: bool = tok.kind == .BANG;
                     const start: usize = if (bang) i + 1 else i;
                     if (utils.validateLink(tokens[start..])) {
-                        try utils.appendWords(self.alloc, inlines, &words, style);
-                        const n: usize = try self.parseLinkOrImage(inlines, tokens[i..], bang);
+                        try utils.appendWords(self.alloc, &inlines, &words, style);
+                        const n: usize = try self.parseLinkOrImage(&inlines, tokens[i..], bang);
                         i += n - 1;
                     } else {
                         try words.append(tok.text);
+                    }
+                },
+                .CODE_INLINE => {
+                    try utils.appendWords(self.alloc, &inlines, &words, style);
+                    if (utils.findFirstOf(tokens, i + 1, &.{.CODE_INLINE})) |end| {
+                        for (tokens[i + 1 .. end]) |ctok| {
+                            try words.append(ctok.text);
+                        }
+
+                        if (words.items.len > 0) {
+                            // Merge all words into a single string
+                            // Merge duplicate ' ' characters
+                            const new_text: []u8 = try std.mem.concat(self.alloc, u8, words.items);
+                            defer self.alloc.free(new_text);
+                            const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
+
+                            const codespan = zd.Codespan{
+                                .alloc = self.alloc,
+                                .text = try self.alloc.dupe(u8, new_text_ws),
+                            };
+                            try inlines.append(Inline.initWithContent(
+                                self.alloc,
+                                zd.InlineData{ .codespan = codespan },
+                            ));
+                            words.clearRetainingCapacity();
+                        }
+
+                        i = end;
                     }
                 },
                 .BREAK => {
@@ -259,9 +223,12 @@ pub const InlineParser = struct {
 
             prev_type = tok.kind;
         }
-        try utils.appendWords(self.alloc, inlines, &words, style);
+        try utils.appendWords(self.alloc, &inlines, &words, style);
+
+        return inlines;
     }
 
+    /// Parse tokens as basic (formatted) text
     fn parseInlineText(self: *Self, tokens: []const Token) !ArrayList(zd.Text) {
         var style = zd.TextStyle{};
         var words = ArrayList([]const u8).init(self.alloc);
@@ -372,57 +339,3 @@ pub const InlineParser = struct {
         return start + rp_idx + 1;
     }
 };
-
-///////////////////////////////////////////////////////////////////////////////
-// Tests
-///////////////////////////////////////////////////////////////////////////////
-
-inline fn makeTokenList(comptime kinds: []const TokenType) []const Token {
-    const N: usize = kinds.len;
-    var tokens: [N]Token = undefined;
-    for (kinds, 0..) |kind, i| {
-        tokens[i].kind = kind;
-        tokens[i].text = "";
-    }
-    return &tokens;
-}
-
-fn checkLink(text: []const u8) bool {
-    var lexer = Lexer{};
-    const tokens = lexer.tokenize(std.testing.allocator, text) catch return false;
-    defer tokens.deinit();
-    return utils.validateLink(tokens.items);
-}
-
-test "Validate links" {
-    // Valid link structures
-    try std.testing.expect(utils.validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .RBRACK, .LPAREN, .RPAREN })));
-    try std.testing.expect(utils.validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .RBRACK, .LPAREN, .SPACE, .RPAREN })));
-    try std.testing.expect(utils.validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .SPACE, .RBRACK, .LPAREN, .RPAREN })));
-    try std.testing.expect(utils.validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .SPACE, .RBRACK, .LPAREN, .SPACE, .RPAREN })));
-
-    // Invalid link structures
-    try std.testing.expect(!utils.validateLink(makeTokenList(&[_]TokenType{ .RBRACK, .LPAREN, .RPAREN })));
-    try std.testing.expect(!utils.validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .RBRACK, .LPAREN })));
-    try std.testing.expect(!utils.validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .RBRACK, .RPAREN })));
-    try std.testing.expect(!utils.validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .RBRACK, .SPACE, .LPAREN, .RPAREN })));
-    try std.testing.expect(!utils.validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .BREAK, .RBRACK, .LPAREN, .SPACE, .RPAREN })));
-
-    // Check with lexer in the loop
-    try std.testing.expect(checkLink("[]()"));
-    try std.testing.expect(checkLink("[]()\n"));
-    try std.testing.expect(checkLink("[txt]()"));
-    try std.testing.expect(checkLink("[](url)"));
-    try std.testing.expect(checkLink("[txt](url)"));
-    try std.testing.expect(checkLink("[**Alt** _Text_](www.example.com)"));
-
-    try std.testing.expect(!checkLink("![]()")); // Images must have the '!' stripped first
-    try std.testing.expect(!checkLink(" []()")); // Leading whitespace not allowed
-    try std.testing.expect(!checkLink("[] ()")); // Space between [] and () not allowed
-    try std.testing.expect(!checkLink("[\n]()"));
-    try std.testing.expect(!checkLink("[](\n)"));
-    try std.testing.expect(!checkLink("]()"));
-    try std.testing.expect(!checkLink("[()"));
-    try std.testing.expect(!checkLink("[])"));
-    try std.testing.expect(!checkLink("[]("));
-}

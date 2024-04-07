@@ -3,7 +3,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
-const debug = @import("debug.zig");
+const debug = @import("../debug.zig");
 
 const errorReturn = debug.errorReturn;
 const errorMsg = debug.errorMsg;
@@ -13,15 +13,45 @@ const zd = struct {
     usingnamespace @import("../utils.zig");
     usingnamespace @import("../tokens.zig");
     usingnamespace @import("../blocks.zig");
+    usingnamespace @import("../inlines.zig");
 };
 
 const TokenType = zd.TokenType;
 const Token = zd.Token;
 const TokenList = zd.TokenList;
 
+/// Logger levels
+/// TODO: Make use of this
+pub const LogLevel = enum {
+    Verbose,
+    Normal,
+    Silent,
+};
+
+/// Options to configure the Parsers
+pub const ParserOpts = struct {
+    /// Allocate a copy of the input text (Caller may free input after creating Parser)
+    copy_input: bool = false,
+    /// Fully log the output of parser to the console
+    verbose: bool = false,
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 // Helper Functions
 ///////////////////////////////////////////////////////////////////////////////
+
+/// Count the number of leading spaces in the given line
+pub fn countLeadingWhitespace(line: []const Token) usize {
+    var leading_ws: usize = 0;
+    for (line) |tok| {
+        switch (tok.kind) {
+            .SPACE => leading_ws += 1,
+            .INDENT => leading_ws += 2,
+            else => return leading_ws,
+        }
+    }
+    return 0;
+}
 
 /// Remove all leading whitespace (spaces or indents) from the start of a line
 pub fn trimLeadingWhitespace(line: []const Token) []const Token {
@@ -154,12 +184,12 @@ pub fn isUnorderedListItem(line: []const Token) bool {
 }
 
 /// Check for any kind of list item
-fn isListItem(line: []const Token) bool {
+pub fn isListItem(line: []const Token) bool {
     return isUnorderedListItem(line) or isOrderedListItem(line);
 }
 
 /// Check for the pattern "[ ]*[>][ ]+"
-fn isQuote(line: []const Token) bool {
+pub fn isQuote(line: []const Token) bool {
     var have_caret: bool = false;
     for (line) |tok| {
         switch (tok.kind) {
@@ -178,7 +208,7 @@ fn isQuote(line: []const Token) bool {
 }
 
 /// Check for the pattern "[ ]*[#]+[ ]+"
-fn isHeading(line: []const Token) bool {
+pub fn isHeading(line: []const Token) bool {
     var have_hash: bool = false;
     for (line) |tok| {
         switch (tok.kind) {
@@ -195,12 +225,83 @@ fn isHeading(line: []const Token) bool {
     return false;
 }
 
-fn isCodeBlock(line: []const Token) bool {
+pub fn isCodeBlock(line: []const Token) bool {
     for (line) |tok| {
         switch (tok.kind) {
             .CODE_BLOCK => return true,
             .SPACE, .INDENT => {},
             else => return false,
+        }
+    }
+
+    return false;
+}
+
+/// Append a list of words to the given TextBlock as Text Inline objects
+pub fn appendText(alloc: Allocator, text_parts: *ArrayList(zd.Text), words: *ArrayList([]const u8), style: zd.TextStyle) Allocator.Error!void {
+    if (words.items.len > 0) {
+        // Merge all words into a single string, merging consecutive whitespace
+        const new_text: []u8 = try std.mem.concat(alloc, u8, words.items);
+        defer alloc.free(new_text);
+        const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
+
+        // End the current Text object with the current style
+        const text = zd.Text{
+            .alloc = alloc,
+            .style = style,
+            .text = try alloc.dupe(u8, new_text_ws),
+        };
+        try text_parts.append(text);
+        words.clearRetainingCapacity();
+    }
+}
+
+/// Append a list of words to the given TextBlock as Text Inline objects
+pub fn appendWords(alloc: Allocator, inlines: *ArrayList(zd.Inline), words: *ArrayList([]const u8), style: zd.TextStyle) Allocator.Error!void {
+    if (words.items.len > 0) {
+        // Merge all words into a single string
+        // Merge duplicate ' ' characters
+        const new_text: []u8 = try std.mem.concat(alloc, u8, words.items);
+        defer alloc.free(new_text);
+        const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
+
+        // End the current Text object with the current style
+        const text = zd.Text{
+            .alloc = alloc,
+            .style = style,
+            .text = try alloc.dupe(u8, new_text_ws),
+        };
+        try inlines.append(zd.Inline.initWithContent(alloc, zd.InlineData{ .text = text }));
+        words.clearRetainingCapacity();
+    }
+}
+
+/// Check if the token slice contains a valid link of the form: [text](url)
+pub fn validateLink(in_line: []const Token) bool {
+    const line: []const Token = getLine(in_line, 0) orelse return false;
+    if (line[0].kind != .LBRACK) return false;
+
+    var i: usize = 1;
+    // var have_rbrack: bool = false;
+    // var have_lparen: bool = false;
+    var have_rparen: bool = false;
+    while (i < line.len) : (i += 1) {
+        if (line[i].kind == .RBRACK) {
+            // have_rbrack = true;
+            break;
+        }
+    }
+    if (i >= line.len - 2) return false;
+
+    i += 1;
+    if (line[i].kind != .LPAREN)
+        return false;
+    i += 1;
+
+    while (i < line.len) : (i += 1) {
+        if (line[i].kind == .RPAREN) {
+            have_rparen = true;
+            return true;
         }
     }
 

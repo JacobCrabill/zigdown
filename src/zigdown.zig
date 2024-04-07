@@ -7,7 +7,8 @@ pub const stbi = @import("stb_image");
 // Expose public namespaces for building docs
 pub const cons = @import("console.zig");
 pub const lexer = @import("lexer.zig");
-pub const parser = @import("parser.zig");
+pub const parser = @import("parsers/blocks.zig");
+// pub const parser = @import("parser.zig");
 pub const render = @import("render.zig");
 pub const tokens = @import("tokens.zig");
 pub const utils = @import("utils.zig");

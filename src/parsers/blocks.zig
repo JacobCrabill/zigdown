@@ -3,7 +3,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
-const debug = @import("debug.zig");
+const debug = @import("../debug.zig");
 
 const errorReturn = debug.errorReturn;
 const errorMsg = debug.errorMsg;
@@ -20,7 +20,8 @@ const zd = struct {
     usingnamespace @import("inlines.zig");
 };
 
-const utils = @import("utils.zig");
+/// Parser utilities
+pub const utils = @import("utils.zig");
 
 const Lexer = zd.Lexer;
 const TokenType = zd.TokenType;
@@ -37,7 +38,9 @@ const Block = zd.Block;
 const ContainerBlock = zd.ContainerBlock;
 const LeafBlock = zd.LeafBlock;
 
-const InlineParser = zd.InlineParser;
+// TODO: reorg
+pub const ParserOpts = utils.ParserOpts;
+pub const InlineParser = zd.InlineParser;
 
 /// Global logger
 var g_logger = Logger{ .enabled = false };
@@ -204,7 +207,6 @@ fn appendWords(alloc: Allocator, inlines: *ArrayList(zd.Inline), words: *ArrayLi
     if (words.items.len > 0) {
         // Merge all words into a single string
         // Merge duplicate ' ' characters
-        // const new_text: []u8 = try std.mem.join(alloc, " ", words.items);
         const new_text: []u8 = try std.mem.concat(alloc, u8, words.items);
         defer alloc.free(new_text);
         const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
@@ -255,55 +257,9 @@ fn parseOneInline(alloc: Allocator, tokens: []const Token) ?zd.Inline {
     }
 }
 
-/// Check if the token slice contains a valid link of the form: [text](url)
-fn validateLink(in_line: []const Token) bool {
-    const line: []const Token = utils.getLine(in_line, 0) orelse return false;
-    if (line[0].kind != .LBRACK) return false;
-
-    var i: usize = 1;
-    // var have_rbrack: bool = false;
-    // var have_lparen: bool = false;
-    var have_rparen: bool = false;
-    while (i < line.len) : (i += 1) {
-        if (line[i].kind == .RBRACK) {
-            // have_rbrack = true;
-            break;
-        }
-    }
-    if (i >= line.len - 2) return false;
-
-    i += 1;
-    if (line[i].kind != .LPAREN)
-        return false;
-    i += 1;
-
-    while (i < line.len) : (i += 1) {
-        if (line[i].kind == .RPAREN) {
-            have_rparen = true;
-            return true;
-        }
-    }
-
-    return false;
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 // Parser Struct
 ///////////////////////////////////////////////////////////////////////////////
-
-pub const LogLevel = enum {
-    Verbose,
-    Normal,
-    Silent,
-};
-
-/// Options to configure the Parser
-pub const ParserOpts = struct {
-    /// Allocate a copy of the input text (Caller may free input after creating Parser)
-    copy_input: bool = false,
-    /// Fully log the output of parser to the console
-    verbose: bool = false,
-};
 
 /// Parse text into a Markdown document structure
 ///
@@ -313,7 +269,6 @@ pub const Parser = struct {
     alloc: Allocator,
     opts: ParserOpts,
     lexer: Lexer,
-    iparser: InlineParser,
     logger: Logger,
     text: ?[]const u8,
     tokens: ArrayList(Token),
@@ -323,13 +278,12 @@ pub const Parser = struct {
     cur_line: []const Token,
     document: Block,
 
-    pub fn init(alloc: Allocator, opts: ParserOpts) !Self {
+    pub fn init(alloc: Allocator, opts: ParserOpts) Self {
         return Self{
             .alloc = alloc,
             .opts = opts,
             .lexer = Lexer{},
             .tokens = ArrayList(Token).init(alloc),
-            .iparser = InlineParser.init(alloc, .{ .verbose = opts.verbose }),
             .logger = Logger{ .enabled = opts.verbose },
             .text = null,
             .cursor = 0,
@@ -356,7 +310,6 @@ pub const Parser = struct {
     /// Free any heap allocations
     pub fn deinit(self: *Self) void {
         self.reset();
-        self.iparser.deinit();
         self.tokens.deinit();
         self.document.deinit();
     }
@@ -838,7 +791,6 @@ pub const Parser = struct {
     ///////////////////////////////////////////////////////
 
     /// Close the block and parse its raw text content into inline content
-    /// TODO: Create separate InlineParser struct?
     fn closeBlock(self: *Self, block: *Block) void {
         if (!block.isOpen()) return;
         switch (block.*) {
@@ -851,7 +803,10 @@ pub const Parser = struct {
                 switch (l.content) {
                     .Code => self.closeBlockCode(block),
                     else => {
-                        self.parseInlines(&l.inlines, l.raw_contents.items) catch unreachable;
+                        var p = zd.InlineParser.init(self.alloc, self.opts);
+                        defer p.deinit();
+                        l.inlines = p.parseInlines(l.raw_contents.items) catch unreachable;
+                        // self.parseInlines(&l.inlines, l.raw_contents.items) catch unreachable;
                     },
                 }
             },
@@ -880,314 +835,4 @@ pub const Parser = struct {
         const tokens = leaf.raw_contents.items;
         self.parseInlines(&leaf.inlines, tokens) catch unreachable;
     }
-
-    fn parseInlines(self: *Self, inlines: *ArrayList(zd.Inline), tokens: []const Token) !void {
-        var style = zd.TextStyle{};
-        // TODO: make this 'scratch workspace' part of the Parser struct
-        // to avoid constant re-init (use clearRetainingCapacity() instead of deinit())
-        var words = ArrayList([]const u8).init(self.alloc);
-        defer words.deinit();
-
-        var prev_type: TokenType = .BREAK;
-        var next_type: TokenType = .BREAK;
-
-        var i: usize = 0;
-        while (i < tokens.len) : (i += 1) {
-            const tok = tokens[i];
-            if (i + 1 < tokens.len) {
-                next_type = tokens[i + 1].kind;
-            } else {
-                next_type = .BREAK;
-            }
-
-            switch (tok.kind) {
-                .EMBOLD => {
-                    try appendWords(self.alloc, inlines, &words, style);
-                    style.bold = !style.bold;
-                    style.italic = !style.italic;
-                },
-                .STAR, .BOLD => {
-                    // TODO: Properly handle emphasis between *, **, ***, * word ** word***, etc.
-                    try appendWords(self.alloc, inlines, &words, style);
-                    style.bold = !style.bold;
-                },
-                .USCORE => {
-                    // If it's an underscore in the middle of a word, don't toggle style with it
-                    if (prev_type == .WORD and next_type == .WORD) {
-                        try words.append(tok.text);
-                    } else {
-                        try appendWords(self.alloc, inlines, &words, style);
-                        style.italic = !style.italic;
-                    }
-                },
-                .TILDE => {
-                    try appendWords(self.alloc, inlines, &words, style);
-                    style.underline = !style.underline;
-                },
-                .BANG, .LBRACK => {
-                    const bang: bool = tok.kind == .BANG;
-                    const start: usize = if (bang) i + 1 else i;
-                    if (validateLink(tokens[start..])) {
-                        try appendWords(self.alloc, inlines, &words, style);
-                        const n: usize = try self.parseLinkOrImage(inlines, tokens[i..], bang);
-                        i += n - 1;
-                    } else {
-                        try words.append(tok.text);
-                    }
-                },
-                .BREAK => {
-                    // Treat line breaks as spaces; Don't clear the style (The renderer deals with wrapping)
-                    try words.append(" ");
-                },
-                else => {
-                    try words.append(tok.text);
-                },
-            }
-
-            prev_type = tok.kind;
-        }
-        try appendWords(self.alloc, inlines, &words, style);
-    }
-
-    fn parseInlineText(self: *Self, tokens: []const Token) !ArrayList(zd.Text) {
-        var style = zd.TextStyle{};
-        var words = ArrayList([]const u8).init(self.alloc);
-        defer words.deinit();
-
-        var prev_type: TokenType = .BREAK;
-        var next_type: TokenType = .BREAK;
-
-        var text_parts = ArrayList(zd.Text).init(self.alloc);
-
-        var i: usize = 0;
-        while (i < tokens.len) : (i += 1) {
-            const tok = tokens[i];
-            if (i + 1 < tokens.len) {
-                next_type = tokens[i + 1].kind;
-            } else {
-                next_type = .BREAK;
-            }
-
-            switch (tok.kind) {
-                .EMBOLD => {
-                    try appendText(self.alloc, &text_parts, &words, style);
-                    style.bold = !style.bold;
-                    style.italic = !style.italic;
-                },
-                .STAR, .BOLD => {
-                    // TODO: Properly handle emphasis between *, **, ***, * word ** word***, etc.
-                    try appendText(self.alloc, &text_parts, &words, style);
-                    style.bold = !style.bold;
-                },
-                .USCORE => {
-                    // If it's an underscore in the middle of a word, don't toggle style with it
-                    if (prev_type == .WORD and next_type == .WORD) {
-                        try words.append(tok.text);
-                    } else {
-                        try appendText(self.alloc, &text_parts, &words, style);
-                        style.italic = !style.italic;
-                    }
-                },
-                .TILDE => {
-                    try appendText(self.alloc, &text_parts, &words, style);
-                    style.underline = !style.underline;
-                },
-                .BREAK => {
-                    // Treat line breaks as spaces; Don't clear the style (The renderer deals with wrapping)
-                    try words.append(" ");
-                },
-                else => {
-                    try words.append(tok.text);
-                },
-            }
-
-            prev_type = tok.kind;
-        }
-
-        // Add any last parsed words
-        try appendText(self.alloc, &text_parts, &words, style);
-
-        return text_parts;
-    }
-
-    /// Parse a Hyperlink (Image or normal Link)
-    /// TODO: return Inline instead of taking *inlines
-    fn parseLinkOrImage(self: *Self, inlines: *ArrayList(Inline), tokens: []const Token, bang: bool) Allocator.Error!usize {
-        // If an image, skip the '!'; the rest should be a valid link
-        const start: usize = if (bang) 1 else 0;
-
-        // Validate link syntax; we assume the link is on a single line
-        var line: []const Token = utils.getLine(tokens, start).?;
-        std.debug.assert(validateLink(line));
-
-        // Find the separating characters: '[', ']', '(', ')'
-        // We already know the 1st token is '[' and that the '(' lies immediately after the '['
-        // The Alt text lies between '[' and ']'
-        // The URI liex between '(' and ')'
-        const alt_start: usize = 1;
-        const rb_idx: usize = utils.findFirstOf(line, 0, &.{.RBRACK}).?;
-        const lp_idx: usize = rb_idx + 2;
-        const rp_idx: usize = utils.findFirstOf(line, 0, &.{.RPAREN}).?;
-        const alt_text: []const Token = line[alt_start..rb_idx];
-        const uri_text: []const Token = line[lp_idx..rp_idx];
-
-        // TODO: Parse line of Text
-        const link_text_block = try self.parseInlineText(alt_text);
-
-        var words = ArrayList([]const u8).init(self.alloc);
-        defer words.deinit();
-        for (uri_text) |tok| {
-            try words.append(tok.text);
-        }
-
-        var inl: Inline = undefined;
-        if (bang) {
-            var img = zd.Image.init(self.alloc);
-            img.heap_src = true;
-            img.src = try std.mem.concat(self.alloc, u8, words.items); // TODO
-            img.alt = link_text_block;
-            inl = Inline.initWithContent(self.alloc, .{ .image = img });
-        } else {
-            var link = zd.Link.init(self.alloc);
-            link.heap_url = true;
-            link.url = try std.mem.concat(self.alloc, u8, words.items);
-            link.text = link_text_block;
-            inl = Inline.initWithContent(self.alloc, .{ .link = link });
-        }
-        try inlines.append(inl);
-
-        return start + rp_idx + 1;
-    }
 };
-
-///////////////////////////////////////////////////////////////////////////////
-// Tests
-///////////////////////////////////////////////////////////////////////////////
-
-fn createAST() !Block {
-    const alloc = std.testing.allocator;
-
-    var root = Block.initContainer(alloc, .Document);
-    var quote = Block.initContainer(alloc, .Quote);
-    var list = Block.initContainer(alloc, .List);
-    var list_item = Block.initContainer(alloc, .ListItem);
-    var paragraph = Block.initLeaf(alloc, .Paragraph);
-
-    const text1 = zd.Text{ .text = "Hello, " };
-    const text2 = zd.Text{ .text = "World", .style = .{ .bold = true } };
-    var text3 = zd.Text{ .text = "!" };
-    text3.style.bold = true;
-    text3.style.italic = true;
-
-    try paragraph.Leaf.inlines.append(Inline.initWithContent(alloc, .{ .text = text1 }));
-    try paragraph.Leaf.inlines.append(Inline.initWithContent(alloc, .{ .text = text2 }));
-    try paragraph.Leaf.inlines.append(Inline.initWithContent(alloc, .{ .text = text3 }));
-
-    try list_item.addChild(paragraph);
-    try list.addChild(list_item);
-    try quote.addChild(list);
-    try root.addChild(quote);
-
-    return root;
-}
-
-test "1. one-line nested blocks" {
-
-    // ~~ Expected Parser Output ~~
-
-    var root = try createAST();
-    defer root.deinit();
-
-    // ~~ Parse ~~
-
-    // TODO: Create AST comparison fn; compare parsed to expected ASTs
-
-    // const input = "> - Hello, World!";
-    // const alloc = std.testing.allocator;
-    // var p: Parser = try Parser.init(alloc, input, .{});
-    // defer p.deinit();
-
-    // try p.parseMarkdown();
-
-    // ~~ Compare ~~
-
-    // Compare Document Block
-    // const root = p.document;
-    try std.testing.expect(root.isContainer());
-    try std.testing.expectEqual(zd.ContainerType.Document, @as(zd.ContainerType, root.Container.content));
-    try std.testing.expectEqual(1, root.Container.children.items.len);
-
-    // Compare Quote Block
-    const quote = root.Container.children.items[0];
-    try std.testing.expect(quote.isContainer());
-    try std.testing.expectEqual(zd.ContainerType.Quote, @as(zd.ContainerType, quote.Container.content));
-    try std.testing.expectEqual(1, quote.Container.children.items.len);
-
-    // Compare List Block
-    const list = quote.Container.children.items[0];
-    try std.testing.expect(list.isContainer());
-    try std.testing.expectEqual(zd.ContainerType.List, @as(zd.ContainerType, list.Container.content));
-    try std.testing.expectEqual(1, list.Container.children.items.len);
-
-    // Compare ListItem Block
-    const list_item = list.Container.children.items[0];
-    try std.testing.expect(list_item.isContainer());
-    try std.testing.expectEqual(zd.ContainerType.ListItem, @as(zd.ContainerType, list_item.Container.content));
-    try std.testing.expectEqual(1, list_item.Container.children.items.len);
-
-    // Compare Paragraph Block
-    const para = list_item.Container.children.items[0];
-    try std.testing.expect(para.isLeaf());
-    try std.testing.expectEqual(zd.LeafType.Paragraph, @as(zd.LeafType, para.Leaf.content));
-    // try std.testing.expectEqual(1, para.Leaf.children.items.len);
-}
-
-inline fn makeTokenList(comptime kinds: []const TokenType) []const Token {
-    const N: usize = kinds.len;
-    var tokens: [N]Token = undefined;
-    for (kinds, 0..) |kind, i| {
-        tokens[i].kind = kind;
-        tokens[i].text = "";
-    }
-    return &tokens;
-}
-
-fn checkLink(text: []const u8) bool {
-    var lexer = Lexer{};
-    const tokens = lexer.tokenize(std.testing.allocator, text) catch return false;
-    defer tokens.deinit();
-    return validateLink(tokens.items);
-}
-
-test "Validate links" {
-    // Valid link structures
-    try std.testing.expect(validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .RBRACK, .LPAREN, .RPAREN })));
-    try std.testing.expect(validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .RBRACK, .LPAREN, .SPACE, .RPAREN })));
-    try std.testing.expect(validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .SPACE, .RBRACK, .LPAREN, .RPAREN })));
-    try std.testing.expect(validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .SPACE, .RBRACK, .LPAREN, .SPACE, .RPAREN })));
-
-    // Invalid link structures
-    try std.testing.expect(!validateLink(makeTokenList(&[_]TokenType{ .RBRACK, .LPAREN, .RPAREN })));
-    try std.testing.expect(!validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .RBRACK, .LPAREN })));
-    try std.testing.expect(!validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .RBRACK, .RPAREN })));
-    try std.testing.expect(!validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .RBRACK, .SPACE, .LPAREN, .RPAREN })));
-    try std.testing.expect(!validateLink(makeTokenList(&[_]TokenType{ .LBRACK, .BREAK, .RBRACK, .LPAREN, .SPACE, .RPAREN })));
-
-    // Check with lexer in the loop
-    try std.testing.expect(checkLink("[]()"));
-    try std.testing.expect(checkLink("[]()\n"));
-    try std.testing.expect(checkLink("[txt]()"));
-    try std.testing.expect(checkLink("[](url)"));
-    try std.testing.expect(checkLink("[txt](url)"));
-    try std.testing.expect(checkLink("[**Alt** _Text_](www.example.com)"));
-
-    try std.testing.expect(!checkLink("![]()")); // Images must have the '!' stripped first
-    try std.testing.expect(!checkLink(" []()")); // Leading whitespace not allowed
-    try std.testing.expect(!checkLink("[] ()")); // Space between [] and () not allowed
-    try std.testing.expect(!checkLink("[\n]()"));
-    try std.testing.expect(!checkLink("[](\n)"));
-    try std.testing.expect(!checkLink("]()"));
-    try std.testing.expect(!checkLink("[()"));
-    try std.testing.expect(!checkLink("[])"));
-    try std.testing.expect(!checkLink("[]("));
-}
