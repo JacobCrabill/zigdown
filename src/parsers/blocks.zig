@@ -21,7 +21,7 @@ const zd = struct {
 };
 
 /// Parser utilities
-pub const utils = @import("utils.zig");
+const utils = @import("utils.zig");
 
 const Lexer = zd.Lexer;
 const TokenType = zd.TokenType;
@@ -38,9 +38,8 @@ const Block = zd.Block;
 const ContainerBlock = zd.ContainerBlock;
 const LeafBlock = zd.LeafBlock;
 
-// TODO: reorg
-pub const ParserOpts = utils.ParserOpts;
-pub const InlineParser = zd.InlineParser;
+const ParserOpts = utils.ParserOpts;
+const InlineParser = zd.InlineParser;
 
 /// Global logger
 var g_logger = Logger{ .enabled = false };

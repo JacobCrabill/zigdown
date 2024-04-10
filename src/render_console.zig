@@ -94,6 +94,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 .DarkYellow => self.writeno(cons.fg_dark_yellow),
                 .PurpleGrey => self.writeno(cons.fg_purple_grey),
                 .DarkGrey => self.writeno(cons.fg_dark_grey),
+                .DarkRed => self.writeno(cons.fg_dark_red),
                 .Default => self.writeno(cons.fg_default),
             }
         }
@@ -111,6 +112,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 .DarkYellow => self.writeno(cons.bg_dark_yellow),
                 .PurpleGrey => self.writeno(cons.bg_purple_grey),
                 .DarkGrey => self.writeno(cons.bg_dark_grey),
+                .DarkRed => self.writeno(cons.bg_dark_red),
                 .Default => self.writeno(cons.bg_default),
             }
         }
@@ -560,7 +562,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a raw block of code
         fn renderCode(self: *Self, c: zd.Code) !void {
-            const bar_style = zd.TextStyle{ .fg_color = .Yellow, .bold = true };
+            const bar_style = zd.TextStyle{ .fg_color = .DarkYellow, .bold = true };
             const text_style = zd.TextStyle{ .bg_color = .DarkGrey, .fg_color = .Yellow };
             self.startStyle(bar_style);
             self.print("━━━━━━━━━━━━━━━━━━━━ <{s}>", .{c.tag orelse "none"});

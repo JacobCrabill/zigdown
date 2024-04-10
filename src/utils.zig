@@ -15,6 +15,7 @@ pub const Color = enum(u8) {
     DarkYellow,
     PurpleGrey,
     DarkGrey,
+    DarkRed,
     // Use terminal defaults
     Default,
 };
