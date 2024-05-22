@@ -8,8 +8,8 @@
     },
     .dependencies = .{
         .stbi = .{
-            .url = "https://github.com/JacobCrabill/zig-stb-image/archive/7eff48498437edb93ce81604824a82b7bce41d0a.tar.gz",
-            .hash = "1220a103eaa442ac108d6e678e6b9f85d34c3e06f0e939d735c055d23c08daad62fd",
+            .url = "https://github.com/JacobCrabill/zig-stb-image/archive/0c0fc6a7406d39b30ae41e6c028cab3acf41b9a9.tar.gz",
+            .hash = "1220ef0ee060dd6c7a3e0abdf2c0913deaff537ee2899ef2cd3410e618bcd76aef92",
         },
         .zig_clap = .{
             .url = "https://github.com/Hejsil/zig-clap/archive/209ba4da76e46412acfe18f711cb0b041ff37f10.tar.gz",

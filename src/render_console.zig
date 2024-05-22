@@ -655,7 +655,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             const path = try std.fs.path.joinZ(self.alloc, &.{ root_dir, image.src });
             defer self.alloc.free(path);
 
-            const img_file: ?stb.Image = stb.load_image(path) catch |err| blk: {
+            const img_file: ?stb.Image = stb.load_image(path, 3) catch |err| blk: {
                 //null; // silently fail
                 std.debug.print("Error loading image: {any}\n", .{err});
                 break :blk null;
