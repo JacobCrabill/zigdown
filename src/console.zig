@@ -56,7 +56,7 @@ pub const bg_purple_grey = ansi ++ "[48;5;170m";
 pub const bg_dark_grey = ansi ++ "[48;5;235m";
 pub const bg_dark_red = ansi ++ "[48;5;125m";
 
-// Basic Fackground Colors
+// Basic Foreground Colors
 pub const fg_black = ansi ++ "[30m";
 pub const fg_red = ansi ++ "[31m";
 pub const fg_green = ansi ++ "[32m";
@@ -67,12 +67,18 @@ pub const fg_cyan = ansi ++ "[36m";
 pub const fg_white = ansi ++ "[37m";
 pub const fg_default = ansi ++ "[39m";
 
-// Extended Background Colors
+// Extended Foreground Colors
 pub const fg_dark_yellow = ansi ++ "[38;5;178m";
 pub const fg_purple_grey = ansi ++ "[38;5;170m";
 pub const fg_dark_grey = ansi ++ "[38;5;235m";
 pub const fg_dark_red = ansi ++ "[38;5;125m";
 
+// 24-Bit Coloring
+// Format strings which take 3 u8's for (r, g, b)
+pub const fg_rgb = ansi ++ "[38;2;{d};{d};{d}m";
+pub const bg_rgb = ansi ++ "[48;2;{d};{d};{d}m";
+
+// Typeface Formatting
 pub const text_bold = ansi ++ "[1m";
 pub const text_italic = ansi ++ "[3m";
 pub const text_underline = ansi ++ "[4m";
