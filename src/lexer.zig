@@ -22,6 +22,7 @@ const TokenList = zd.TokenList;
 pub const Lexer = struct {
     data: []const u8 = undefined,
     cursor: usize = 0,
+    src: zd.SourceLocation = zd.SourceLocation{},
 
     /// Store the text and reset the cursor position
     pub fn setText(self: *Lexer, text: []const u8) void {
@@ -53,6 +54,8 @@ pub const Lexer = struct {
         const end_opt: ?usize = std.mem.indexOfScalarPos(u8, self.data, self.cursor, '\n');
         if (end_opt) |end| {
             self.cursor = end + 1;
+            self.row.row += 1;
+            self.src.col = 0;
             return true;
         } else {
             self.cursor = self.data.len;
@@ -66,6 +69,7 @@ pub const Lexer = struct {
             return zd.Eof;
         } else if (self.cursor == self.data.len) {
             self.cursor += 1;
+            self.src.col += 1;
             return zd.Eof;
         }
 
@@ -74,7 +78,12 @@ pub const Lexer = struct {
             const text = self.data[self.cursor..];
             if (tokenizer.peek(text)) |token| {
                 self.cursor += token.text.len;
-                return token;
+                self.src.col += token.text.len;
+                return .{
+                    .kind = token.kind,
+                    .text = token.text,
+                    .src = self.src,
+                };
             }
         }
 
@@ -82,6 +91,7 @@ pub const Lexer = struct {
         const token = Token{
             .kind = .UNKNOWN,
             .text = self.data[self.cursor .. self.cursor + 1],
+            .src = self.src,
         };
         self.cursor += 1;
         return token;

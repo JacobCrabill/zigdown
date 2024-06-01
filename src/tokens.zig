@@ -49,9 +49,15 @@ pub const TokenType = enum {
     UNKNOWN,
 };
 
+pub const SourceLocation = struct {
+    row: usize = 0,
+    col: usize = 0,
+};
+
 pub const Token = struct {
     kind: TokenType = TokenType.EOF,
     text: []const u8 = undefined,
+    src: SourceLocation = undefined,
 };
 
 pub const TokenList = ArrayList(Token);

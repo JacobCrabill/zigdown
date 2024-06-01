@@ -289,7 +289,7 @@ pub const Parser = struct {
             .cur_token = undefined,
             .next_token = undefined,
             .cur_line = undefined,
-            .document = Block.initContainer(alloc, .Document),
+            .document = Block.initContainer(alloc, .Document, 0),
         };
     }
 
@@ -303,7 +303,7 @@ pub const Parser = struct {
         }
         self.tokens.clearRetainingCapacity();
         self.document.deinit();
-        self.document = Block.initContainer(self.alloc, .Document);
+        self.document = Block.initContainer(self.alloc, .Document, 0);
     }
 
     /// Free any heap allocations
@@ -517,10 +517,11 @@ pub const Parser = struct {
         self.logger.printText(line, false);
 
         // Ensure we have at least 1 open ListItem child
+        const col: usize = line[0].src.col;
         var cblock = block.container();
         var child: *Block = undefined;
         if (cblock.children.items.len == 0) {
-            block.addChild(Block.initContainer(block.allocator(), .ListItem)) catch unreachable;
+            block.addChild(Block.initContainer(block.allocator(), .ListItem, col)) catch unreachable;
         } else {
             child = &cblock.children.items[cblock.children.items.len - 1];
 
@@ -540,7 +541,7 @@ pub const Parser = struct {
             // If so, close the current ListItem (if any) and start a new one
             if ((is_ul or is_ol) or !child.isOpen()) {
                 self.closeBlock(child);
-                block.addChild(Block.initContainer(block.allocator(), .ListItem)) catch unreachable;
+                block.addChild(Block.initContainer(block.allocator(), .ListItem, col)) catch unreachable;
             }
         }
         child = &cblock.children.items[cblock.children.items.len - 1];
@@ -707,11 +708,12 @@ pub const Parser = struct {
         var b: Block = undefined;
         self.logger.log("ParseNewBlock: ", .{});
         self.logger.printText(line, false);
+        const col: usize = line[0].src.col;
 
         switch (line[0].kind) {
             .GT => {
                 // Parse quote block
-                b = Block.initContainer(self.alloc, .Quote);
+                b = Block.initContainer(self.alloc, .Quote, col);
                 b.Container.content.Quote = {};
                 if (!self.handleLineQuote(&b, line))
                     return error.ParseError;
@@ -719,13 +721,13 @@ pub const Parser = struct {
             .MINUS => {
                 if (utils.isListItem(line)) {
                     // Parse unorderd list block
-                    b = Block.initContainer(self.alloc, .List);
+                    b = Block.initContainer(self.alloc, .List, col);
                     b.Container.content.List = zd.List{ .ordered = false };
                     if (!self.handleLineList(&b, line))
                         return error.ParseError;
                 } else {
                     // Fallback - parse paragraph
-                    b = Block.initLeaf(self.alloc, .Paragraph);
+                    b = Block.initLeaf(self.alloc, .Paragraph, col);
                     if (!self.handleLineParagraph(&b, line))
                         try errorReturn(@src(), "Cannot parse line as paragraph: {any}", .{line});
                 }
@@ -733,7 +735,7 @@ pub const Parser = struct {
             .STAR => {
                 if (line.len > 1 and line[1].kind == .SPACE) {
                     // Parse unorderd list block
-                    b = Block.initContainer(self.alloc, .List);
+                    b = Block.initContainer(self.alloc, .List, col);
                     b.Container.content.List = zd.List{ .ordered = false };
                     if (!self.handleLineList(&b, line))
                         return error.ParseError;
@@ -743,35 +745,35 @@ pub const Parser = struct {
                 if (utils.isListItem(line)) {
                     // if (line.len > 1 and line[1].kind == .PERIOD) {
                     // Parse numbered list block
-                    b = Block.initContainer(self.alloc, .List);
+                    b = Block.initContainer(self.alloc, .List, col);
                     b.Container.content.List.ordered = true;
                     // todo: consider parsing and setting the start number here
                     if (!self.handleLineList(&b, line))
                         try errorReturn(@src(), "Cannot parse line as numlist: {any}", .{line});
                 } else {
                     // Fallback - parse paragraph
-                    b = Block.initLeaf(self.alloc, .Paragraph);
+                    b = Block.initLeaf(self.alloc, .Paragraph, col);
                     if (!self.handleLineParagraph(&b, line))
                         try errorReturn(@src(), "Cannot parse line as paragraph: {any}", .{line});
                 }
             },
             .HASH => {
-                b = Block.initLeaf(self.alloc, .Heading);
+                b = Block.initLeaf(self.alloc, .Heading, col);
                 if (!self.handleLineHeading(&b, line))
                     try errorReturn(@src(), "Cannot parse line as heading: {any}", .{line});
             },
             .CODE_BLOCK => {
-                b = Block.initLeaf(self.alloc, .Code);
+                b = Block.initLeaf(self.alloc, .Code, col);
                 if (!self.handleLineCode(&b, line))
                     try errorReturn(@src(), "Cannot parse line as code: {any}", .{line});
             },
             .BREAK => {
-                b = Block.initLeaf(self.alloc, .Break);
+                b = Block.initLeaf(self.alloc, .Break, col);
                 b.Leaf.content.Break = {};
             },
             else => {
                 // Fallback - parse paragraph
-                b = Block.initLeaf(self.alloc, .Paragraph);
+                b = Block.initLeaf(self.alloc, .Paragraph, col);
                 if (!self.handleLineParagraph(&b, line))
                     try errorReturn(@src(), "Cannot parse line as paragraph: {any}", .{line});
             },

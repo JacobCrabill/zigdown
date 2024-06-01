@@ -45,13 +45,13 @@ pub const Block = union(BlockType) {
     Leaf: Leaf,
 
     /// Create a new Container of the given type
-    pub fn initContainer(alloc: Allocator, kind: ContainerType) Block {
-        return .{ .Container = Container.init(alloc, kind) };
+    pub fn initContainer(alloc: Allocator, kind: ContainerType, col: usize) Block {
+        return .{ .Container = Container.init(alloc, kind, col) };
     }
 
     /// Create a new Leaf of the given type
-    pub fn initLeaf(alloc: Allocator, kind: LeafType) Block {
-        return .{ .Leaf = Leaf.init(alloc, kind) };
+    pub fn initLeaf(alloc: Allocator, kind: LeafType, col: usize) Block {
+        return .{ .Leaf = Leaf.init(alloc, kind, col) };
     }
 
     pub fn deinit(self: *Block) void {
@@ -63,6 +63,12 @@ pub const Block = union(BlockType) {
     pub fn allocator(self: Block) Allocator {
         return switch (self) {
             inline else => |b| b.alloc,
+        };
+    }
+
+    pub fn start_col(self: Block) Allocator {
+        return switch (self) {
+            inline else => |b| b.start_col,
         };
     }
 
@@ -122,12 +128,14 @@ pub const Container = struct {
     content: ContainerData,
     open: bool = true,
     children: ArrayList(Block),
+    start_col: usize = 0, // The starting column of the first line of this block
 
-    pub fn init(alloc: Allocator, kind: ContainerType) Self {
+    pub fn init(alloc: Allocator, kind: ContainerType, col: usize) Self {
         var block = Container{
             .alloc = alloc,
             .content = undefined,
             .children = ArrayList(Block).init(alloc),
+            .start_col = col,
         };
 
         block.content = switch (kind) {
@@ -184,12 +192,14 @@ pub const Leaf = struct {
     raw_contents: ArrayList(Token),
     inlines: ArrayList(Inline),
     open: bool = true,
+    start_col: usize = 0, // The starting column of the first line of this block
 
-    pub fn init(alloc: Allocator, kind: LeafType) Leaf {
+    pub fn init(alloc: Allocator, kind: LeafType, col: usize) Leaf {
         return Leaf{
             .alloc = alloc,
             .raw_contents = ArrayList(Token).init(alloc),
             .inlines = ArrayList(Inline).init(alloc),
+            .start_col = col,
             .content = blk: {
                 switch (kind) {
                     .Break => break :blk .{ .Break = {} },
@@ -302,16 +312,16 @@ pub fn isLeaf(block: Block) bool {
 /// Manually create a useful Markdown document AST
 fn createTestAst(alloc: Allocator) !Block {
     // Create the Document root
-    var root = Block.initContainer(alloc, .Document);
+    var root = Block.initContainer(alloc, .Document, 0);
 
     // Create a List container
-    var list = Block.initContainer(alloc, .List);
+    var list = Block.initContainer(alloc, .List, 0);
 
     // Create a ListItem
-    var list_item = Block.initContainer(alloc, .ListItem);
+    var list_item = Block.initContainer(alloc, .ListItem, 2);
 
     // Create a Paragraph
-    var paragraph = Block.initLeaf(alloc, .Paragraph);
+    var paragraph = Block.initLeaf(alloc, .Paragraph, 4);
 
     // Create some Text
     const text1 = Text{ .text = "Hello, " };
