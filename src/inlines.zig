@@ -48,6 +48,7 @@ pub const InlineData = union(InlineType) {
             .link => |*l| l.deinit(),
             .image => |*i| i.deinit(),
             .text => |*t| t.deinit(),
+            .codespan => |*c| c.deinit(),
             else => {},
         }
     }
