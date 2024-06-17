@@ -38,6 +38,7 @@ pub fn main() !void {
     const stdout = std.io.getStdOut().writer(); // Fun fact: This must be in function scope on Windows
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
     var alloc = gpa.allocator();
 
     // Use Zig-Clap to parse a list of arguments
@@ -102,6 +103,8 @@ pub fn main() !void {
         .verbose = verbose_parsing,
     };
     var parser = zd.Parser.init(alloc, opts);
+    defer parser.deinit();
+
     timer.reset();
     try parser.parseMarkdown(md_text);
     const t1 = timer.read();
