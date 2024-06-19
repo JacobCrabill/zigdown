@@ -449,7 +449,8 @@ pub const Parser = struct {
         if (cblock.children.items.len > 0) {
             const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
             if (child.isOpen()) {
-                if (self.handleLine(child, utils.removeIndent(line, 2))) {
+                // if (self.handleLine(child, utils.removeIndent(line, 2))) {
+                if (self.handleLine(child, line)) {
                     return true;
                 } else {
                     self.closeBlock(child);
@@ -524,12 +525,14 @@ pub const Parser = struct {
             block.addChild(Block.initContainer(block.allocator(), .ListItem, col)) catch unreachable;
         } else {
             child = &cblock.children.items[cblock.children.items.len - 1];
+            const tline = utils.trimLeadingWhitespace(line);
 
             // Check if the line starts a new item of the wrong type
             // In that case, we must close and return false (A new List must be started)
             const ordered: bool = block.Container.content.List.ordered;
             const is_ol: bool = utils.isOrderedListItem(line);
             const is_ul: bool = utils.isUnorderedListItem(line);
+            const is_indented: bool = tline.len > 0 and tline[0].src.col > child.start_col() + 1;
             const wrong_type: bool = (ordered and is_ul) or (!ordered and is_ol);
             if (wrong_type) {
                 self.logger.log("Mismatched list type; ending List.\n", .{});
@@ -540,8 +543,13 @@ pub const Parser = struct {
             // Check for the start of a new ListItem
             // If so, close the current ListItem (if any) and start a new one
             if ((is_ul or is_ol) or !child.isOpen()) {
-                self.closeBlock(child);
-                block.addChild(Block.initContainer(block.allocator(), .ListItem, col)) catch unreachable;
+                if (is_indented) {
+                    self.logger.log("We have a new ListItem, but it belongs to a child list\n", .{});
+                } else {
+                    self.logger.log("Adding new ListItem child\n", .{});
+                    self.closeBlock(child);
+                    block.addChild(Block.initContainer(block.allocator(), .ListItem, col)) catch unreachable;
+                }
             }
         }
         child = &cblock.children.items[cblock.children.items.len - 1];
@@ -565,11 +573,16 @@ pub const Parser = struct {
         self.logger.log("Handling ListItem: ", .{});
         self.logger.printText(line, false);
 
-        var trimmed_line = line;
-        if (isContinuationLineList(line)) {
+        var trimmed_line = utils.trimLeadingWhitespace(line);
+        if (isContinuationLineList(line) and trimmed_line.len > 0 and trimmed_line[0].src.col < block.start_col() + 2) {
+            self.logger.log("Line continues current list\n", .{});
             trimmed_line = trimContinuationMarkersList(line);
         } else {
-            trimmed_line = utils.removeIndent(line, 2);
+            self.logger.log("Removing indent with start_col: {d}\n", .{block.start_col()});
+            trimmed_line = utils.removeIndent(line, block.start_col());
+
+            if (trimmed_line.len > 0 and trimmed_line[0].src.col > block.start_col() + 1)
+                return false;
 
             // Otherwise, check if the trimmed line can be appended to the current block or not
             if (!isLazyContinuationLineList(trimmed_line)) {
@@ -690,10 +703,10 @@ pub const Parser = struct {
         // > Normal paragraph text on this line
         // >  - This starts a list, and should not be a paragraph
         if (!isContinuationLineParagraph(utils.removeIndent(line, 2))) {
-            self.logger.log("~~ line does not continue paragraph\n", .{});
+            self.logger.log("  Line does not continue paragraph\n", .{});
             return false;
         }
-        self.logger.log("~~ line continues paragraph!\n", .{});
+        self.logger.log("  Line continues paragraph!\n", .{});
 
         block.Leaf.raw_contents.appendSlice(line) catch unreachable;
 
@@ -721,6 +734,7 @@ pub const Parser = struct {
             .MINUS => {
                 if (utils.isListItem(line)) {
                     // Parse unorderd list block
+                    self.logger.log("Parsing list with start_col {d}\n", .{col});
                     b = Block.initContainer(self.alloc, .List, col);
                     b.Container.content.List = zd.List{ .ordered = false };
                     if (!self.handleLineList(&b, line))

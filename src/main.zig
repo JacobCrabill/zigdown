@@ -111,6 +111,11 @@ pub fn main() !void {
 
     const md: zd.Block = parser.document;
 
+    if (verbose_parsing) {
+        std.debug.print("AST:\n", .{});
+        md.print(0);
+    }
+
     if (outfile) |outname| {
         var out_file: File = try std.fs.cwd().createFile(outname, .{ .truncate = true });
         try render(out_file.writer(), md, do_console, do_html, md_dir);

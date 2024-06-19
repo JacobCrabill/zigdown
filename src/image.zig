@@ -122,7 +122,7 @@ pub fn sendImageRGB(stream: anytype, alloc: Allocator, file: []const u8, width: 
     }
 }
 
-/// Send an image file to the terminal as raw RGB pixel data using the Kitty terminal graphics protocol
+/// Send raw RGB image data to the terminal using the Kitty terminal graphics protocol
 pub fn sendImageRGB2(stream: anytype, alloc: Allocator, img: *const stb.Image, width: ?usize, height: ?usize) !void {
     const size: usize = @intCast(img.width * img.height * img.nchan);
     const rgb: []u8 = img.data[0..size];

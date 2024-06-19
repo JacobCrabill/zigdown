@@ -656,7 +656,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             defer self.alloc.free(path);
 
             const img_file: ?stb.Image = stb.load_image(path, 3) catch |err| blk: {
-                //null; // silently fail
                 std.debug.print("Error loading image: {any}\n", .{err});
                 break :blk null;
             };
@@ -684,10 +683,14 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
                 // const raw_data: []const u8 = img.data[0..@intCast(img.width * img.height * img.nchan)];
                 gfx.sendImagePNG(self.stream, self.alloc, path, width, height) catch |err| {
-                    if (err == error.FileIsNotPNG and img.nchan == 3) {
-                        gfx.sendImageRGB2(self.stream, self.alloc, &img, width, height) catch |err2| {
-                            std.debug.print("Error rendering RGB image: {any}\n", .{err2});
-                        };
+                    if (err == error.FileIsNotPNG) {
+                        if (img.nchan == 3) {
+                            gfx.sendImageRGB2(self.stream, self.alloc, &img, width, height) catch |err2| {
+                                std.debug.print("Error rendering RGB image: {any}\n", .{err2});
+                            };
+                        } else {
+                            std.debug.print("Invalid # of channels for non-PNG image: {d}\n", .{img.nchan});
+                        }
                     } else {
                         std.debug.print("Error rendering image: {any}\n", .{err});
                     }

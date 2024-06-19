@@ -66,7 +66,7 @@ pub const Block = union(BlockType) {
         };
     }
 
-    pub fn start_col(self: Block) Allocator {
+    pub fn start_col(self: Block) usize {
         return switch (self) {
             inline else => |b| b.start_col,
         };
@@ -391,6 +391,6 @@ test "Render basic AST" {
 
 const html = @import("render_html.zig");
 
-pub fn htmlRenderer(out_stream: anytype, alloc: Allocator) html.HtmlRenderer(@TypeOf(out_stream)) {
+fn htmlRenderer(out_stream: anytype, alloc: Allocator) html.HtmlRenderer(@TypeOf(out_stream)) {
     return html.HtmlRenderer(@TypeOf(out_stream)).init(out_stream, alloc);
 }

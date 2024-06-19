@@ -136,7 +136,7 @@ pub fn isEmptyLine(line: []const Token) bool {
 /// Check for the pattern "[ ]*[0-9]*[.][ ]+"
 pub fn isOrderedListItem(line: []const Token) bool {
     var have_period: bool = false;
-    for (line) |tok| {
+    for (trimLeadingWhitespace(line)) |tok| {
         switch (tok.kind) {
             .DIGIT => {
                 if (have_period) return false;
@@ -162,7 +162,7 @@ pub fn isOrderedListItem(line: []const Token) bool {
 /// Check for the pattern "[ ]*[-+*][ ]+"
 pub fn isUnorderedListItem(line: []const Token) bool {
     var have_bullet: bool = false;
-    for (line) |tok| {
+    for (trimLeadingWhitespace(line)) |tok| {
         switch (tok.kind) {
             .SPACE => {
                 if (have_bullet) return true;
@@ -191,7 +191,7 @@ pub fn isListItem(line: []const Token) bool {
 /// Check for the pattern "[ ]*[>][ ]+"
 pub fn isQuote(line: []const Token) bool {
     var have_caret: bool = false;
-    for (line) |tok| {
+    for (trimLeadingWhitespace(line)) |tok| {
         switch (tok.kind) {
             .GT => {
                 if (have_caret) return false;
@@ -210,7 +210,7 @@ pub fn isQuote(line: []const Token) bool {
 /// Check for the pattern "[ ]*[#]+[ ]+"
 pub fn isHeading(line: []const Token) bool {
     var have_hash: bool = false;
-    for (line) |tok| {
+    for (trimLeadingWhitespace(line)) |tok| {
         switch (tok.kind) {
             .HASH => {
                 have_hash = true;
