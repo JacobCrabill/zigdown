@@ -58,7 +58,12 @@ pub fn build(b: *std.Build) !void {
     const clap_dep = Dependency{ .name = "clap", .module = clap.module("clap") };
     mod.addImport(clap_dep.name, clap_dep.module);
 
-    var dep_array = [_]Dependency{ stbi_dep, clap_dep, mod_dep };
+    // treez (tree-sitter)
+    const treez = b.dependency("treez", .{ .optimize = optimize, .target = target });
+    const treez_dep = Dependency{ .name = "treez", .module = treez.module("treez") };
+    mod.addImport(treez_dep.name, treez_dep.module);
+
+    var dep_array = [_]Dependency{ stbi_dep, clap_dep, treez_dep, mod_dep };
     const deps: []Dependency = &dep_array;
 
     const exe_opts = BuildOpts{
@@ -135,6 +140,25 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
         .optimize = opts.optimize,
         .target = opts.target orelse b.host,
     });
+    // TODO: Fix 'treez' to link on its own
+    // expose an option to use either vendored tree-sitter or system tree-sitter
+    var env_map: std.process.EnvMap = std.process.getEnvMap(b.allocator) catch unreachable;
+    defer env_map.deinit();
+
+    // Setup our standard library & include paths
+    const HOME = env_map.get("HOME") orelse "";
+
+    const lib_path: []const u8 = std.mem.concat(b.allocator, u8, &.{ HOME, "/.local/lib/" }) catch unreachable;
+    const include_path: []const u8 = std.mem.concat(b.allocator, u8, &.{ HOME, "/.local/include/" }) catch unreachable;
+    defer b.allocator.free(lib_path);
+    defer b.allocator.free(include_path);
+
+    exe.addRPath(.{ .path = lib_path });
+    exe.addLibraryPath(.{ .path = lib_path });
+    exe.linkSystemLibrary("tree-sitter");
+    exe.linkSystemLibrary("tree-sitter-c");
+    exe.linkSystemLibrary("tree-sitter-zig");
+    exe.linkSystemLibrary("tree-sitter-json");
 
     // Add the executable to the default 'zig build' command
     b.installArtifact(exe);
@@ -186,4 +210,44 @@ fn addTest(b: *std.Build, cmd: []const u8, description: []const u8, path: []cons
     run_step.has_side_effects = true; // Force the test to always be run on command
     const step = b.step(cmd, description);
     step.dependOn(&run_step.step);
+}
+
+/// TODO doxystring
+fn fetchStandardQuery(alloc: std.mem.Allocator, language: []const u8, comptime github_user: []const u8, comptime query_folder: []const u8) !void {
+    std.debug.print("Fetching highlights query for {s}\n", .{language});
+
+    var url_buf: [1024]u8 = undefined;
+    const url_s = try std.fmt.bufPrint(url_buf[0..], "https://raw.githubusercontent.com/{s}/tree-sitter-{s}/master/queries/highlights.scm", .{
+        github_user,
+        language,
+    });
+    const uri = try std.Uri.parse(url_s);
+
+    var client = std.http.Client{ .allocator = alloc };
+    defer client.deinit();
+
+    // Perform a one-off request and wait for the response
+    // Returns an http.Status
+    var response_buffer: [1024 * 1024]u8 = undefined;
+    var response_storage = std.ArrayListUnmanaged(u8).initBuffer(&response_buffer);
+    const status = try client.fetch(.{
+        .location = .{ .uri = uri },
+        .method = .GET,
+        .headers = .{ .authorization = .omit },
+        .response_storage = .{ .static = &response_storage },
+    });
+
+    const body = response_storage.items;
+
+    if (status.status != .ok or body.len == 0) {
+        std.debug.print("Error fetching {s} (!ok)\n", .{language});
+        return error.NoReply;
+    }
+
+    // Save the query to a file at the given path
+    var fname_buf: [256]u8 = undefined;
+    const fname = try std.fmt.bufPrint(fname_buf[0..], query_folder ++ "/highlights-{s}.scm", .{language});
+    var of: std.fs.File = try std.fs.cwd().createFile(fname, .{});
+    defer of.close();
+    try of.writeAll(body);
 }
