@@ -585,40 +585,19 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             const source = c.text orelse "";
 
             // Use TreeSitter to parse the code block and apply colors
-            // TODO: Create a map at comptime, maybe?
-            var lang: ?*const treez.Language = null;
-            if (std.mem.eql(u8, language, "c")) {
-                lang = try treez.Language.get("c");
-                // } else if (std.mem.eql(u8, language, "cpp")) {
-                //     lang = try treez.Language.get("cpp");
-            } else if (std.mem.eql(u8, language, "zig")) {
-                lang = try treez.Language.get("zig");
-                // } else if (std.mem.eql(u8, language, "python")) {
-                //     lang = try treez.Language.get("python");
-                // } else if (std.mem.eql(u8, language, "bash")) {
-                //     lang = try treez.Language.get("bash");
-            } else if (std.mem.eql(u8, language, "json")) {
-                lang = try treez.Language.get("json");
-                // } else if (std.mem.eql(u8, language, "html")) {
-                //     lang = try treez.Language.get("html");
-            } else {
-                std.debug.print("Unimplemented language: {s}\n", .{language});
-            }
+            const lang: ?*const treez.Language = getLanguage(language);
 
             // Get the highlights query
-            const highlights: []const u8 = queries.get(language).?; // orelse "TODO";
+            const highlights: []const u8 = queries.get(language).?;
 
             if (lang) |tlang| {
                 var parser = try treez.Parser.create();
                 defer parser.destroy();
 
                 try parser.setLanguage(tlang);
-                // parser.useStandardLogger();
 
                 const tree = try parser.parseString(null, source);
                 defer tree.destroy();
-
-                // std.debug.print("QUERY: {s}\n", .{highlights});
 
                 const query = try treez.Query.create(tlang, highlights);
                 defer query.destroy();
@@ -628,6 +607,17 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
                 cursor.execute(query, tree.getRootNode());
 
+                // Testing - might not be the best way to do this...
+                // For simplicity, append each range as we iterate the matches
+                // Any ranges not falling into a match will be set to the "Default" color
+                const Range = struct {
+                    color: zd.Color,
+                    content: []const u8,
+                };
+                var ranges = ArrayList(Range).init(self.alloc);
+                defer ranges.deinit();
+
+                var idx: usize = 0;
                 while (cursor.nextMatch()) |match| {
                     for (match.captures()) |capture| {
                         const node: treez.Node = capture.node;
@@ -635,30 +625,31 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                         const end = node.getEndByte();
                         const capture_name = query.getCaptureNameForId(capture.id);
                         const content = source[start..end];
-                        // std.debug.print("-- Capture #{d}\n", .{i});
-                        // std.debug.print("Node capture idx: {d}\n", .{capture.id});
-                        // std.debug.print("  Capture name: {s}\n", .{capture_name});
-                        // std.debug.print("  Captured node name: {s} [{d} {d}]\n", .{ node.getType(), start, end });
-                        // std.debug.print("  Content: {s}\n", .{content});
+                        const color = highlights_map.get(capture_name) orelse .Default;
 
-                        std.debug.print("  {s}: {s}\n", .{ capture_name, content });
+                        if (start > idx) {
+                            // We've missed something in between captures
+                            try ranges.append(.{ .color = .Default, .content = source[idx..start] });
+                        }
+
+                        if (end > idx) {
+                            try ranges.append(.{ .color = color, .content = content });
+                            idx = end;
+                        }
                     }
                 }
-                // var pv = try treez.CursorWithValidation.init(self.alloc, query);
-                // var i: usize = 0;
-                // while (pv.nextCapture(source, cursor)) |capture| {
-                //     const node = capture.node;
-                //     std.log.info("[{d}] {s}: ({d},{d}-{d},{d}): {s}", .{
-                //         i,
-                //         node.getType(),
-                //         node.getStartPoint().row,
-                //         node.getStartPoint().column,
-                //         node.getEndPoint().row,
-                //         node.getEndPoint().column,
-                //         source[node.getStartByte()..node.getEndByte()],
-                //     });
-                //     i += 1;
-                // }
+
+                if (idx < source.len) {
+                    // We've missed something un-captured at the end; probably a '}\n'
+                    try ranges.append(.{ .color = .Default, .content = source[idx..] });
+                }
+
+                for (ranges.items) |range| {
+                    const style = zd.TextStyle{ .fg_color = range.color, .bg_color = .Default };
+                    self.startStyle(style);
+                    self.wrapText(range.content);
+                    self.endStyle(style);
+                }
             } else {
                 self.writeLeaders();
                 self.startStyle(text_style);
@@ -791,4 +782,45 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
         }
     };
+}
+
+// Capture Name: number
+const highlights_map = std.ComptimeStringMap(zd.Color, .{
+    .{ "number", .Yellow },
+    .{ "keyword", .Blue },
+    .{ "operator", .Cyan },
+    .{ "delimiter", .Default },
+    .{ "string", .Green },
+    .{ "property", .Magenta },
+    .{ "label", .Magenta },
+    .{ "type", .Red },
+    .{ "function", .Cyan },
+    .{ "function.special", .Cyan },
+    .{ "variable", .Cyan },
+    .{ "constant", .Yellow },
+    .{ "comment", .DarkGrey },
+});
+
+// TODO: Bake into an auto-generated file based on available parsers?
+fn getLanguage(language: []const u8) ?*const treez.Language {
+    if (std.mem.eql(u8, language, "c")) {
+        return treez.Language.get("c") catch null;
+    } else if (std.mem.eql(u8, language, "zig")) {
+        return treez.Language.get("zig") catch null;
+    } else if (std.mem.eql(u8, language, "json")) {
+        return treez.Language.get("json") catch null;
+    } else {
+        std.debug.print("Unimplemented language: {s}\n", .{language});
+    }
+
+    // } else if (std.mem.eql(u8, language, "cpp")) {
+    //     lang = try treez.Language.get("cpp");
+    // } else if (std.mem.eql(u8, language, "python")) {
+    //     lang = try treez.Language.get("python");
+    // } else if (std.mem.eql(u8, language, "bash")) {
+    //     lang = try treez.Language.get("bash");
+    // } else if (std.mem.eql(u8, language, "html")) {
+    //     lang = try treez.Language.get("html");
+
+    return null;
 }
