@@ -1,4 +1,6 @@
 const std = @import("std");
+const Build = std.Build;
+const Allocator = std.mem.Allocator;
 
 const Dependency = struct {
     name: []const u8,
@@ -58,12 +60,25 @@ pub fn build(b: *std.Build) !void {
     const clap_dep = Dependency{ .name = "clap", .module = clap.module("clap") };
     mod.addImport(clap_dep.name, clap_dep.module);
 
-    // treez (tree-sitter)
+    // treez (tree-sitter wrapper library)
     const treez = b.dependency("treez", .{ .optimize = optimize, .target = target });
     const treez_dep = Dependency{ .name = "treez", .module = treez.module("treez") };
     mod.addImport(treez_dep.name, treez_dep.module);
 
-    var dep_array = [_]Dependency{ stbi_dep, clap_dep, treez_dep, mod_dep };
+    // Create a module for the TreeSitter queries
+    const gen_file_name = "tree-sitter/queries.zig";
+    // TODO: How to add to build graph?
+    // Maybe I just want to check all of it into Git anyways, and add a step to re-generate
+    // only when I want to change languages.  Idk.
+    // Could also 'git clone' and build all necessary libraries at the same time.
+    // If I can fetch the highlights file, why not the whole repo and call `make install`?
+    // If I take that approach, I could bake the static library in
+    // const gen_file = b.addWriteFile(gen_file_name, "pub const Hello = \"Hello, World!\n\";\n");
+    const queries = b.addModule("queries", .{ .root_source_file = .{ .path = gen_file_name } });
+    const queries_dep = Dependency{ .name = "queries", .module = queries };
+    mod.addImport(queries_dep.name, queries_dep.module);
+
+    var dep_array = [_]Dependency{ stbi_dep, clap_dep, treez_dep, queries_dep, mod_dep };
     const deps: []Dependency = &dep_array;
 
     const exe_opts = BuildOpts{
@@ -85,6 +100,7 @@ pub fn build(b: *std.Build) !void {
     addExecutable(b, exe_config, exe_opts);
 
     // Build HTML library documentation
+    // TODO: how to enable docs??
     const lib = b.addSharedLibrary(.{
         .name = "libzigdown",
         .root_source_file = .{ .path = "src/zigdown.zig" },
@@ -94,6 +110,7 @@ pub fn build(b: *std.Build) !void {
     b.installArtifact(lib);
     const lib_step = b.step("lib", "Build Zigdown as a shared library (and also build HTML docs)");
     lib_step.dependOn(&lib.step);
+    b.getInstallStep().dependOn(lib_step);
 
     // Add unit tests
 
@@ -212,8 +229,26 @@ fn addTest(b: *std.Build, cmd: []const u8, description: []const u8, path: []cons
     step.dependOn(&run_step.step);
 }
 
+/// Fetch a list of TreeSitter highlight queries and save them to individual files
+fn fecthTreeSitterQueries(b: *Build) !void {
+    const query_dir = try std.fs.cwd().makeOpenPath("tree-sitter/queries/", .{});
+    defer query_dir.close();
+
+    // Languages hosted by the tree-sitter project itself
+    const languages = [_][]const u8{ "c", "cpp", "rust", "python", "bash", "json", "toml" };
+    for (languages) |lang| {
+        const body = fetchStandardQuery(b.allocator(), lang, "tree-sitter", "tree-sitter/queries") catch continue;
+        writeQueryFile(body, query_dir, lang);
+    }
+
+    // Additional languages hosted by other users on Github
+    fetchStandardQuery(b.allocator(), "zig", "maxxnino", query_dir) catch |err| {
+        std.debug.print("Failed to download zig query: {any}\n", .{err});
+    };
+}
+
 /// TODO doxystring
-fn fetchStandardQuery(alloc: std.mem.Allocator, language: []const u8, comptime github_user: []const u8, comptime query_folder: []const u8) !void {
+fn fetchStandardQuery(alloc: std.mem.Allocator, language: []const u8, comptime github_user: []const u8) !void {
     std.debug.print("Fetching highlights query for {s}\n", .{language});
 
     var url_buf: [1024]u8 = undefined;
@@ -244,10 +279,15 @@ fn fetchStandardQuery(alloc: std.mem.Allocator, language: []const u8, comptime g
         return error.NoReply;
     }
 
+    return body;
+}
+
+/// Save the TreeSitter query at a standard name
+fn writeQueryFile(body: []const u8, dir: std.fs.Dir, language: []const u8) !void {
     // Save the query to a file at the given path
     var fname_buf: [256]u8 = undefined;
-    const fname = try std.fmt.bufPrint(fname_buf[0..], query_folder ++ "/highlights-{s}.scm", .{language});
-    var of: std.fs.File = try std.fs.cwd().createFile(fname, .{});
+    const fname = try std.fmt.bufPrint(fname_buf[0..], "highlights-{s}.scm", .{language});
+    var of: std.fs.File = try dir.createFile(fname, .{});
     defer of.close();
     try of.writeAll(body);
 }

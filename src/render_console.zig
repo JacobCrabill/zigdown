@@ -11,6 +11,8 @@ const cons = @import("console.zig");
 const debug = @import("debug.zig");
 const gfx = @import("image.zig");
 const stb = @import("stb_image");
+const treez = @import("treez");
+const queries = @import("queries").queries;
 
 const errorReturn = debug.errorReturn;
 const errorMsg = debug.errorMsg;
@@ -43,6 +45,16 @@ pub const RenderError = error{
     ConnectionResetByPeer,
     Unexpected,
     SystemError,
+    // treez errors
+    Unknown,
+    VersionMismatch,
+    NoLanguage,
+    InvalidSyntax,
+    InvalidNodeType,
+    InvalidField,
+    InvalidCapture,
+    InvalidStructure,
+    InvalidLanguage,
 };
 
 pub const RenderOpts = struct {
@@ -569,10 +581,90 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.renderBreak();
             self.resetStyle();
 
-            self.writeLeaders();
-            self.startStyle(text_style);
-            self.wrapText(c.text orelse "");
-            self.endStyle(text_style);
+            const language = c.tag orelse "none";
+            const source = c.text orelse "";
+
+            // Use TreeSitter to parse the code block and apply colors
+            // TODO: Create a map at comptime, maybe?
+            var lang: ?*const treez.Language = null;
+            if (std.mem.eql(u8, language, "c")) {
+                lang = try treez.Language.get("c");
+                // } else if (std.mem.eql(u8, language, "cpp")) {
+                //     lang = try treez.Language.get("cpp");
+            } else if (std.mem.eql(u8, language, "zig")) {
+                lang = try treez.Language.get("zig");
+                // } else if (std.mem.eql(u8, language, "python")) {
+                //     lang = try treez.Language.get("python");
+                // } else if (std.mem.eql(u8, language, "bash")) {
+                //     lang = try treez.Language.get("bash");
+            } else if (std.mem.eql(u8, language, "json")) {
+                lang = try treez.Language.get("json");
+                // } else if (std.mem.eql(u8, language, "html")) {
+                //     lang = try treez.Language.get("html");
+            } else {
+                std.debug.print("Unimplemented language: {s}\n", .{language});
+            }
+
+            // Get the highlights query
+            const highlights: []const u8 = queries.get(language).?; // orelse "TODO";
+
+            if (lang) |tlang| {
+                var parser = try treez.Parser.create();
+                defer parser.destroy();
+
+                try parser.setLanguage(tlang);
+                // parser.useStandardLogger();
+
+                const tree = try parser.parseString(null, source);
+                defer tree.destroy();
+
+                // std.debug.print("QUERY: {s}\n", .{highlights});
+
+                const query = try treez.Query.create(tlang, highlights);
+                defer query.destroy();
+
+                const cursor = try treez.Query.Cursor.create();
+                defer cursor.destroy();
+
+                cursor.execute(query, tree.getRootNode());
+
+                while (cursor.nextMatch()) |match| {
+                    for (match.captures()) |capture| {
+                        const node: treez.Node = capture.node;
+                        const start = node.getStartByte();
+                        const end = node.getEndByte();
+                        const capture_name = query.getCaptureNameForId(capture.id);
+                        const content = source[start..end];
+                        // std.debug.print("-- Capture #{d}\n", .{i});
+                        // std.debug.print("Node capture idx: {d}\n", .{capture.id});
+                        // std.debug.print("  Capture name: {s}\n", .{capture_name});
+                        // std.debug.print("  Captured node name: {s} [{d} {d}]\n", .{ node.getType(), start, end });
+                        // std.debug.print("  Content: {s}\n", .{content});
+
+                        std.debug.print("  {s}: {s}\n", .{ capture_name, content });
+                    }
+                }
+                // var pv = try treez.CursorWithValidation.init(self.alloc, query);
+                // var i: usize = 0;
+                // while (pv.nextCapture(source, cursor)) |capture| {
+                //     const node = capture.node;
+                //     std.log.info("[{d}] {s}: ({d},{d}-{d},{d}): {s}", .{
+                //         i,
+                //         node.getType(),
+                //         node.getStartPoint().row,
+                //         node.getStartPoint().column,
+                //         node.getEndPoint().row,
+                //         node.getEndPoint().column,
+                //         source[node.getStartByte()..node.getEndByte()],
+                //     });
+                //     i += 1;
+                // }
+            } else {
+                self.writeLeaders();
+                self.startStyle(text_style);
+                self.wrapText(source);
+                self.endStyle(text_style);
+            }
 
             self.startStyle(bar_style);
             self.write("━━━━━━━━━━━━━━━━━━━━");
