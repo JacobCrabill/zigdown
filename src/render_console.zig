@@ -798,29 +798,28 @@ const highlights_map = std.ComptimeStringMap(zd.Color, .{
     .{ "function.special", .Cyan },
     .{ "variable", .Cyan },
     .{ "constant", .Yellow },
-    .{ "comment", .DarkGrey },
+    .{ "comment", .DarkRed },
 });
 
 // TODO: Bake into an auto-generated file based on available parsers?
 fn getLanguage(language: []const u8) ?*const treez.Language {
     if (std.mem.eql(u8, language, "c")) {
         return treez.Language.get("c") catch null;
+    } else if (std.mem.eql(u8, language, "cpp")) {
+        return treez.Language.get("cpp") catch null;
     } else if (std.mem.eql(u8, language, "zig")) {
         return treez.Language.get("zig") catch null;
     } else if (std.mem.eql(u8, language, "json")) {
         return treez.Language.get("json") catch null;
+    } else if (std.mem.eql(u8, language, "bash")) {
+        return treez.Language.get("bash") catch null;
+    } else if (std.mem.eql(u8, language, "html")) {
+        return treez.Language.get("html") catch null;
+    } else if (std.mem.eql(u8, language, "python")) {
+        return treez.Language.get("python") catch null;
     } else {
         std.debug.print("Unimplemented language: {s}\n", .{language});
     }
-
-    // } else if (std.mem.eql(u8, language, "cpp")) {
-    //     lang = try treez.Language.get("cpp");
-    // } else if (std.mem.eql(u8, language, "python")) {
-    //     lang = try treez.Language.get("python");
-    // } else if (std.mem.eql(u8, language, "bash")) {
-    //     lang = try treez.Language.get("bash");
-    // } else if (std.mem.eql(u8, language, "html")) {
-    //     lang = try treez.Language.get("html");
 
     return null;
 }

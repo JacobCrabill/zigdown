@@ -44,7 +44,11 @@ pub fn build(b: *std.Build) !void {
     // }
 
     // Export the zigdown module to downstream consumers
-    const mod = b.addModule("zigdown", .{ .root_source_file = .{ .path = "src/zigdown.zig" } });
+    const mod = b.addModule("zigdown", .{
+        .root_source_file = .{ .path = "src/zigdown.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
     const mod_dep = Dependency{ .name = "zigdown", .module = mod };
 
     ///////////////////////////////////////////////////////////////////////////
@@ -77,6 +81,30 @@ pub fn build(b: *std.Build) !void {
     const queries = b.addModule("queries", .{ .root_source_file = .{ .path = gen_file_name } });
     const queries_dep = Dependency{ .name = "queries", .module = queries };
     mod.addImport(queries_dep.name, queries_dep.module);
+
+    // TODO: Fix 'treez' to link on its own
+    // expose an option to use either vendored tree-sitter or system tree-sitter
+    var env_map: std.process.EnvMap = std.process.getEnvMap(b.allocator) catch unreachable;
+    defer env_map.deinit();
+
+    // Setup our standard library & include paths
+    const HOME = env_map.get("HOME") orelse "";
+
+    const lib_path: []const u8 = std.mem.concat(b.allocator, u8, &.{ HOME, "/.local/lib/" }) catch unreachable;
+    const include_path: []const u8 = std.mem.concat(b.allocator, u8, &.{ HOME, "/.local/include/" }) catch unreachable;
+    defer b.allocator.free(lib_path);
+    defer b.allocator.free(include_path);
+
+    mod.addRPath(.{ .path = lib_path });
+    mod.addLibraryPath(.{ .path = lib_path });
+    mod.linkSystemLibrary("tree-sitter", .{ .needed = true });
+    mod.linkSystemLibrary("tree-sitter-bash", .{ .needed = true });
+    mod.linkSystemLibrary("tree-sitter-c", .{ .needed = true });
+    mod.linkSystemLibrary("tree-sitter-cpp", .{ .needed = true });
+    mod.linkSystemLibrary("tree-sitter-zig", .{ .needed = true });
+    mod.linkSystemLibrary("tree-sitter-json", .{ .needed = true });
+    mod.linkSystemLibrary("tree-sitter-html", .{ .needed = true });
+    mod.linkSystemLibrary("tree-sitter-python", .{ .needed = true });
 
     var dep_array = [_]Dependency{ stbi_dep, clap_dep, treez_dep, queries_dep, mod_dep };
     const deps: []Dependency = &dep_array;
@@ -157,25 +185,6 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
         .optimize = opts.optimize,
         .target = opts.target orelse b.host,
     });
-    // TODO: Fix 'treez' to link on its own
-    // expose an option to use either vendored tree-sitter or system tree-sitter
-    var env_map: std.process.EnvMap = std.process.getEnvMap(b.allocator) catch unreachable;
-    defer env_map.deinit();
-
-    // Setup our standard library & include paths
-    const HOME = env_map.get("HOME") orelse "";
-
-    const lib_path: []const u8 = std.mem.concat(b.allocator, u8, &.{ HOME, "/.local/lib/" }) catch unreachable;
-    const include_path: []const u8 = std.mem.concat(b.allocator, u8, &.{ HOME, "/.local/include/" }) catch unreachable;
-    defer b.allocator.free(lib_path);
-    defer b.allocator.free(include_path);
-
-    exe.addRPath(.{ .path = lib_path });
-    exe.addLibraryPath(.{ .path = lib_path });
-    exe.linkSystemLibrary("tree-sitter");
-    exe.linkSystemLibrary("tree-sitter-c");
-    exe.linkSystemLibrary("tree-sitter-zig");
-    exe.linkSystemLibrary("tree-sitter-json");
 
     // Add the executable to the default 'zig build' command
     b.installArtifact(exe);
