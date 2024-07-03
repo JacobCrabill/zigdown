@@ -33,15 +33,13 @@ pub fn build(b: *std.Build) !void {
     // Standard optimize options allows the user to choose the optimization mode
     // when running 'zig build'.  This applies to downstream consumers of this package
     // as well, e.g. when added as a dependency in build.zig.zon.
-    const optimize = b.standardOptimizeOption(.{});
-
-    // // Default to ReleaseSafe, but allow the user to specify Debug or ReleaseFast builds
-    // var optimize: std.builtin.Mode = .ReleaseSafe;
-    // if (b.option(bool, "debug", "Build Debug mode") != null) {
-    //     optimize = .Debug;
-    // } else if (b.option(bool, "fast", "Build ReleaseFast mode") != null) {
-    //     optimize = .ReleaseFast;
-    // }
+    // Default to Debug, but allow the user to specify ReleaseSafe or ReleaseFast builds
+    var optimize = b.standardOptimizeOption(.{});
+    if (b.option(bool, "safe", "Build ReleaseSafe mode") != null) {
+        optimize = .ReleaseSafe;
+    } else if (b.option(bool, "fast", "Build ReleaseFast mode") != null) {
+        optimize = .ReleaseFast;
+    }
 
     // Export the zigdown module to downstream consumers
     const mod = b.addModule("zigdown", .{
@@ -70,34 +68,12 @@ pub fn build(b: *std.Build) !void {
     mod.addImport(treez_dep.name, treez_dep.module);
 
     // Create a module for the TreeSitter queries
+    // TODO: Add main() function to queries.zig and add run step to download & install all queries
+    // Also just @import("queries.zig"); instead of creating a module
     const gen_file_name = "tree-sitter/queries.zig";
-    // TODO: How to add auto-generated file to build graph?
-    // Maybe I just want to check all of it into Git anyways, and add a step to re-generate
-    // only when I want to change languages.  Idk.
-    // Could also 'git clone' and build all necessary libraries at the same time.
-    // If I can fetch the highlights file, why not the whole repo and call `make install`?
-    // If I take that approach, I could bake the static library in
-    // const gen_file = b.addWriteFile(gen_file_name, "pub const Hello = \"Hello, World!\n\";\n");
     const queries = b.addModule("queries", .{ .root_source_file = .{ .path = gen_file_name } });
     const queries_dep = Dependency{ .name = "queries", .module = queries };
     mod.addImport(queries_dep.name, queries_dep.module);
-
-    // TODO: Fix 'treez' to link on its own
-    // expose an option to use either vendored tree-sitter or system tree-sitter
-    var env_map: std.process.EnvMap = std.process.getEnvMap(b.allocator) catch unreachable;
-    defer env_map.deinit();
-
-    // Setup our standard library & include paths
-    const HOME = env_map.get("HOME") orelse "";
-
-    const lib_path: []const u8 = std.mem.concat(b.allocator, u8, &.{ HOME, "/.local/lib/" }) catch unreachable;
-    const include_path: []const u8 = std.mem.concat(b.allocator, u8, &.{ HOME, "/.local/include/" }) catch unreachable;
-    defer b.allocator.free(lib_path);
-    defer b.allocator.free(include_path);
-
-    mod.addRPath(.{ .path = lib_path });
-    mod.addLibraryPath(.{ .path = lib_path });
-    mod.linkSystemLibrary("tree-sitter", .{ .needed = true });
 
     var dep_array = [_]Dependency{ stbi_dep, clap_dep, treez_dep, queries_dep, mod_dep };
     const deps: []Dependency = &dep_array;
