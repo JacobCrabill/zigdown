@@ -71,7 +71,7 @@ pub fn build(b: *std.Build) !void {
 
     // Create a module for the TreeSitter queries
     const gen_file_name = "tree-sitter/queries.zig";
-    // TODO: How to add to build graph?
+    // TODO: How to add auto-generated file to build graph?
     // Maybe I just want to check all of it into Git anyways, and add a step to re-generate
     // only when I want to change languages.  Idk.
     // Could also 'git clone' and build all necessary libraries at the same time.
@@ -98,13 +98,6 @@ pub fn build(b: *std.Build) !void {
     mod.addRPath(.{ .path = lib_path });
     mod.addLibraryPath(.{ .path = lib_path });
     mod.linkSystemLibrary("tree-sitter", .{ .needed = true });
-    mod.linkSystemLibrary("tree-sitter-bash", .{ .needed = true });
-    mod.linkSystemLibrary("tree-sitter-c", .{ .needed = true });
-    mod.linkSystemLibrary("tree-sitter-cpp", .{ .needed = true });
-    mod.linkSystemLibrary("tree-sitter-zig", .{ .needed = true });
-    mod.linkSystemLibrary("tree-sitter-json", .{ .needed = true });
-    mod.linkSystemLibrary("tree-sitter-html", .{ .needed = true });
-    mod.linkSystemLibrary("tree-sitter-python", .{ .needed = true });
 
     var dep_array = [_]Dependency{ stbi_dep, clap_dep, treez_dep, queries_dep, mod_dep };
     const deps: []Dependency = &dep_array;

@@ -585,7 +585,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             const source = c.text orelse "";
 
             // Use TreeSitter to parse the code block and apply colors
-            const lang: ?*const treez.Language = getLanguage(language);
+            const lang: ?*const treez.Language = getLanguage(self.alloc, language);
 
             // Get the highlights query
             const highlights: []const u8 = queries.get(language).?;
@@ -802,24 +802,10 @@ const highlights_map = std.ComptimeStringMap(zd.Color, .{
 });
 
 // TODO: Bake into an auto-generated file based on available parsers?
-fn getLanguage(language: []const u8) ?*const treez.Language {
-    if (std.mem.eql(u8, language, "c")) {
-        return treez.Language.get("c") catch null;
-    } else if (std.mem.eql(u8, language, "cpp")) {
-        return treez.Language.get("cpp") catch null;
-    } else if (std.mem.eql(u8, language, "zig")) {
-        return treez.Language.get("zig") catch null;
-    } else if (std.mem.eql(u8, language, "json")) {
-        return treez.Language.get("json") catch null;
-    } else if (std.mem.eql(u8, language, "bash")) {
-        return treez.Language.get("bash") catch null;
-    } else if (std.mem.eql(u8, language, "html")) {
-        return treez.Language.get("html") catch null;
-    } else if (std.mem.eql(u8, language, "python")) {
-        return treez.Language.get("python") catch null;
-    } else {
-        std.debug.print("Unimplemented language: {s}\n", .{language});
-    }
-
-    return null;
+fn getLanguage(_: Allocator, language: []const u8) ?*const treez.Language {
+    //return treez.languageFromLibrary(language) catch |err| {
+    return treez.Language.loadFromDynLib(language) catch |err| {
+        std.debug.print("Error loading {s} language: {any}\n", .{ language, err });
+        return null;
+    };
 }
