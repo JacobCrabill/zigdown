@@ -67,15 +67,7 @@ pub fn build(b: *std.Build) !void {
     const treez_dep = Dependency{ .name = "treez", .module = treez.module("treez") };
     mod.addImport(treez_dep.name, treez_dep.module);
 
-    // Create a module for the TreeSitter queries
-    // TODO: Add main() function to queries.zig and add run step to download & install all queries
-    // Also just @import("queries.zig"); instead of creating a module
-    const gen_file_name = "tree-sitter/queries.zig";
-    const queries = b.addModule("queries", .{ .root_source_file = .{ .path = gen_file_name } });
-    const queries_dep = Dependency{ .name = "queries", .module = queries };
-    mod.addImport(queries_dep.name, queries_dep.module);
-
-    var dep_array = [_]Dependency{ stbi_dep, clap_dep, treez_dep, queries_dep, mod_dep };
+    var dep_array = [_]Dependency{ stbi_dep, clap_dep, treez_dep, mod_dep };
     const deps: []Dependency = &dep_array;
 
     const exe_opts = BuildOpts{
@@ -95,6 +87,18 @@ pub fn build(b: *std.Build) !void {
         .root_path = "src/main.zig",
     };
     addExecutable(b, exe_config, exe_opts);
+
+    // Compile the TreeSitter query-fetcher executable
+    const query_fetcher = ExeConfig{
+        .version = .{ .major = 0, .minor = 1, .patch = 0 },
+        .name = "fetch_ts_queries",
+        .build_cmd = "query-fetcher",
+        .build_description = "TODO",
+        .run_cmd = "fetch-queries",
+        .run_description = "Fetch a list of TreeSitter highlights queries",
+        .root_path = "tools/fetch_queries.zig",
+    };
+    addExecutable(b, query_fetcher, exe_opts);
 
     // Build HTML library documentation
     // TODO: how to enable docs??
@@ -205,67 +209,4 @@ fn addTest(b: *std.Build, cmd: []const u8, description: []const u8, path: []cons
     run_step.has_side_effects = true; // Force the test to always be run on command
     const step = b.step(cmd, description);
     step.dependOn(&run_step.step);
-}
-
-/// Fetch a list of TreeSitter highlight queries and save them to individual files
-fn fecthTreeSitterQueries(b: *Build) !void {
-    const query_dir = try std.fs.cwd().makeOpenPath("tree-sitter/queries/", .{});
-    defer query_dir.close();
-
-    // Languages hosted by the tree-sitter project itself
-    const languages = [_][]const u8{ "c", "cpp", "rust", "python", "bash", "json", "toml" };
-    for (languages) |lang| {
-        const body = fetchStandardQuery(b.allocator(), lang, "tree-sitter", "tree-sitter/queries") catch continue;
-        writeQueryFile(body, query_dir, lang);
-    }
-
-    // Additional languages hosted by other users on Github
-    fetchStandardQuery(b.allocator(), "zig", "maxxnino", query_dir) catch |err| {
-        std.debug.print("Failed to download zig query: {any}\n", .{err});
-    };
-}
-
-/// TODO doxystring
-fn fetchStandardQuery(alloc: std.mem.Allocator, language: []const u8, comptime github_user: []const u8) !void {
-    std.debug.print("Fetching highlights query for {s}\n", .{language});
-
-    var url_buf: [1024]u8 = undefined;
-    const url_s = try std.fmt.bufPrint(url_buf[0..], "https://raw.githubusercontent.com/{s}/tree-sitter-{s}/master/queries/highlights.scm", .{
-        github_user,
-        language,
-    });
-    const uri = try std.Uri.parse(url_s);
-
-    var client = std.http.Client{ .allocator = alloc };
-    defer client.deinit();
-
-    // Perform a one-off request and wait for the response
-    // Returns an http.Status
-    var response_buffer: [1024 * 1024]u8 = undefined;
-    var response_storage = std.ArrayListUnmanaged(u8).initBuffer(&response_buffer);
-    const status = try client.fetch(.{
-        .location = .{ .uri = uri },
-        .method = .GET,
-        .headers = .{ .authorization = .omit },
-        .response_storage = .{ .static = &response_storage },
-    });
-
-    const body = response_storage.items;
-
-    if (status.status != .ok or body.len == 0) {
-        std.debug.print("Error fetching {s} (!ok)\n", .{language});
-        return error.NoReply;
-    }
-
-    return body;
-}
-
-/// Save the TreeSitter query at a standard name
-fn writeQueryFile(body: []const u8, dir: std.fs.Dir, language: []const u8) !void {
-    // Save the query to a file at the given path
-    var fname_buf: [256]u8 = undefined;
-    const fname = try std.fmt.bufPrint(fname_buf[0..], "highlights-{s}.scm", .{language});
-    var of: std.fs.File = try dir.createFile(fname, .{});
-    defer of.close();
-    try of.writeAll(body);
 }

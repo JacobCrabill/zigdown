@@ -10,9 +10,9 @@ const zd = struct {
 const cons = @import("console.zig");
 const debug = @import("debug.zig");
 const gfx = @import("image.zig");
+const ts_queries = @import("ts_queries.zig");
 const stb = @import("stb_image");
 const treez = @import("treez");
-const queries = @import("queries").queries;
 
 const errorReturn = debug.errorReturn;
 const errorMsg = debug.errorMsg;
@@ -81,6 +81,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         cur_style: zd.TextStyle = .{},
 
         pub fn init(stream: OutStream, alloc: Allocator, opts: RenderOpts) Self {
+            // Initialize the TreeSitter query functionality in case we need it
+            ts_queries.init(alloc);
             return Self{
                 .stream = stream,
                 .alloc = alloc,
@@ -588,9 +590,13 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             const lang: ?*const treez.Language = getLanguage(self.alloc, language);
 
             // Get the highlights query
-            const highlights: []const u8 = queries.get(language).?;
+            const highlights_opt: ?[]const u8 = ts_queries.get(self.alloc, language);
+            defer if (highlights_opt) |h| self.alloc.free(h);
 
-            if (lang) |tlang| {
+            if (lang != null and highlights_opt != null) {
+                const tlang = lang.?;
+                const highlights = highlights_opt.?;
+
                 var parser = try treez.Parser.create();
                 defer parser.destroy();
 
