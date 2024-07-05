@@ -631,7 +631,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                         const end = node.getEndByte();
                         const capture_name = query.getCaptureNameForId(capture.id);
                         const content = source[start..end];
-                        const color = highlights_map.get(capture_name) orelse .Default;
+                        const color = ts_queries.getHighlightFor(capture_name) orelse .Default;
 
                         if (start > idx) {
                             // We've missed something in between captures
@@ -789,23 +789,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
     };
 }
-
-// Capture Name: number
-const highlights_map = std.ComptimeStringMap(zd.Color, .{
-    .{ "number", .Yellow },
-    .{ "keyword", .Blue },
-    .{ "operator", .Cyan },
-    .{ "delimiter", .Default },
-    .{ "string", .Green },
-    .{ "property", .Magenta },
-    .{ "label", .Magenta },
-    .{ "type", .Red },
-    .{ "function", .Cyan },
-    .{ "function.special", .Cyan },
-    .{ "variable", .Cyan },
-    .{ "constant", .Yellow },
-    .{ "comment", .DarkRed },
-});
 
 // TODO: Bake into an auto-generated file based on available parsers?
 fn getLanguage(_: Allocator, language: []const u8) ?*const treez.Language {

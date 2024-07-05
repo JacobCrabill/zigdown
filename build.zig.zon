@@ -16,9 +16,8 @@
             .hash = "12200103e7b4a0cb162f2912df4fe97914024a25b5c9fcce6ea4119744f3f2a7f24e",
         },
         .treez = .{
-            // .url = "https://github.com/ziglibs/treez/archive/82c62d738d0f5a1b32e9907f54cea2c35926814a.tar.gz",
-            // .hash = "12209255c77b7f73e0f39513c4808a0fe0342e94e1288178884db62a1c3f9b2b236c",
-            .path = "../zig-tools/treez/",
+            .url = "https://github.com/JacobCrabill/treez/archive/4b33707502677d82bb69eccca3930ce10b2df668.tar.gz",
+            .hash = "1220bc28dbf5172dee6eb2058700086ae1653fb46073194cad17e08cc013c50cd248",
         },
     },
 }

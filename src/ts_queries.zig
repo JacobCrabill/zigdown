@@ -1,6 +1,9 @@
+/// ts_queries.zig
+/// TreeSitter highlight queries and related functionality
 const std = @import("std");
 const clap = @import("clap");
 const cons = @import("console.zig");
+const utils = @import("utils.zig");
 
 const Self = @This();
 
@@ -66,10 +69,10 @@ pub fn getTsQueryDir() ![]const u8 {
 /// Try to read the tree-sitter highlights query for the given language
 /// The expected location of the file is:
 ///
-///     ${TS_CONFIG_DIR}/highlights-{language}.scm
+///     ${TS_CONFIG_DIR}/queries/highlights-{language}.scm
 ///
 /// If the environment variable TS_CONFIG_DIR is not defined,
-/// the "standard" path of ${HOME}/.config/tree-sitter/queries/ will be used instead.
+/// the "standard" path of ${HOME}/.config/tree-sitter/ will be used instead.
 ///
 /// If ${HOME} is not defined, it will fall back to the current working directory.
 ///
@@ -102,6 +105,32 @@ pub fn get(query_alloc: Allocator, language: []const u8) ?[]const u8 {
     defer file.close();
 
     return file.readToEndAlloc(query_alloc, 1e7) catch null;
+}
+
+// Capture Name: number
+const highlights_map = std.ComptimeStringMap(utils.Color, .{
+    .{ "number", .Yellow },
+    .{ "keyword", .Blue },
+    .{ "operator", .Cyan },
+    .{ "delimiter", .Default },
+    .{ "string", .Green },
+    .{ "property", .Magenta },
+    .{ "label", .Magenta },
+    .{ "type", .Red },
+    .{ "function", .Cyan },
+    .{ "function.special", .Cyan },
+    .{ "variable", .Cyan },
+    .{ "constant", .Yellow },
+    .{ "constant.builtin", .Yellow },
+    .{ "comment", .DarkRed },
+    .{ "escape", .DarkRed },
+});
+
+/// Get the highlight color for a specific capture group
+/// TODO: Load from JSON, possibly on a per-language basis
+/// TODO: Setup RGB color schemes and a Vim-style subset of highlight groups
+pub fn getHighlightFor(label: []const u8) ?utils.Color {
+    return highlights_map.get(label);
 }
 
 /// Fetch a TreeSitter highlights query from Github
