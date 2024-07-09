@@ -43,10 +43,9 @@ pub fn free(string: []const u8) void {
     allocator.free(string);
 }
 
-/// Figure out where to save the TreeSitter query files
-/// Returns a heap-allocated string containing the absolute path to the TreeSitter query directory
+/// Return the absolute path to our TreeSitter config directory
 /// Caller owns the returned string
-pub fn getTsQueryDir() ![]const u8 {
+pub fn getTsConfigDir() ![]const u8 {
     var env_map: std.process.EnvMap = std.process.getEnvMap(allocator) catch unreachable;
     defer env_map.deinit();
 
@@ -63,7 +62,22 @@ pub fn getTsQueryDir() ![]const u8 {
         }
     }
     defer allocator.free(ts_config_dir);
-    return try std.fmt.allocPrint(allocator, "{s}/queries/", .{ts_config_dir});
+
+    // Ensure the path is an absolute path
+    var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+    const config_path = try std.fs.realpath(ts_config_dir, &path_buf);
+    return try allocator.dupe(u8, config_path);
+}
+
+/// Figure out where to save the TreeSitter query files
+/// Returns a heap-allocated string containing the absolute path to the TreeSitter query directory
+/// Caller owns the returned string
+pub fn getTsQueryDir() ![]const u8 {
+    const ts_config_dir = try getTsConfigDir();
+    defer allocator.free(ts_config_dir);
+
+    // Ensure the path is an absolute path
+    return try std.fs.path.join(allocator, &.{ ts_config_dir, "queries" });
 }
 
 /// Try to read the tree-sitter highlights query for the given language
@@ -85,17 +99,10 @@ pub fn get(query_alloc: Allocator, language: []const u8) ?[]const u8 {
     defer Self.free(query_dir);
 
     var qd: std.fs.Dir = undefined;
-    if (std.fs.path.isAbsolute(query_dir)) {
-        qd = std.fs.openDirAbsolute(query_dir, .{}) catch {
-            std.debug.print("Unable to open absolute directory: {s}\n", .{query_dir});
-            return null;
-        };
-    } else {
-        qd = std.fs.cwd().openDir(query_dir, .{}) catch {
-            std.debug.print("Unable to open directory: <cwd>/{s}\n", .{query_dir});
-            return null;
-        };
-    }
+    qd = std.fs.openDirAbsolute(query_dir, .{}) catch {
+        std.debug.print("Unable to open absolute directory: {s}\n", .{query_dir});
+        return null;
+    };
     defer qd.close();
 
     var buffer: [1024]u8 = undefined;
@@ -183,6 +190,100 @@ pub fn fetchStandardQuery(language: []const u8, github_user: []const u8) ![]cons
     try queries.put(lang, query);
 
     return query;
+}
+
+/// Fetch a TreeSitter parser repoo from Github
+pub fn fetchParserRepo(language: []const u8, github_user: []const u8) !void {
+    std.debug.print("Fetching repo for {s}\n", .{language});
+
+    // Open our config directory
+    const config_dir: []const u8 = try getTsConfigDir();
+    defer Self.free(config_dir);
+
+    var configd: std.fs.Dir = try std.fs.openDirAbsolute(config_dir, .{});
+    defer configd.close();
+
+    // Setup our parser directory
+    const parser_repo = try std.fmt.allocPrint(allocator, "tree-sitter-{s}", .{language});
+    defer Self.free(parser_repo);
+
+    const parser_dir = try std.fs.path.join(allocator, &.{ config_dir, "parsers", parser_repo });
+    const parser_subdir = try std.fs.path.join(allocator, &.{ "parsers", parser_repo });
+    defer Self.free(parser_dir);
+    defer Self.free(parser_subdir);
+
+    // Fetch the tarball from Github
+    var url_buf: [1024]u8 = undefined;
+    const url_s = try std.fmt.bufPrint(url_buf[0..], "https://github.com/{s}/tree-sitter-{s}/archive/refs/heads/master.tar.gz", .{
+        github_user,
+        language,
+    });
+    const uri = try std.Uri.parse(url_s);
+
+    var client = std.http.Client{ .allocator = allocator };
+    defer client.deinit();
+
+    // Perform a one-off request and wait for the response
+    // Returns an http.Status
+    var response_storage = std.ArrayList(u8).init(allocator);
+    defer response_storage.deinit();
+    const status = try client.fetch(.{
+        .location = .{ .uri = uri },
+        .method = .GET,
+        .headers = .{ .authorization = .omit },
+        .response_storage = .{ .dynamic = &response_storage },
+    });
+
+    // The response is the *.tar.gz file stream
+    const body = response_storage.items;
+
+    if (status.status != .ok or body.len == 0) {
+        std.debug.print("Error fetching {s} (!ok)\n", .{language});
+        return error.NoReply;
+    }
+
+    // Ensure we start with an empty directory for the parser we downloaded
+    try configd.deleteTree(parser_subdir);
+    configd.makeDir(parser_dir) catch {};
+    const out_dir: std.fs.Dir = try configd.openDir(parser_subdir, .{});
+
+    // Decompress the tarball to the parser directory we created
+    var stream = std.io.fixedBufferStream(body);
+    var decompress = std.compress.gzip.decompressor(stream.reader());
+
+    try std.tar.pipeToFileSystem(out_dir, decompress.reader(), .{
+        .strip_components = 1,
+        .mode_mode = .ignore,
+    });
+
+    // Run 'make install' in the parser repo
+    // Specify the install prefix as ${TS_CONFIG_DIR}
+    const prefix = try std.fmt.allocPrint(allocator, "PREFIX={s}", .{config_dir});
+    defer Self.free(prefix);
+
+    const args = [_][]const u8{ "make", "install", prefix };
+    const res = try std.process.Child.run(.{
+        .allocator = allocator,
+        .argv = &args,
+        .cwd = parser_dir,
+    });
+    allocator.free(res.stdout);
+    allocator.free(res.stderr);
+
+    // Copy the highlights query to the query dir
+    var fname_buf: [256]u8 = undefined;
+    const fname = try std.fmt.bufPrint(fname_buf[0..], "highlights-{s}.scm", .{language});
+    const query_sub: []const u8 = try std.fs.path.join(allocator, &.{ "queries", fname });
+    const source_path: []const u8 = try std.fs.path.join(allocator, &.{ "queries", "highlights.scm" });
+    defer Self.free(query_sub);
+    defer Self.free(source_path);
+    try out_dir.copyFile(source_path, configd, query_sub, .{});
+}
+
+test "Fetch C parser" {
+    Self.init(std.testing.allocator);
+
+    try fetchParserRepo("c", "tree-sitter");
 }
 
 /// Save the TreeSitter query to a file at the standard name "highlights-{language}.scm"
