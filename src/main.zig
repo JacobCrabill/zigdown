@@ -7,7 +7,7 @@ const File = std.fs.File;
 const os = std.os;
 
 const cons = zd.cons;
-const TS = zd.TextStyle;
+const TextStyle = zd.utils.TextStyle;
 const htmlRenderer = zd.htmlRenderer;
 const consoleRenderer = zd.consoleRenderer;
 const Parser = zd.Parser;
@@ -19,19 +19,23 @@ fn print_usage(alloc: std.mem.Allocator) void {
 
     const usage = "    {s} [options] [filename.md]\n\n";
     const options =
-        \\ -c, --console        Render to the console (default)
-        \\ -h, --html           Render to HTML
-        \\ -o, --output [file]  Direct output to a file, instead of stdout
-        \\ -t, --timeit         Time the parsing & rendering
-        \\ -v, --verbose        Verbose output from the parser
-        \\
+        \\ -c, --console         Render to the console (default)
+        \\ -h, --html            Render to HTML
+        \\ -o, --output [file]   Direct output to a file, instead of stdout
+        \\ -t, --timeit          Time the parsing & rendering
+        \\ -v, --verbose         Verbose output from the parser
+        \\ -p, --install-parsers Install one or more TreeSitter language parsers from Github
+        \\                       Comma-separated list of <lang> or <github_user>:<lang>
+        \\                       e.g. c,cpp,maxxnino:zig,rust,html
         \\
     ;
 
-    cons.printColor(std.debug, .Green, "Usage:\n", .{});
-    cons.printColor(std.debug, .White, usage, .{arg0});
-    cons.printColor(std.debug, .Green, "Options:\n", .{});
-    cons.printColor(std.debug, .White, options, .{});
+    const Green = TextStyle{ .fg_color = .Green, .bold = true };
+    const White = TextStyle{ .fg_color = .White };
+    cons.printStyled(std.debug, Green, "Usage:\n", .{});
+    cons.printStyled(std.debug, White, usage, .{arg0});
+    cons.printStyled(std.debug, Green, "Options:\n", .{});
+    cons.printStyled(std.debug, White, options, .{});
 }
 
 pub fn main() !void {
@@ -44,13 +48,15 @@ pub fn main() !void {
     // Use Zig-Clap to parse a list of arguments
     // Each arg has a short and/or long variant with optional type and help description
     const params = comptime clap.parseParamsComptime(
-        \\     --help         Display help and exit
-        \\ -c, --console      Render to the console (default)
-        \\ -h, --html         Render to HTML
-        \\ -o, --output <str> Direct output to a file, instead of stdout
-        \\ -t, --timeit       Time the parsing & rendering
-        \\ -v, --verbose      Verbose parser output
-        \\ <str>              Markdown file to render
+        \\     --help                  Display help and exit
+        \\ -c, --console               Render to the console (default)
+        \\ -h, --html                  Render to HTML
+        \\ -o, --output <str>          Direct output to a file, instead of stdout
+        \\ -t, --timeit                Time the parsing & rendering
+        \\ -v, --verbose               Verbose parser output
+        \\ -p, --install-parsers <str> Install one or more TreeSitter language parsers
+        \\                             (Used for syntax highlighting of code blocks)
+        \\ <str>                       Markdown file to render
     );
 
     // Have Clap parse the command-line arguments
@@ -68,6 +74,24 @@ pub fn main() !void {
     if (res.args.help != 0) {
         print_usage(alloc);
         std.process.exit(0);
+    }
+
+    if (res.args.@"install-parsers") |s| {
+        zd.ts_queries.init(alloc);
+        var langs = std.mem.tokenize(u8, s, ",");
+        while (langs.next()) |lang| {
+            var user: []const u8 = "tree-sitter";
+            var language: []const u8 = lang;
+
+            // Check if the positional argument is a single language or a user:language pair
+            if (std.mem.indexOfScalar(u8, lang, ':')) |i| {
+                std.debug.assert(i + 1 < lang.len);
+                user = lang[0..i];
+                language = lang[i + 1 ..];
+            }
+            try zd.ts_queries.fetchParserRepo(language, user);
+        }
+        return;
     }
 
     if (res.args.output) |ostr| {
