@@ -145,19 +145,20 @@ pub fn getHighlightFor(label: []const u8) ?utils.Color {
 ///
 /// @param[in] language: The tree-sitter language name (e.g. "cpp" for C++)
 /// @param[in] github_user: The Github account hosting tree-sitter-{language}
-pub fn fetchStandardQuery(language: []const u8, github_user: []const u8) ![]const u8 {
-    std.debug.print("Fetching highlights query for {s}\n", .{language});
-
+pub fn fetchStandardQuery(language: []const u8, github_user: []const u8, git_ref: []const u8) ![]const u8 {
     if (queries.get(language)) |query| {
         return try allocator.dupe(u8, query);
     }
 
     var url_buf: [1024]u8 = undefined;
-    const url_s = try std.fmt.bufPrint(url_buf[0..], "https://raw.githubusercontent.com/{s}/tree-sitter-{s}/master/queries/highlights.scm", .{
+    const url_s = try std.fmt.bufPrint(url_buf[0..], "https://raw.githubusercontent.com/{s}/tree-sitter-{s}/{s}/queries/highlights.scm", .{
         github_user,
         language,
+        git_ref,
     });
     const uri = try std.Uri.parse(url_s);
+
+    std.debug.print("Fetching highlights query for {s} from {s}\n", .{ language, url_s });
 
     var client = std.http.Client{ .allocator = allocator };
     defer client.deinit();
@@ -193,7 +194,7 @@ pub fn fetchStandardQuery(language: []const u8, github_user: []const u8) ![]cons
 }
 
 /// Fetch a TreeSitter parser repoo from Github
-pub fn fetchParserRepo(language: []const u8, github_user: []const u8) !void {
+pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: []const u8) !void {
     std.debug.print("Fetching repo for {s}\n", .{language});
 
     // Open our config directory
@@ -214,11 +215,14 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8) !void {
 
     // Fetch the tarball from Github
     var url_buf: [1024]u8 = undefined;
-    const url_s = try std.fmt.bufPrint(url_buf[0..], "https://github.com/{s}/tree-sitter-{s}/archive/refs/heads/master.tar.gz", .{
+    const url_s = try std.fmt.bufPrint(url_buf[0..], "https://github.com/{s}/tree-sitter-{s}/archive/refs/heads/{s}.tar.gz", .{
         github_user,
         language,
+        git_ref,
     });
     const uri = try std.Uri.parse(url_s);
+
+    std.debug.print("Fetching repo for {s} from {s}\n", .{ language, url_s });
 
     var client = std.http.Client{ .allocator = allocator };
     defer client.deinit();
@@ -227,12 +231,15 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8) !void {
     // Returns an http.Status
     var response_storage = std.ArrayList(u8).init(allocator);
     defer response_storage.deinit();
-    const status = try client.fetch(.{
+    const status = client.fetch(.{
         .location = .{ .uri = uri },
         .method = .GET,
         .headers = .{ .authorization = .omit },
         .response_storage = .{ .dynamic = &response_storage },
-    });
+    }) catch |err| {
+        std.debug.print("Error fetching {s} at {s}: {any}\n", .{ language, url_s, err });
+        return;
+    };
 
     // The response is the *.tar.gz file stream
     const body = response_storage.items;
@@ -244,7 +251,8 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8) !void {
 
     // Ensure we start with an empty directory for the parser we downloaded
     try configd.deleteTree(parser_subdir);
-    configd.makeDir(parser_dir) catch {};
+    configd.makeDir("parsers") catch {};
+    configd.makeDir(parser_subdir) catch {};
     const out_dir: std.fs.Dir = try configd.openDir(parser_subdir, .{});
 
     // Decompress the tarball to the parser directory we created
@@ -271,6 +279,7 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8) !void {
     allocator.free(res.stderr);
 
     // Copy the highlights query to the query dir
+    configd.makeDir("queries") catch {};
     var fname_buf: [256]u8 = undefined;
     const fname = try std.fmt.bufPrint(fname_buf[0..], "highlights-{s}.scm", .{language});
     const query_sub: []const u8 = try std.fs.path.join(allocator, &.{ "queries", fname });
@@ -283,7 +292,7 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8) !void {
 test "Fetch C parser" {
     Self.init(std.testing.allocator);
 
-    try fetchParserRepo("c", "tree-sitter");
+    try fetchParserRepo("c", "tree-sitter", "master");
 }
 
 /// Save the TreeSitter query to a file at the standard name "highlights-{language}.scm"

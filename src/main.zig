@@ -81,6 +81,7 @@ pub fn main() !void {
         var langs = std.mem.tokenize(u8, s, ",");
         while (langs.next()) |lang| {
             var user: []const u8 = "tree-sitter";
+            var git_ref: []const u8 = "master";
             var language: []const u8 = lang;
 
             // Check if the positional argument is a single language or a user:language pair
@@ -88,8 +89,13 @@ pub fn main() !void {
                 std.debug.assert(i + 1 < lang.len);
                 user = lang[0..i];
                 language = lang[i + 1 ..];
+                if (std.mem.indexOfScalar(u8, lang[i + 1 ..], ':')) |j| {
+                    const split = i + 1 + j;
+                    git_ref = lang[i + 1 .. split];
+                    language = lang[split + 1 ..];
+                }
             }
-            try zd.ts_queries.fetchParserRepo(language, user);
+            try zd.ts_queries.fetchParserRepo(language, user, git_ref);
         }
         return;
     }

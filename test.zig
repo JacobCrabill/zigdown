@@ -1,12 +1,13 @@
 const std = @import("std");
 
-fn fetchStandardQuery(alloc: std.mem.Allocator, language: []const u8, comptime github_user: []const u8, comptime query_folder: []const u8) !void {
+fn fetchStandardQuery(alloc: std.mem.Allocator, language: []const u8, comptime github_user: []const u8, comptime query_folder: []const u8, git_ref: []const u8) !void {
     std.debug.print("Fetching highlights query for {s}\n", .{language});
 
     var url_buf: [1024]u8 = undefined;
-    const url_s = try std.fmt.bufPrint(url_buf[0..], "https://raw.githubusercontent.com/{s}/tree-sitter-{s}/master/queries/highlights.scm", .{
+    const url_s = try std.fmt.bufPrint(url_buf[0..], "https://raw.githubusercontent.com/{s}/tree-sitter-{s}/{s}/queries/highlights.scm", .{
         github_user,
         language,
+        git_ref,
     });
     const uri = try std.Uri.parse(url_s);
 
@@ -57,11 +58,11 @@ pub fn main() !void {
     // Languages hosted by the tree-sitter project itself
     const languages = [_][]const u8{ "c", "cpp", "rust", "python", "bash", "json", "toml" };
     for (languages) |lang| {
-        fetchStandardQuery(alloc, lang, "tree-sitter", "tree-sitter/queries") catch continue;
+        fetchStandardQuery(alloc, lang, "tree-sitter", "tree-sitter/queries", "master") catch continue;
     }
 
     // Additional languages hosted by other users on Github
-    fetchStandardQuery(alloc, "zig", "maxxnino", "tree-sitter/queries") catch |err| {
+    fetchStandardQuery(alloc, "zig", "maxxnino", "tree-sitter/queries", "master") catch |err| {
         std.debug.print("Failed to download zig query: {any}\n", .{err});
     };
 }

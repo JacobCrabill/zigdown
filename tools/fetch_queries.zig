@@ -80,6 +80,7 @@ pub fn main() !void {
     // Download and save each language's highlights query to disk
     for (res.positionals) |lang| {
         var user: []const u8 = "tree-sitter";
+        var git_ref: []const u8 = "master";
         var language: []const u8 = lang;
 
         // Check if the positional argument is a single language or a user:language pair
@@ -87,10 +88,14 @@ pub fn main() !void {
             std.debug.assert(i + 1 < lang.len);
             user = lang[0..i];
             language = lang[i + 1 ..];
+            if (std.mem.indexOfScalar(u8, lang[i + 1 ..], ':')) |j| {
+                git_ref = lang[i + 1 .. j];
+                language = lang[j + 1 ..];
+            }
         }
 
-        const query = ts_queries.fetchStandardQuery(language, user) catch |err| {
-            cons.printColor(std.debug, .Red, "  Error setting up {s}/{s}: ", .{ user, language });
+        const query = ts_queries.fetchStandardQuery(language, user, git_ref) catch |err| {
+            cons.printColor(std.debug, .Red, "  Error setting up {s}@{s}/{s}: ", .{ user, git_ref, language });
             std.debug.print("{any}\n", .{err});
             continue;
         };
