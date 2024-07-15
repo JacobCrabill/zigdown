@@ -136,19 +136,18 @@ pub fn isEmptyLine(line: []const Token) bool {
 /// Check for the pattern "[ ]*[0-9]*[.][ ]+"
 pub fn isOrderedListItem(line: []const Token) bool {
     var have_period: bool = false;
+    var have_digit: bool = false;
     for (trimLeadingWhitespace(line)) |tok| {
         switch (tok.kind) {
             .DIGIT => {
                 if (have_period) return false;
+                have_digit = true;
             },
             .PERIOD => {
+                if (!have_digit) return false;
                 have_period = true;
             },
-            .SPACE => {
-                if (have_period) return true;
-                return false;
-            },
-            .INDENT => {
+            .SPACE, .INDENT, .BREAK => {
                 if (have_period) return true;
                 return false;
             },
@@ -164,11 +163,7 @@ pub fn isUnorderedListItem(line: []const Token) bool {
     var have_bullet: bool = false;
     for (trimLeadingWhitespace(line)) |tok| {
         switch (tok.kind) {
-            .SPACE => {
-                if (have_bullet) return true;
-                return false;
-            },
-            .INDENT => {
+            .SPACE, .INDENT, .BREAK => {
                 if (have_bullet) return true;
                 return false;
             },

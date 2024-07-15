@@ -66,8 +66,9 @@ fn isContinuationLineQuote(line: []const Token) bool {
             else => return false,
         }
 
-        if (leading_ws > 3)
-            return false;
+        // TODO: keep or no?
+        // if (leading_ws > 3)
+        //     return false;
     }
 
     return false;
@@ -418,6 +419,7 @@ pub const Parser = struct {
     // Container Block Parsers
     ///////////////////////////////////////////////////////
 
+    /// Parse one line of Markdown using the given Block
     fn handleLine(self: *Self, block: *Block, line: []const Token) bool {
         switch (block.*) {
             .Container => |c| {
@@ -534,7 +536,7 @@ pub const Parser = struct {
             const is_ul: bool = utils.isUnorderedListItem(line);
             const is_indented: bool = tline.len > 0 and tline[0].src.col > child.start_col() + 1;
             const wrong_type: bool = (ordered and is_ul) or (!ordered and is_ol);
-            if (wrong_type) {
+            if (wrong_type and !is_indented) {
                 self.logger.log("Mismatched list type; ending List.\n", .{});
                 self.closeBlock(child);
                 return false;
@@ -543,12 +545,12 @@ pub const Parser = struct {
             // Check for the start of a new ListItem
             // If so, close the current ListItem (if any) and start a new one
             if ((is_ul or is_ol) or !child.isOpen()) {
-                if (is_indented) {
+                if (is_indented and child.isOpen()) {
                     self.logger.log("We have a new ListItem, but it belongs to a child list\n", .{});
                 } else {
                     self.logger.log("Adding new ListItem child\n", .{});
                     self.closeBlock(child);
-                    block.addChild(Block.initContainer(block.allocator(), .ListItem, col)) catch unreachable;
+                    block.addChild(Block.initContainer(block.allocator(), .ListItem, tline[0].src.col)) catch unreachable;
                 }
             }
         }
@@ -581,8 +583,21 @@ pub const Parser = struct {
             self.logger.log("Removing indent with start_col: {d}\n", .{block.start_col()});
             trimmed_line = utils.removeIndent(line, block.start_col());
 
-            if (trimmed_line.len > 0 and trimmed_line[0].src.col > block.start_col() + 1)
-                return false;
+            if (trimmed_line.len > 0 and trimmed_line[0].src.col > block.start_col() + 1) {
+                // Child / nested content
+                const child = self.parseNewBlock(utils.removeIndent(trimmed_line, block.start_col())) catch unreachable;
+                block.container().children.append(child) catch unreachable;
+
+                return true;
+            } else if (trimmed_line.len == 0) {
+                // Empty list item - just create an empty paragraph child
+                var child = Block.initLeaf(self.alloc, .Paragraph, block.start_col());
+                child.close();
+                block.container().children.append(child) catch unreachable;
+                block.close();
+
+                return true;
+            }
 
             // Otherwise, check if the trimmed line can be appended to the current block or not
             if (!isLazyContinuationLineList(trimmed_line)) {
@@ -606,7 +621,7 @@ pub const Parser = struct {
 
         // Child did not accept this line (or no children yet)
         // Determine which kind of Block this line should be
-        const child = self.parseNewBlock(utils.removeIndent(trimmed_line, 2)) catch unreachable;
+        const child = self.parseNewBlock(utils.removeIndent(trimmed_line, block.start_col())) catch unreachable;
         cblock.children.append(child) catch unreachable;
 
         return true;

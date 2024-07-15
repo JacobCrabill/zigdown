@@ -26,13 +26,15 @@ fn print_usage(alloc: std.mem.Allocator) void {
         \\ -v, --verbose         Verbose output from the parser
         \\ -p, --install-parsers Install one or more TreeSitter language parsers from Github
         \\                       Comma-separated list of <lang> or <github_user>:<lang>
-        \\                       e.g. c,cpp,maxxnino:zig,rust,html
+        \\                       Example: "c,tree-sitter:cpp,maxxnino:master:zig,rust,html"
+        \\                       Requires 'make' and 'gcc'
+        \\
         \\
     ;
 
     const Green = TextStyle{ .fg_color = .Green, .bold = true };
     const White = TextStyle{ .fg_color = .White };
-    cons.printStyled(std.debug, Green, "Usage:\n", .{});
+    cons.printStyled(std.debug, Green, "\nUsage:\n", .{});
     cons.printStyled(std.debug, White, usage, .{arg0});
     cons.printStyled(std.debug, Green, "Options:\n", .{});
     cons.printStyled(std.debug, White, options, .{});
@@ -54,8 +56,19 @@ pub fn main() !void {
         \\ -o, --output <str>          Direct output to a file, instead of stdout
         \\ -t, --timeit                Time the parsing & rendering
         \\ -v, --verbose               Verbose parser output
-        \\ -p, --install-parsers <str> Install one or more TreeSitter language parsers
-        \\                             (Used for syntax highlighting of code blocks)
+        \\ -p, --install-parsers <str> Install one or more TreeSitter language parsers from Github
+        \\
+        \\                             (Used for syntax highlighting of code blocks).
+        \\
+        \\                             Comma-separated list of:
+        \\                                  lang
+        \\                               or [github_user]:lang
+        \\                               or [github_user]:[branch]:lang
+        \\
+        \\                             e.g.: "c,cpp,maxxnino:master:zig,tre-sitter:rust"
+        \\
+        \\                             Requires 'make' and 'gcc'
+        \\
         \\ <str>                       Markdown file to render
     );
 
@@ -73,6 +86,7 @@ pub fn main() !void {
 
     if (res.args.help != 0) {
         print_usage(alloc);
+        try clap.help(stdout, clap.Help, &params, .{});
         std.process.exit(0);
     }
 
@@ -97,7 +111,7 @@ pub fn main() !void {
             }
             try zd.ts_queries.fetchParserRepo(language, user, git_ref);
         }
-        return;
+        std.process.exit(0);
     }
 
     if (res.args.output) |ostr| {

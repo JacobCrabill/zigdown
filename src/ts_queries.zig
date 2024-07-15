@@ -121,6 +121,7 @@ const highlights_map = std.ComptimeStringMap(utils.Color, .{
     .{ "operator", .Cyan },
     .{ "delimiter", .Default },
     .{ "string", .Green },
+    .{ "include", .Green },
     .{ "property", .Magenta },
     .{ "label", .Magenta },
     .{ "type", .Red },
@@ -129,6 +130,7 @@ const highlights_map = std.ComptimeStringMap(utils.Color, .{
     .{ "variable", .Cyan },
     .{ "constant", .Yellow },
     .{ "constant.builtin", .Yellow },
+    .{ "variable.builtin", .Yellow },
     .{ "comment", .DarkRed },
     .{ "escape", .DarkRed },
 });
