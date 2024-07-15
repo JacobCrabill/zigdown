@@ -6,15 +6,11 @@
 
 #### Heading 4
 
-Plain text with **bold** and _italic_ styles (and **_bold_italic_**) and no line breaks unless the
-previous line is...
-
-...blank like above
-
-Indented text should also work a 2-space indent should have no effect
+Plain text with **bold** and _italic_ styles (and **_bold_italic_**) or ~underlined **and bold _or
+italic_**~.
 
 - Unordered list
-- Foobar
+- Works as you'd expect
   1. Nested numbered list
   1. Numbers auto-increment
      - more nesting!
@@ -29,20 +25,11 @@ Indented text should also work a 2-space indent should have no effect
 >
 > > With line breaks and **_Formatting_**.
 >
-> - item
->
-> 1. other item
+> - Lists inside quotes
 
-A C++ code block.
+## Code Blocks
 
-```cpp
-#include <iostream>
-
-// Comment
-int main() {
-  std::cout << "Hello, world!" << std::endl;
-}
-```
+A C code block with syntax highlighting.
 
 ```c
 #include <stdio.h>
@@ -56,6 +43,9 @@ int main() {
 # Images
 
 ![Image Alt](zig-zero.png) [Click Me!](https://google.com)
+
+Rendered to the console using the
+[Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/).
 
 Note: hologram.nvim somehow renders this properly(ish) within the NeoVim buffer, but mdcat and
 image_cat don't (even though they work in plain terminal). What's the difference between how

@@ -9,7 +9,7 @@ const Dependency = struct {
 
 const ExeConfig = struct {
     version: ?std.SemanticVersion = null, // The version of the executable
-    name: []const u8, // @param[in] name: The name for the generated executable
+    name: []const u8, // The name for the generated executable
     build_cmd: []const u8, // The build step name ('zig build <cmd>')
     build_description: []const u8, // The description for the build step ('zig build -l')
     run_cmd: []const u8, // The run step name ('zig build <cmd>')
@@ -62,7 +62,7 @@ pub fn build(b: *std.Build) !void {
     const clap_dep = Dependency{ .name = "clap", .module = clap.module("clap") };
     mod.addImport(clap_dep.name, clap_dep.module);
 
-    // treez (tree-sitter wrapper library)
+    // Treez (TreeSitter wrapper library)
     const treez = b.dependency("treez", .{ .optimize = optimize, .target = target });
     const treez_dep = Dependency{ .name = "treez", .module = treez.module("treez") };
     mod.addImport(treez_dep.name, treez_dep.module);
