@@ -5,7 +5,6 @@ const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const File = std.fs.File;
 const Dir = std.fs.Dir;
-const stdout = std.io.getStdOut().writer();
 const Base64Encoder = std.base64.standard.Encoder;
 
 const os = std.os;
@@ -260,6 +259,7 @@ test "Get window size" {
 // 'zig test src/image.zig' works, but 'zig build test-image' just hangs
 test "Display image" {
     const alloc = std.testing.allocator;
+    const stdout = std.io.getStdOut().writer();
     std.debug.print("Rendering Zero the Ziguana here:\n", .{});
 
     try sendImagePNG(stdout, alloc, "test/zig-zero.png", 100, 60);
@@ -271,6 +271,7 @@ pub fn main() !void {
     const alloc = std.heap.page_allocator;
     const args = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, args);
+    const stdout = std.io.getStdOut().writer();
 
     if (args.len < 2) {
         try stdout.print("Expected .png filename\n", .{});

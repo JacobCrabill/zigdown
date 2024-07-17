@@ -130,20 +130,7 @@ fn trimContinuationMarkersList(line: []const Token) []const Token {
 }
 
 fn trimContinuationMarkersUnorderedList(line: []const Token) []const Token {
-    // const trimmed = utils.trimLeadingWhitespace(line);
-    // Find the first list-item marker (*, -, +)
-    var ws_count: usize = 0;
-    for (line) |tok| {
-        if (tok.kind == .SPACE) {
-            ws_count += 1;
-        } else if (tok.kind == .INDENT) {
-            ws_count += 2;
-        } else {
-            break;
-        }
-    }
-    std.debug.assert(ws_count < line.len);
-    const trimmed = line[@min(ws_count, 2)..];
+    const trimmed = utils.trimLeadingWhitespace(line);
     std.debug.assert(trimmed.len > 0);
 
     switch (trimmed[0].kind) {
@@ -513,8 +500,9 @@ pub const Parser = struct {
         self.logger.depth += 1;
         defer self.logger.depth -= 1;
 
-        if (!isLazyContinuationLineList(line))
+        if (!(isLazyContinuationLineList(line) or utils.findStartColumn(line) > block.start_col())) {
             return false;
+        }
 
         self.logger.log("Handling List: ", .{});
         self.logger.printText(line, false);
@@ -585,10 +573,11 @@ pub const Parser = struct {
 
             if (trimmed_line.len > 0 and trimmed_line[0].src.col > block.start_col() + 1) {
                 // Child / nested content
-                const child = self.parseNewBlock(utils.removeIndent(trimmed_line, block.start_col())) catch unreachable;
-                block.container().children.append(child) catch unreachable;
+                // TODO: PASS TO CHILD!!
+                // const child = self.parseNewBlock(utils.removeIndent(trimmed_line, block.start_col())) catch unreachable;
+                // block.container().children.append(child) catch unreachable;
 
-                return true;
+                // return true;
             } else if (trimmed_line.len == 0) {
                 // Empty list item - just create an empty paragraph child
                 var child = Block.initLeaf(self.alloc, .Paragraph, block.start_col());
@@ -600,7 +589,7 @@ pub const Parser = struct {
             }
 
             // Otherwise, check if the trimmed line can be appended to the current block or not
-            if (!isLazyContinuationLineList(trimmed_line)) {
+            if (!(isLazyContinuationLineList(trimmed_line) or utils.findStartColumn(trimmed_line) > block.start_col())) {
                 self.logger.log("ListItem cannot handle line\n", .{});
                 return false;
             }
@@ -670,6 +659,12 @@ pub const Parser = struct {
                 have_closer = true;
                 break;
             }
+
+            // Don't append any leading whitespace prior to the start column of the block
+            if (utils.isWhitespace(tok) and tok.src.col < block.start_col()) {
+                self.logger.log("Skipping token '{s}' in code block\n", .{tok.text});
+                continue;
+            }
             block.Leaf.raw_contents.append(tok) catch unreachable;
         }
 
@@ -730,8 +725,7 @@ pub const Parser = struct {
 
     /// Parse a single line of Markdown into the start of a new Block
     fn parseNewBlock(self: *Self, in_line: []const Token) !Block {
-        // We allow some "wiggle room" in the leading whitespace, up to 2 spaces
-        const line = utils.removeIndent(in_line, 2);
+        const line = utils.trimLeadingWhitespace(in_line);
 
         var b: Block = undefined;
         self.logger.log("ParseNewBlock: ", .{});

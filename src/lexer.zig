@@ -78,18 +78,21 @@ pub const Lexer = struct {
             const text = self.data[self.cursor..];
             if (tokenizer.peek(text)) |token| {
                 self.cursor += token.text.len;
-                self.src.col += token.text.len;
 
-                if (token.kind == .BREAK) {
-                    self.src.row += 1;
-                    self.src.col = 0;
-                }
-
-                return .{
+                const tok = Token{
                     .kind = token.kind,
                     .text = token.text,
                     .src = self.src,
                 };
+
+                if (token.kind == .BREAK) {
+                    self.src.row += 1;
+                    self.src.col = 0;
+                } else {
+                    self.src.col += token.text.len;
+                }
+
+                return tok;
             }
         }
 

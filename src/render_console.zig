@@ -27,6 +27,9 @@ const numlist_indent_10 = zd.Text{ .style = .{}, .text = "     " };
 const numlist_indent_100 = zd.Text{ .style = .{}, .text = "      " };
 const numlist_indent_1000 = zd.Text{ .style = .{}, .text = "       " };
 
+const code_fence_style = zd.TextStyle{ .fg_color = .DarkYellow, .bold = true };
+const code_text_style = zd.TextStyle{ .bg_color = .DarkGrey, .fg_color = .Yellow };
+
 pub const RenderError = error{
     OutOfMemory,
     DiskQuota,
@@ -318,6 +321,15 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
         }
 
+        /// Get the width of the current leader_stack
+        pub fn getLeadersWidth(self: *Self) usize {
+            var col: usize = 0;
+            for (self.leader_stack.items) |text| {
+                col += text.text.len;
+            }
+            return col;
+        }
+
         // Top-Level Block Rendering Functions --------------------------------
 
         /// Render a generic Block (may be a Container or a Leaf)
@@ -576,9 +588,11 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a raw block of code
         fn renderCode(self: *Self, c: zd.Code) !void {
-            const bar_style = zd.TextStyle{ .fg_color = .DarkYellow, .bold = true };
-            const text_style = zd.TextStyle{ .bg_color = .DarkGrey, .fg_color = .Yellow };
-            self.startStyle(bar_style);
+            if (self.column > 0) {
+                self.renderBreak();
+                self.writeLeaders();
+            }
+            self.startStyle(code_fence_style);
             self.print("━━━━━━━━━━━━━━━━━━━━ <{s}>", .{c.tag orelse "none"});
             self.renderBreak();
             self.resetStyle();
@@ -650,6 +664,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     try ranges.append(.{ .color = .Default, .content = source[idx..] });
                 }
 
+                self.writeLeaders();
                 for (ranges.items) |range| {
                     const style = zd.TextStyle{ .fg_color = range.color, .bg_color = .Default };
                     self.startStyle(style);
@@ -658,12 +673,16 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 }
             } else {
                 self.writeLeaders();
-                self.startStyle(text_style);
+                self.startStyle(code_fence_style);
                 self.wrapText(source);
-                self.endStyle(text_style);
+                self.endStyle(code_fence_style);
             }
 
-            self.startStyle(bar_style);
+            // if (self.column > 0) {
+            //     self.renderBreak();
+            //     self.writeLeaders();
+            // }
+            self.startStyle(code_fence_style);
             self.write("━━━━━━━━━━━━━━━━━━━━");
             self.resetStyle();
             self.renderBreak();

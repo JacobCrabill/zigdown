@@ -133,6 +133,23 @@ pub fn isEmptyLine(line: []const Token) bool {
     return false;
 }
 
+pub fn isWhitespace(token: Token) bool {
+    return switch (token.kind) {
+        .SPACE, .INDENT, .BREAK => true,
+        else => false,
+    };
+}
+
+/// Find the column of the first non-whitespace token
+pub fn findStartColumn(line: []const Token) usize {
+    for (line) |tok| {
+        if (isWhitespace(tok))
+            continue;
+        return tok.src.col;
+    }
+    return 0;
+}
+
 /// Check for the pattern "[ ]*[0-9]*[.][ ]+"
 pub fn isOrderedListItem(line: []const Token) bool {
     var have_period: bool = false;
