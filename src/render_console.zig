@@ -594,10 +594,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a raw block of code
         fn renderCode(self: *Self, c: zd.Code) !void {
-            if (self.column > 0) {
-                self.renderBreak();
-                self.writeLeaders();
-            }
             self.startStyle(code_fence_style);
             self.print("━━━━━━━━━━━━━━━━━━━━ <{s}>", .{c.tag orelse "none"});
             self.renderBreak();
