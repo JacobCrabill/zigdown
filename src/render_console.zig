@@ -464,8 +464,14 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         fn renderListItem(self: *Self, list: zd.Container) !void {
-            for (list.children.items) |item| {
+            // TODO: Deal with breaks in between blocks
+            for (list.children.items, 0..) |item, i| {
                 try self.renderBlock(item);
+
+                if (i < list.children.items.len - 1) {
+                    self.renderBreak();
+                    self.writeLeaders();
+                }
             }
         }
 
