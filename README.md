@@ -16,23 +16,23 @@ Markdown files.
 
 - Headers
 - Basic text formatting (**Bold**, _italic_, ~underline~)
+- (Clickable) Links
 - Quote blocks
-- Code blocks
-  - Including syntax highlighting using TreeSitter
 - Unordered lists
 - Ordered lists
-- (Clickable) Links
+- Code blocks
+  - Including syntax highlighting using TreeSitter
 - Images (rendered to the console using the
   [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)
 
 ## Future Work
 
-- Task lists
-- Tables
-- Web-based images (fetch & display in-terminal)
-- Autolinks, references
-- Basic NeoVim integration (w/o images)
-- Complete NeoVim integration (w/ image rendering)
+1. Basic NeoVim integration (w/o images)
+2. Complete NeoVim integration (w/ image rendering)
+3. Task lists
+4. Tables
+5. Web-based images (fetch & display in-terminal)
+6. Autolinks, references
 
 ## Caveats
 
