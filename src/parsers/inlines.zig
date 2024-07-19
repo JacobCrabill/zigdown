@@ -307,7 +307,7 @@ pub const InlineParser = struct {
         const alt_start: usize = 1;
         const rb_idx: usize = utils.findFirstOf(line, 0, &.{.RBRACK}).?;
         const lp_idx: usize = rb_idx + 2;
-        const rp_idx: usize = utils.findFirstOf(line, 0, &.{.RPAREN}).?;
+        const rp_idx: usize = utils.findFirstOf(line, lp_idx, &.{.RPAREN}).?;
         const alt_text: []const Token = line[alt_start..rb_idx];
         const uri_text: []const Token = line[lp_idx..rp_idx];
 
