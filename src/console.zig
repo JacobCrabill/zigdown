@@ -52,9 +52,14 @@ pub const bg_default = ansi ++ "[49m";
 
 // Extended Background Colors
 pub const bg_dark_yellow = ansi ++ "[48;5;178m";
-pub const bg_purple_grey = ansi ++ "[48;5;170m";
+pub const bg_purple_grey = ansi ++ "[48;2;170;130;250m";
 pub const bg_dark_grey = ansi ++ "[48;5;235m";
 pub const bg_dark_red = ansi ++ "[48;5;125m";
+pub const bg_rgb_blue = ansi ++ "[48;2;120;141;216m";
+pub const bg_rgb_orange = ansi ++ "[48;2;255;151;0m";
+pub const bg_rgb_coral = ansi ++ "[48;2;215;100;155m";
+
+pub const bg_rgb_fmt = ansi ++ "[48;{d};{d};{d}m";
 
 // Basic Foreground Colors
 pub const fg_black = ansi ++ "[30m";
@@ -69,9 +74,14 @@ pub const fg_default = ansi ++ "[39m";
 
 // Extended Foreground Colors
 pub const fg_dark_yellow = ansi ++ "[38;5;178m";
-pub const fg_purple_grey = ansi ++ "[38;5;170m";
+pub const fg_purple_grey = ansi ++ "[38;2;170;130;250m";
 pub const fg_dark_grey = ansi ++ "[38;5;235m";
 pub const fg_dark_red = ansi ++ "[38;5;125m";
+pub const fg_rgb_blue = ansi ++ "[38;2;120;141;216m";
+pub const fg_rgb_orange = ansi ++ "[38;2;255;151;0m";
+pub const fg_rgb_coral = ansi ++ "[38;2;215;100;155m";
+
+pub const fg_rgb_fmt = ansi ++ "[38;{d};{d};{d}m";
 
 // 24-Bit Coloring
 // Format strings which take 3 u8's for (r, g, b)
@@ -112,42 +122,54 @@ const DebugStream = struct {
     }
 };
 
+pub fn getFgColor(color: Color) []const u8 {
+    return switch (color) {
+        .Black => fg_black,
+        .Red => fg_red,
+        .Green => fg_green,
+        .Yellow => fg_yellow,
+        .Blue => fg_blue,
+        .Cyan => fg_cyan,
+        .White => fg_white,
+        .Magenta => fg_magenta,
+        .DarkYellow => fg_dark_yellow,
+        .PurpleGrey => fg_purple_grey,
+        .DarkGrey => fg_dark_grey,
+        .DarkRed => fg_dark_red,
+        .Orange => fg_rgb_orange,
+        .Coral => fg_rgb_coral,
+        .Default => fg_default,
+    };
+}
+
+pub fn getBgColor(color: Color) []const u8 {
+    return switch (color) {
+        .Black => bg_black,
+        .Red => bg_red,
+        .Green => bg_green,
+        .Yellow => bg_yellow,
+        .Blue => bg_blue,
+        .Cyan => bg_cyan,
+        .White => bg_white,
+        .Magenta => bg_magenta,
+        .DarkYellow => bg_dark_yellow,
+        .PurpleGrey => bg_purple_grey,
+        .DarkGrey => bg_dark_grey,
+        .DarkRed => bg_dark_red,
+        .Orange => bg_rgb_orange,
+        .Coral => bg_rgb_coral,
+        .Default => bg_default,
+    };
+}
+
 /// Configure the terminal to start printing with the given foreground color
 pub fn startFgColor(stream: anytype, color: Color) void {
-    switch (color) {
-        .Black => stream.print(fg_black, .{}),
-        .Red => stream.print(fg_red, .{}),
-        .Green => stream.print(fg_green, .{}),
-        .Yellow => stream.print(fg_yellow, .{}),
-        .Blue => stream.print(fg_blue, .{}),
-        .Cyan => stream.print(fg_cyan, .{}),
-        .White => stream.print(fg_white, .{}),
-        .Magenta => stream.print(fg_magenta, .{}),
-        .DarkYellow => stream.print(fg_dark_yellow, .{}),
-        .PurpleGrey => stream.print(fg_purple_grey, .{}),
-        .DarkGrey => stream.print(fg_dark_grey, .{}),
-        .DarkRed => stream.print(fg_dark_red, .{}),
-        .Default => stream.print(fg_default, .{}),
-    }
+    stream.print("{s}", .{getFgColor(color)});
 }
 
 /// Configure the terminal to start printing with the given background color
 pub fn startBgColor(stream: anytype, color: Color) void {
-    switch (color) {
-        .Black => stream.print(bg_black, .{}),
-        .Red => stream.print(bg_red, .{}),
-        .Green => stream.print(bg_green, .{}),
-        .Yellow => stream.print(bg_yellow, .{}),
-        .Blue => stream.print(bg_blue, .{}),
-        .Cyan => stream.print(bg_cyan, .{}),
-        .White => stream.print(bg_white, .{}),
-        .Magenta => stream.print(bg_magenta, .{}),
-        .DarkYellow => stream.print(bg_dark_yellow, .{}),
-        .PurpleGrey => stream.print(bg_purple_grey, .{}),
-        .DarkGrey => stream.print(bg_dark_grey, .{}),
-        .DarkRed => stream.print(bg_dark_red, .{}),
-        .Default => stream.print(bg_default, .{}),
-    }
+    stream.print("{s}", .{getBgColor(color)});
 }
 
 /// Configure the terminal to start printing with the given (single) style

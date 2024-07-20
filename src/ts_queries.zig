@@ -128,11 +128,11 @@ const highlights_map = std.ComptimeStringMap(utils.Color, .{
     .{ "function", .Cyan },
     .{ "function.special", .Cyan },
     .{ "variable", .Cyan },
-    .{ "constant", .Yellow },
-    .{ "constant.builtin", .Yellow },
-    .{ "variable.builtin", .Yellow },
-    .{ "comment", .DarkRed },
-    .{ "escape", .DarkRed },
+    .{ "constant", .White },
+    .{ "constant.builtin", .White },
+    .{ "variable.builtin", .White },
+    .{ "comment", .Coral },
+    .{ "escape", .Coral },
 });
 
 /// Get the highlight color for a specific capture group

@@ -27,8 +27,8 @@ const numlist_indent_10 = zd.Text{ .style = .{}, .text = "     " };
 const numlist_indent_100 = zd.Text{ .style = .{}, .text = "      " };
 const numlist_indent_1000 = zd.Text{ .style = .{}, .text = "       " };
 
-const code_fence_style = zd.TextStyle{ .fg_color = .DarkYellow, .bold = true };
-const code_text_style = zd.TextStyle{ .bg_color = .DarkGrey, .fg_color = .Yellow };
+const code_fence_style = zd.TextStyle{ .fg_color = .PurpleGrey, .bold = true };
+const code_text_style = zd.TextStyle{ .bg_color = .Black, .fg_color = .PurpleGrey };
 
 pub const RenderError = error{
     OutOfMemory,
@@ -99,39 +99,11 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         pub fn startFgColor(self: *Self, fg_color: zd.Color) void {
-            switch (fg_color) {
-                .Black => self.writeno(cons.fg_black),
-                .Red => self.writeno(cons.fg_red),
-                .Green => self.writeno(cons.fg_green),
-                .Yellow => self.writeno(cons.fg_yellow),
-                .Blue => self.writeno(cons.fg_blue),
-                .Magenta => self.writeno(cons.fg_magenta),
-                .Cyan => self.writeno(cons.fg_cyan),
-                .White => self.writeno(cons.fg_white),
-                .DarkYellow => self.writeno(cons.fg_dark_yellow),
-                .PurpleGrey => self.writeno(cons.fg_purple_grey),
-                .DarkGrey => self.writeno(cons.fg_dark_grey),
-                .DarkRed => self.writeno(cons.fg_dark_red),
-                .Default => self.writeno(cons.fg_default),
-            }
+            self.writeno(cons.getFgColor(fg_color));
         }
 
         pub fn startBgColor(self: *Self, bg_color: zd.Color) void {
-            switch (bg_color) {
-                .Black => self.writeno(cons.bg_black),
-                .Red => self.writeno(cons.bg_red),
-                .Green => self.writeno(cons.bg_green),
-                .Yellow => self.writeno(cons.bg_yellow),
-                .Blue => self.writeno(cons.bg_blue),
-                .Magenta => self.writeno(cons.bg_magenta),
-                .Cyan => self.writeno(cons.bg_cyan),
-                .White => self.writeno(cons.bg_white),
-                .DarkYellow => self.writeno(cons.bg_dark_yellow),
-                .PurpleGrey => self.writeno(cons.bg_purple_grey),
-                .DarkGrey => self.writeno(cons.bg_dark_grey),
-                .DarkRed => self.writeno(cons.bg_dark_red),
-                .Default => self.writeno(cons.bg_default),
-            }
+            self.writeno(cons.getBgColor(bg_color));
         }
 
         /// Configure the terminal to start printing with the given (single) style
@@ -290,6 +262,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     self.writeLeaders();
                 }
                 for (word) |c| {
+                    if (c == '\r') {
+                        continue;
+                    }
                     if (c == '\n') {
                         self.renderBreak();
                         self.writeLeaders();
@@ -711,7 +686,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         fn renderInlineCode(self: *Self, code: zd.Codespan) !void {
             const cur_style = self.cur_style;
             self.resetStyle();
-            const style = zd.TextStyle{ .fg_color = .DarkYellow, .bg_color = .DarkGrey };
+            const style = code_text_style;
             self.startStyle(style);
             self.wrapText(code.text);
             self.resetStyle();

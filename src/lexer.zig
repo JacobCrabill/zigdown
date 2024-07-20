@@ -44,11 +44,6 @@ pub const Lexer = struct {
         return tokens;
     }
 
-    /// Increment the cursor until we reach a non-whitespace character
-    pub fn trimLeft(self: *Lexer) void {
-        while (self.cursor < self.data.len and zd.isWhitespace(self.data[self.cursor])) : (self.cursor += 1) {}
-    }
-
     /// Consume the remainder of the current line and return if a newline was found
     pub fn eatLine(self: *Lexer) bool {
         const end_opt: ?usize = std.mem.indexOfScalarPos(u8, self.data, self.cursor, '\n');
