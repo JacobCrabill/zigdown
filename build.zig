@@ -109,8 +109,7 @@ pub fn build(b: *std.Build) !void {
     lua_mod.linkSystemLibrary("lua5.1");
 
     // "Install" to the output dir using the correct naming convention to load with lua
-    // const copy_step = b.addInstallFileWithDir(lua_mod.getEmittedBin(), .lib, "lua_mod.so");
-    const copy_step = b.addInstallFileWithDir(lua_mod.getEmittedBin(), .lib, "zigdown_lua.so");
+    const copy_step = b.addInstallFileWithDir(lua_mod.getEmittedBin(), .{ .custom = "../lua/" }, "zigdown_lua.so");
     copy_step.step.dependOn(&lua_mod.step);
     b.getInstallStep().dependOn(&copy_step.step);
 

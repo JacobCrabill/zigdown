@@ -1,5 +1,5 @@
 -- For luajit 2.1.0 (Based on Lua 5.1)
-package.cpath = package.cpath .. ';./zig-out/lib/?.so'
+package.cpath = package.cpath .. ';./lua/?.so'
 local mylib = require('zigdown_lua')
 
 print(mylib.adder(40, 2))
