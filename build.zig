@@ -88,6 +88,32 @@ pub fn build(b: *std.Build) !void {
     };
     addExecutable(b, exe_config, exe_opts);
 
+    // Compile Zigdown as a Lua module
+    // Build export-module as a shared library for running via Lua
+    const lua_mod = b.addSharedLibrary(.{
+        .name = "zigdown_lua",
+        .root_source_file = b.path("src/lua_api.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    if (exe_opts.dependencies) |deplist| {
+        for (deplist) |dep| {
+            lua_mod.root_module.addImport(dep.name, dep.module);
+        }
+    }
+
+    // Point the compiler to the location of the Lua headers (lua.h and friends)
+    // Note that we require Lua 5.1, specifically
+    // This is compatible with the version of LuaJIT built into NeoVim
+    lua_mod.addIncludePath(.{ .path = "/usr/include/luajit-2.1" });
+    lua_mod.linkSystemLibrary("lua5.1");
+
+    // "Install" to the output dir using the correct naming convention to load with lua
+    // const copy_step = b.addInstallFileWithDir(lua_mod.getEmittedBin(), .lib, "lua_mod.so");
+    const copy_step = b.addInstallFileWithDir(lua_mod.getEmittedBin(), .lib, "zigdown_lua.so");
+    copy_step.step.dependOn(&lua_mod.step);
+    b.getInstallStep().dependOn(&copy_step.step);
+
     // Compile the TreeSitter query-fetcher executable
     const query_fetcher = ExeConfig{
         .version = .{ .major = 0, .minor = 1, .patch = 0 },
