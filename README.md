@@ -24,10 +24,10 @@ Markdown files.
   - Including syntax highlighting using TreeSitter
 - Images (rendered to the console using the
   [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)
+- Neovim integration (requires Lua 5.1 system libraries for building)
 
 ## Future Work
 
-1. Basic NeoVim integration (w/o images)
 2. Complete NeoVim integration (w/ image rendering)
 3. Task lists
 4. Tables

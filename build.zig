@@ -88,8 +88,8 @@ pub fn build(b: *std.Build) !void {
     };
     addExecutable(b, exe_config, exe_opts);
 
-    // Compile Zigdown as a Lua module
-    // Build export-module as a shared library for running via Lua
+    // Compile Zigdown as a Lua module compatible with Neovim / LuaJIT 5.1
+    // Requires LuaJIT 2.1 headers & Lua 5.1 library
     const lua_mod = b.addSharedLibrary(.{
         .name = "zigdown_lua",
         .root_source_file = b.path("src/lua_api.zig"),
