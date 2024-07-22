@@ -147,22 +147,7 @@ fn trimContinuationMarkersUnorderedList(line: []const Token) []const Token {
 }
 
 fn trimContinuationMarkersOrderedList(line: []const Token) []const Token {
-    // Find the first list-item marker "[0-9]+[.]"
-    // const trimmed = utils.trimLeadingWhitespace(line);
-    var ws_count: usize = 0;
-    for (line) |tok| {
-        if (tok.kind == .SPACE) {
-            ws_count += 1;
-        } else if (tok.kind == .INDENT) {
-            ws_count += 2;
-        } else {
-            break;
-        }
-    }
-    std.debug.assert(ws_count < line.len);
-    const trimmed = line[@min(ws_count, 2)..];
-    std.debug.assert(trimmed.len > 0);
-
+    const trimmed = utils.trimLeadingWhitespace(line);
     var have_dot: bool = false;
     for (trimmed, 0..) |tok, i| {
         switch (tok.kind) {
@@ -176,6 +161,7 @@ fn trimContinuationMarkersOrderedList(line: []const Token) []const Token {
                 if (have_dot and i + 1 < line.len)
                     return utils.trimLeadingWhitespace(trimmed[i + 1 ..]);
 
+                g_logger.printText(line, false);
                 std.debug.print("{s}-{d}: ERROR: Shouldn't be here! List line: '{any}'\n", .{
                     @src().fn_name,
                     @src().line,
@@ -830,7 +816,6 @@ pub const Parser = struct {
                         var p = zd.InlineParser.init(self.alloc, self.opts);
                         defer p.deinit();
                         l.inlines = p.parseInlines(l.raw_contents.items) catch unreachable;
-                        // self.parseInlines(&l.inlines, l.raw_contents.items) catch unreachable;
                     },
                 }
             },

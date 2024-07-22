@@ -28,7 +28,7 @@ const numlist_indent_100 = zd.Text{ .style = .{}, .text = "      " };
 const numlist_indent_1000 = zd.Text{ .style = .{}, .text = "       " };
 
 const code_fence_style = zd.TextStyle{ .fg_color = .PurpleGrey, .bold = true };
-const code_text_style = zd.TextStyle{ .bg_color = .Black, .fg_color = .PurpleGrey };
+const code_text_style = zd.TextStyle{ .bg_color = .DarkGrey, .fg_color = .PurpleGrey };
 
 pub const RenderError = error{
     OutOfMemory,
@@ -284,6 +284,26 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
         }
 
+        /// Write the text, keeping all characters (including whitespace),
+        /// handling indentation upon line breaks.
+        /// We don't actually insert additional newlines in this case
+        fn wrapTextRaw(self: *Self, text: []const u8) void {
+            const len = text.len;
+            if (len == 0) return;
+
+            for (text) |c| {
+                if (c == '\r') {
+                    continue;
+                }
+                if (c == '\n') {
+                    self.renderBreak();
+                    self.writeLeaders();
+                    continue;
+                }
+                self.write(&.{c});
+            }
+        }
+
         pub fn writeLeaders(self: *Self) void {
             const style = self.cur_style;
             self.resetStyle();
@@ -354,6 +374,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a Quote block
         pub fn renderQuote(self: *Self, block: zd.Container) !void {
+            self.writeLeaders();
             try self.leader_stack.append(quote_indent);
             if (!self.needs_leaders) {
                 self.startStyle(quote_indent.style);
@@ -566,6 +587,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a raw block of code
         fn renderCode(self: *Self, c: zd.Code) !void {
+            self.writeLeaders();
             self.startStyle(code_fence_style);
             self.print("━━━━━━━━━━━━━━━━━━━━ <{s}>", .{c.tag orelse "none"});
             self.renderBreak();
@@ -642,13 +664,13 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 for (ranges.items) |range| {
                     const style = zd.TextStyle{ .fg_color = range.color, .bg_color = .Default };
                     self.startStyle(style);
-                    self.wrapText(range.content);
+                    self.wrapTextRaw(range.content);
                     self.endStyle(style);
                 }
             } else {
                 self.writeLeaders();
                 self.startStyle(code_fence_style);
-                self.wrapText(source);
+                self.wrapTextRaw(source);
                 self.endStyle(code_fence_style);
             }
 

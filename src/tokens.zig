@@ -16,7 +16,7 @@ pub const TokenType = enum {
     SPACE,
     BREAK,
     HASH,
-    CODE_BLOCK,
+    CODE_BLOCK, // TODO: Change to 'DIRECTIVE' with # of ticks
     CODE_INLINE,
     PLUS,
     MINUS,

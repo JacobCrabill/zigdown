@@ -31,10 +31,14 @@ export fn adder(lua: ?*LuaState) callconv(.C) c_int {
 }
 
 export fn render_markdown(lua: ?*LuaState) callconv(.C) c_int {
+    // Markdown text to render
     var len: usize = 0;
     const input_a: [*c]const u8 = c.lua_tolstring(lua, 1, &len);
     const input: []const u8 = input_a[0..len];
     const alloc = std.heap.page_allocator;
+
+    // Number of columns to render (output width)
+    const cols: c_long = c.lua_tointeger(lua, 2);
 
     // Parse the input text
     const opts = zd.parser.ParserOpts{ .copy_input = false, .verbose = false };
@@ -54,7 +58,7 @@ export fn render_markdown(lua: ?*LuaState) callconv(.C) c_int {
     const render_opts = zd.render.render_console.RenderOpts{
         .root_dir = null, // TODO
         .indent = 2,
-        .width = 90, // TODO
+        .width = @intCast(cols),
     };
     var c_renderer = zd.consoleRenderer(buffer.writer(), md.allocator(), render_opts);
     defer c_renderer.deinit();

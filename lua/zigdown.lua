@@ -55,7 +55,6 @@ function M.setup(opts)
   M.opts = opts or {}
 
   zd_plugin_root = path_append(script_dir(), "..")
-  vim.print("Zigdown plugin root: " .. zd_plugin_root)
 
   -- Check if the plugin has been built yet. Build it if not.
   local function file_exists(name)
@@ -155,8 +154,10 @@ function M.render_current_buffer()
     zigdown = require('zigdown_lua')
   end
 
+  local src_win = vim.api.nvim_get_current_win()
+  local cols = vim.api.nvim_win_get_width(src_win)
   local content = buffer_to_string(0)
-  local output = zigdown.render_markdown(content)
+  local output = zigdown.render_markdown(content, cols)
 
   display_content(vim.split(output, "\n"))
 end
