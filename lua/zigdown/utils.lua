@@ -57,9 +57,23 @@ function M.parent_dir(file)
   return parent
 end
 
+-- Get the root of our Zigdown project
+function M.get_zigdown_root()
+  return M.parent_dir(M.parent_dir(M.script_dir()))
+end
+
+-- Check if the given file exists
+function M.file_exists(name)
+  local f = io.open(name, "r")
+  return f ~= nil and io.close(f)
+end
+
 -- Create a vertical split if we don't already have one
 ---@return table: The source and destination windows of the new split view
-function M.setup_window_spilt()
+function M.setup_window_spilt(dest_win, dest_buf)
+  if dest_win ~= nil then
+    vim.api.nvim_win_close(dest_win, false)
+  end
   -- If we don't already have a preview window open, open one
   local src_win = vim.api.nvim_get_current_win()
   local wins = vim.api.nvim_list_wins()
@@ -67,7 +81,7 @@ function M.setup_window_spilt()
     vim.cmd('vsplit')
     wins = vim.api.nvim_list_wins()
   end
-  local dest_win = wins[#wins]
+  dest_win = wins[#wins]
   vim.api.nvim_set_current_win(dest_win)
 
   return { source = src_win, dest = dest_win }

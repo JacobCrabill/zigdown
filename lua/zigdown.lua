@@ -1,10 +1,11 @@
 local utils = require "zigdown.utils"
 local build = require "zigdown.build"
+local render = require "zigdown.render"
 
 -- For luajit 2.1.0 (Based on Lua 5.1)
 -- Import the shared library containing our Lua API to Zigdown
 local zigdown = nil
-local plugin_root = utils.parent_dir(utils.script_dir())
+local plugin_root = utils.get_zigdown_root()
 vim.opt.runtimepath:append(plugin_root)
 
 -- Our Plugin Module Table
@@ -19,17 +20,14 @@ local zig_ver = "0.12.1"
 local buf = nil      -- Buffer used for rendering
 local job_id = nil   -- PID of render process (cat to term)
 local tmp_file = nil -- tmp file containing rendered output
+local dest_win = nil
 
 --- Setup the plugin with user-provided options
 function M.setup(opts)
   M.opts = opts or {}
 
   -- Check if the plugin has been built yet. Build it if not.
-  local function file_exists(name)
-   local f = io.open(name, "r")
-   return f ~= nil and io.close(f)
-  end
-  if not file_exists(utils.script_dir() .. "/zigdown_lua.so") then
+  if not utils.file_exists(utils.script_dir() .. "/zigdown_lua.so") then
     build.install(zig_ver, M.root)
   end
 
@@ -51,11 +49,8 @@ local buffer_to_string = function(bufnr)
   return table.concat(content, "\n")
 end
 
-function M.display_content(content)
+function M.display_content(wins, content)
   utils.stop_job(job_id)
-
-  -- If we don't already have a preview window open, open one
-  local wins = utils.setup_window_spilt()
 
   -- Create an autocmd group to automatically re-render the buffer upon save
   -- (Effectively a live preview pane)
@@ -68,6 +63,7 @@ function M.display_content(content)
 
   -- Create a fresh buffer (delete existing if needed)
   if buf ~= nil then
+    vim.print("Clearing render buffer")
     vim.api.nvim_win_set_buf(wins.dest, buf)
     vim.cmd("Kwbd")
   end
@@ -112,13 +108,15 @@ function M.render_current_buffer()
     zigdown = build.load_module()
   end
 
-  local wins = utils.setup_window_spilt()
-  local cols = vim.api.nvim_win_get_width(wins.source) - 6
+  -- Render the Markdown using an external process
+  -- Runs the prebuilt 'zigdown' binary in a subshell to a new terminal
+  render.render_file(vim.api.nvim_buf_get_name(0))
 
-  local content = buffer_to_string(0)
-  local output = zigdown.render_markdown(content, cols)
-
-  M.display_content(vim.split(output, "\n"))
+  -- Render the Markdown in-process using the Lua module
+  -- Still a WIP to use the Lua module effectively
+  -- Problem is not the rendering, but the dumping of the rendered output
+  -- to a terminal to have the terminal render the ANSI escape sequences
+  -- render.render_buffer(0)
 end
 
 

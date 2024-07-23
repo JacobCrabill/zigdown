@@ -48,10 +48,8 @@ function M.build_zigdown()
 
   -- Remove the archive after completion
   if vim.fn.filereadable(M.tarball) == 1 then
-    local success = os.remove(M.tarball)
-    if not success then
-      return vim.notify("Existing zig archive could not be removed!", vim.log.levels.ERROR)
-    end
+    vim.fn.delete(M.tarball)
+    M.tarball = ''
   end
 end
 
