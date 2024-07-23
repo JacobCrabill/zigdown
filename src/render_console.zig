@@ -603,7 +603,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         fn renderCode(self: *Self, c: zd.Code) !void {
             self.writeLeaders();
             self.startStyle(code_fence_style);
-            self.print("╭━━━━━━━━━━━━━━━━━━━━ <{s}>", .{c.tag orelse "none"});
+            self.print("╭──────────────────── <{s}>", .{c.tag orelse "none"});
             self.renderBreak();
             self.resetStyle();
 
@@ -694,7 +694,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.resetLine();
             self.writeLeaders();
             self.startStyle(code_fence_style);
-            self.write("╰━━━━━━━━━━━━━━━━━━━━");
+            self.write("╰────────────────────");
             self.resetStyle();
             self.renderBreak();
         }
