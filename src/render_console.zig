@@ -29,6 +29,7 @@ const numlist_indent_1000 = zd.Text{ .style = .{}, .text = "       " };
 
 const code_fence_style = zd.TextStyle{ .fg_color = .PurpleGrey, .bold = true };
 const code_text_style = zd.TextStyle{ .bg_color = .DarkGrey, .fg_color = .PurpleGrey };
+const code_indent = zd.Text{ .style = code_fence_style, .text = "│ " };
 
 pub const RenderError = error{
     OutOfMemory,
@@ -228,11 +229,11 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// ----------------------------------------------
         /// Private implementation methods
-        fn renderBegin(self: *Self) !void {
+        fn renderBegin(self: *Self) void {
             self.renderBreak();
         }
 
-        fn renderEnd(self: *Self) !void {
+        fn renderEnd(self: *Self) void {
             self.printno(cons.move_left, .{1000});
             self.writeno(cons.clear_line);
             self.column = 0;
@@ -363,13 +364,13 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a Document block (contains only other blocks)
         pub fn renderDocument(self: *Self, doc: zd.Container) !void {
-            try self.renderBegin();
+            self.renderBegin();
             for (doc.children.items) |block| {
                 try self.renderBlock(block);
                 if (self.column > self.opts.indent) self.renderBreak(); // Begin new line
                 if (!zd.isBreak(block)) self.renderBreak(); // Add blank line
             }
-            try self.renderEnd();
+            self.renderEnd();
         }
 
         /// Render a Quote block
@@ -483,6 +484,19 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.startStyle(cur_style);
         }
 
+        /// Clear and reset the current line
+        fn resetLine(self: *Self) void {
+            // Some styles fill the remainder of the line, even after a '\n'
+            // Reset all styles before wrting the newline and indent
+            const cur_style = self.cur_style;
+            self.resetStyle();
+            self.writeno(cons.clear_line_end);
+            self.writeno(cons.move_home);
+            self.column = 0;
+            self.writeNTimes(" ", self.opts.indent);
+            self.startStyle(cur_style);
+        }
+
         fn renderCentered(self: *Self, text: []const u8, style: zd.TextStyle, pad_char: []const u8) !void {
             const lpad: usize = (self.opts.width - text.len) / 2;
             const rpad: usize = self.opts.width - text.len - lpad;
@@ -589,9 +603,11 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         fn renderCode(self: *Self, c: zd.Code) !void {
             self.writeLeaders();
             self.startStyle(code_fence_style);
-            self.print("━━━━━━━━━━━━━━━━━━━━ <{s}>", .{c.tag orelse "none"});
+            self.print("╭━━━━━━━━━━━━━━━━━━━━ <{s}>", .{c.tag orelse "none"});
             self.renderBreak();
             self.resetStyle();
+
+            try self.leader_stack.append(code_indent);
 
             const language = c.tag orelse "none";
             const source = c.text orelse "";
@@ -674,8 +690,11 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 self.endStyle(code_fence_style);
             }
 
+            _ = self.leader_stack.pop();
+            self.resetLine();
+            self.writeLeaders();
             self.startStyle(code_fence_style);
-            self.write("━━━━━━━━━━━━━━━━━━━━");
+            self.write("╰━━━━━━━━━━━━━━━━━━━━");
             self.resetStyle();
             self.renderBreak();
         }
