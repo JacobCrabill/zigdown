@@ -10,7 +10,7 @@ int main() {
 
 ```json
 {
-"foo": "bar",
-"baz": 2
+  "foo": "bar",
+  "baz": 2
 }
 ```
