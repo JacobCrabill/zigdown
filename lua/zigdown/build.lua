@@ -67,7 +67,8 @@ end
 -- Install the required version of Zig to do so
 ---@param zig_ver string Version of Zig to use, e.g. "0.12.1"
 ---@param root string Root directory of the package to build
-function M.install(zig_ver, root)
+---@param load_lib boolean Load the build shared lib as a Lua module
+function M.install(zig_ver, root, load_lib)
   local raw_os = vim.loop.os_uname().sysname
   local raw_arch = jit.arch
 
@@ -106,7 +107,9 @@ function M.install(zig_ver, root)
       M.build_zigdown()
 
       -- Now that the module is built, import it
-      M.zigdown = M.load_module()
+      if load_lib then
+        M.zigdown = M.load_module()
+      end
     end),
   }
 

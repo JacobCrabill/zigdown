@@ -41,6 +41,8 @@ pub fn build(b: *std.Build) !void {
         optimize = .ReleaseFast;
     }
 
+    const build_lua = b.option(bool, "lua", "Build Zigdown as a Lua module");
+
     // Export the zigdown module to downstream consumers
     const mod = b.addModule("zigdown", .{
         .root_source_file = .{ .path = "src/zigdown.zig" },
@@ -70,6 +72,14 @@ pub fn build(b: *std.Build) !void {
     var dep_array = [_]Dependency{ stbi_dep, clap_dep, treez_dep, mod_dep };
     const deps: []Dependency = &dep_array;
 
+    // TODO
+    // const luajit = b.dependency("luajit", .{ .optimize = optimize, .target = target });
+    // const luajit_dep = Dependency{ .name = "luajit", .module = luajit.module("luajit") };
+    // const lua51 = b.dependency("lua51", .{ .optimize = optimize, .target = target });
+    // const lua51_dep = Dependency{ .name = "lua51", .module = lua51.module("lua51") };
+    // var lua_deps_array = [_]Dependency{ luajit_dep, lua51_dep };
+    // const lua_deps: []Dependency = &lua_deps_array;
+
     const exe_opts = BuildOpts{
         .target = target,
         .optimize = optimize,
@@ -88,30 +98,34 @@ pub fn build(b: *std.Build) !void {
     };
     addExecutable(b, exe_config, exe_opts);
 
-    // Compile Zigdown as a Lua module compatible with Neovim / LuaJIT 5.1
-    // Requires LuaJIT 2.1 headers & Lua 5.1 library
-    const lua_mod = b.addSharedLibrary(.{
-        .name = "zigdown_lua",
-        .root_source_file = b.path("src/lua_api.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    if (exe_opts.dependencies) |deplist| {
-        for (deplist) |dep| {
-            lua_mod.root_module.addImport(dep.name, dep.module);
+    if (build_lua) {
+        // Compile Zigdown as a Lua module compatible with Neovim / LuaJIT 5.1
+        // Requires LuaJIT 2.1 headers & Lua 5.1 library
+        const lua_mod = b.addSharedLibrary(.{
+            .name = "zigdown_lua",
+            .root_source_file = b.path("src/lua_api.zig"),
+            .target = target,
+            .optimize = optimize,
+        });
+        if (exe_opts.dependencies) |deplist| {
+            for (deplist) |dep| {
+                lua_mod.root_module.addImport(dep.name, dep.module);
+            }
         }
+
+        // Point the compiler to the location of the Lua headers (lua.h and friends)
+        // Note that we require Lua 5.1, specifically
+        // This is compatible with the version of LuaJIT built into NeoVim
+        lua_mod.addIncludePath(.{ .path = "/usr/include/luajit-2.1" });
+        lua_mod.linkSystemLibrary("lua5.1");
+
+        // "Install" to the output dir using the correct naming convention to load with lua
+        const copy_step = b.addInstallFileWithDir(lua_mod.getEmittedBin(), .{ .custom = "../lua/" }, "zigdown_lua.so");
+        copy_step.step.dependOn(&lua_mod.step);
+        b.getInstallStep().dependOn(&copy_step.step);
+        const step = b.step("zigdown-lua", "Build Zigdown as a Lua module");
+        step.dependOn(&copy_step.step);
     }
-
-    // Point the compiler to the location of the Lua headers (lua.h and friends)
-    // Note that we require Lua 5.1, specifically
-    // This is compatible with the version of LuaJIT built into NeoVim
-    lua_mod.addIncludePath(.{ .path = "/usr/include/luajit-2.1" });
-    lua_mod.linkSystemLibrary("lua5.1");
-
-    // "Install" to the output dir using the correct naming convention to load with lua
-    const copy_step = b.addInstallFileWithDir(lua_mod.getEmittedBin(), .{ .custom = "../lua/" }, "zigdown_lua.so");
-    copy_step.step.dependOn(&lua_mod.step);
-    b.getInstallStep().dependOn(&copy_step.step);
 
     // Compile the TreeSitter query-fetcher executable
     const query_fetcher = ExeConfig{
