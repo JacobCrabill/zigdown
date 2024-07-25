@@ -77,11 +77,13 @@ pub const Heading = struct {
 };
 
 /// Raw code or other preformatted content
+/// TODO: Split into "Code" and "Directive"
 pub const Code = struct {
     alloc: Allocator = undefined,
     // The opening tag, e.g. "```", that has to be matched to end the block
     opener: ?[]const u8 = null,
     tag: ?[]const u8 = null,
+    directive: ?[]const u8 = null,
     text: ?[]const u8 = "",
 
     pub fn init(alloc: Allocator) Code {

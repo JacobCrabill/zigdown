@@ -32,12 +32,13 @@ fn print_usage(alloc: std.mem.Allocator) void {
         \\
     ;
 
+    const stdout = std.io.getStdOut().writer();
     const Green = TextStyle{ .fg_color = .Green, .bold = true };
     const White = TextStyle{ .fg_color = .White };
-    cons.printStyled(std.debug, Green, "\nUsage:\n", .{});
-    cons.printStyled(std.debug, White, usage, .{arg0});
-    cons.printStyled(std.debug, Green, "Options:\n", .{});
-    cons.printStyled(std.debug, White, options, .{});
+    cons.printStyled(stdout, Green, "\nUsage:\n", .{});
+    cons.printStyled(stdout, White, usage, .{arg0});
+    cons.printStyled(stdout, Green, "Options:\n", .{});
+    cons.printStyled(stdout, White, options, .{});
 }
 
 pub fn main() !void {
@@ -124,8 +125,8 @@ pub fn main() !void {
     }
 
     if (filename == null) {
-        cons.printColor(std.debug, .Red, "ERROR: ", .{});
-        cons.printColor(std.debug, .White, "No filename provided\n\n", .{});
+        cons.printColor(stdout, .Red, "ERROR: ", .{});
+        cons.printColor(stdout, .White, "No filename provided\n\n", .{});
         print_usage(alloc);
         std.process.exit(2);
     }
@@ -169,8 +170,8 @@ pub fn main() !void {
 
     const t2 = timer.read();
     if (timeit) {
-        cons.printColor(std.debug, .Green, "  Parsed in:   {d}us\n", .{t1 / 1000});
-        cons.printColor(std.debug, .Green, "  Rendered in: {d}us\n", .{(t2 - t1) / 1000});
+        cons.printColor(stdout, .Green, "  Parsed in:   {d}us\n", .{t1 / 1000});
+        cons.printColor(stdout, .Green, "  Rendered in: {d}us\n", .{(t2 - t1) / 1000});
     }
 }
 

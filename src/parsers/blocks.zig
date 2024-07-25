@@ -613,7 +613,6 @@ pub const Parser = struct {
     }
 
     pub fn handleLineCode(self: *Self, block: *Block, line: []const Token) bool {
-        // TODO: We need access to the complete raw line, w/o removing indents!
         self.logger.depth += 1;
         defer self.logger.depth -= 1;
         var code: *zd.Code = &block.Leaf.content.Code;
@@ -623,7 +622,7 @@ pub const Parser = struct {
             const trimmed_line = utils.trimLeadingWhitespace(line);
             if (trimmed_line.len < 1) return false;
 
-            // Code block opener. We allow nesting (TODO), so track the specific chars
+            // Code block opener. We allow nesting, so track the specific chars
             if (trimmed_line[0].kind == .DIRECTIVE) {
                 code.opener = trimmed_line[0].text;
             } else {
@@ -633,6 +632,14 @@ pub const Parser = struct {
             // Parse the directive tag (language, or special command like "warning")
             const end: usize = utils.findFirstOf(trimmed_line, 1, &.{.BREAK}) orelse trimmed_line.len;
             code.tag = zd.concatWords(block.allocator(), trimmed_line[1..end]) catch unreachable;
+
+            if (code.tag) |tag| {
+                // Check for a special directive block like "{warning}"
+                if (tag[0] == '{' and tag[tag.len - 1] == '}') {
+                    code.directive = tag[1 .. tag.len - 1];
+                }
+            }
+
             return true;
         }
 

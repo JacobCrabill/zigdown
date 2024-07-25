@@ -67,10 +67,11 @@ pub fn main() !void {
     _ = text2;
     const text = text1;
 
+    const stdout = std.io.getStdOut().writer();
     var style: zd.TextStyle = zd.TextStyle{ .fg_color = .Green, .bold = true };
-    cons.printStyled(std.debug, style, "\n────────────────── Test Document ──────────────────\n", .{});
-    std.debug.print("{s}\n", .{text});
-    cons.printStyled(std.debug, style, "───────────────────────────────────────────────────\n", .{});
+    cons.printStyled(stdout, style, "\n────────────────── Test Document ──────────────────\n", .{});
+    try stdout.print("{s}\n", .{text});
+    cons.printStyled(stdout, style, "───────────────────────────────────────────────────\n", .{});
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -81,22 +82,20 @@ pub fn main() !void {
     try p.parseMarkdown(text);
 
     style.fg_color = .Blue;
-    cons.printStyled(std.debug, style, "─────────────────── Parsed AST ────────────────────\n", .{});
+    cons.printStyled(stdout, style, "─────────────────── Parsed AST ────────────────────\n", .{});
     p.document.print(0);
-    cons.printStyled(std.debug, style, "───────────────────────────────────────────────────\n", .{});
-
-    const stdout = std.io.getStdOut().writer();
+    cons.printStyled(stdout, style, "───────────────────────────────────────────────────\n", .{});
 
     var hrenderer = htmlRenderer(stdout, alloc);
     style.fg_color = .Cyan;
-    cons.printStyled(std.debug, style, "────────────────── Rendered HTML ──────────────────\n", .{});
+    cons.printStyled(stdout, style, "────────────────── Rendered HTML ──────────────────\n", .{});
     try hrenderer.renderBlock(p.document);
-    cons.printStyled(std.debug, style, "───────────────────────────────────────────────────\n", .{});
+    cons.printStyled(stdout, style, "───────────────────────────────────────────────────\n", .{});
 
     style.fg_color = .Red;
-    cons.printStyled(std.debug, style, "─────────────────────── Rendered Text ───────────────────────\n", .{});
+    cons.printStyled(stdout, style, "─────────────────────── Rendered Text ───────────────────────\n", .{});
     var crenderer = consoleRenderer(stdout, alloc, .{ .width = 70 });
     defer crenderer.deinit();
     try crenderer.renderBlock(p.document);
-    cons.printStyled(std.debug, style, "─────────────────────────────────────────────────────────────\n", .{});
+    cons.printStyled(stdout, style, "─────────────────────────────────────────────────────────────\n", .{});
 }

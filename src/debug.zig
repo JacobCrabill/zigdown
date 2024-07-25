@@ -5,15 +5,17 @@ const zd = struct {
 };
 
 pub fn errorReturn(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) !void {
-    cons.printStyled(std.debug, .{ .fg_color = .Red, .bold = true }, "{s}-{d}: ERROR: ", .{ src.fn_name, src.line });
-    cons.printStyled(std.debug, .{ .bold = true }, fmt, args);
-    std.debug.print("\n", .{});
+    const stderr = std.io.getStdErr().writer();
+    cons.printStyled(stderr, .{ .fg_color = .Red, .bold = true }, "{s}-{d}: ERROR: ", .{ src.fn_name, src.line });
+    cons.printStyled(stderr, .{ .bold = true }, fmt, args);
+    try stderr.print("\n", .{});
     return error.ParseError;
 }
 
 pub fn errorMsg(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) void {
-    cons.printStyled(std.debug, .{ .fg_color = .Red, .bold = true }, "{s}-{d}: ERROR: ", .{ src.fn_name, src.line });
-    cons.printStyled(std.debug, .{ .bold = true }, fmt, args);
+    const stderr = std.io.getStdErr().writer();
+    cons.printStyled(stderr, .{ .fg_color = .Red, .bold = true }, "{s}-{d}: ERROR: ", .{ src.fn_name, src.line });
+    cons.printStyled(stderr, .{ .bold = true }, fmt, args);
     std.debug.print("\n", .{});
 }
 

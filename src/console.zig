@@ -161,38 +161,38 @@ pub fn getBgColor(color: Color) []const u8 {
 
 /// Configure the terminal to start printing with the given foreground color
 pub fn startFgColor(stream: anytype, color: Color) void {
-    stream.print("{s}", .{getFgColor(color)});
+    stream.print("{s}", .{getFgColor(color)}) catch unreachable;
 }
 
 /// Configure the terminal to start printing with the given background color
 pub fn startBgColor(stream: anytype, color: Color) void {
-    stream.print("{s}", .{getBgColor(color)});
+    stream.print("{s}", .{getBgColor(color)}) catch unreachable;
 }
 
 /// Configure the terminal to start printing with the given (single) style
 pub fn startStyle(stream: anytype, style: Style) void {
     switch (style) {
-        .Bold => stream.print(text_bold, .{}),
-        .Italic => stream.print(text_italic, .{}),
-        .Underline => stream.print(text_underline, .{}),
-        .Blink => stream.print(text_blink, .{}),
-        .FastBlink => stream.print(text_fastblink, .{}),
-        .Reverse => stream.print(text_reverse, .{}),
-        .Hide => stream.print(text_hide, .{}),
-        .Strike => stream.print(text_strike, .{}),
+        .Bold => stream.print(text_bold, .{}) catch unreachable,
+        .Italic => stream.print(text_italic, .{}) catch unreachable,
+        .Underline => stream.print(text_underline, .{}) catch unreachable,
+        .Blink => stream.print(text_blink, .{}) catch unreachable,
+        .FastBlink => stream.print(text_fastblink, .{}) catch unreachable,
+        .Reverse => stream.print(text_reverse, .{}) catch unreachable,
+        .Hide => stream.print(text_hide, .{}) catch unreachable,
+        .Strike => stream.print(text_strike, .{}) catch unreachable,
     }
 }
 
 /// Configure the terminal to start printing one or more styles with color
 pub fn startStyles(stream: anytype, style: TextStyle) void {
-    if (style.bold) stream.print(text_bold, .{});
-    if (style.italic) stream.print(text_italic, .{});
-    if (style.underline) stream.print(text_underline, .{});
-    if (style.blink) stream.print(text_blink, .{});
-    if (style.fastblink) stream.print(text_fastblink, .{});
-    if (style.reverse) stream.print(text_reverse, .{});
-    if (style.hide) stream.print(text_hide, .{});
-    if (style.strike) stream.print(text_strike, .{});
+    if (style.bold) stream.print(text_bold, .{}) catch unreachable;
+    if (style.italic) stream.print(text_italic, .{}) catch unreachable;
+    if (style.underline) stream.print(text_underline, .{}) catch unreachable;
+    if (style.blink) stream.print(text_blink, .{}) catch unreachable;
+    if (style.fastblink) stream.print(text_fastblink, .{}) catch unreachable;
+    if (style.reverse) stream.print(text_reverse, .{}) catch unreachable;
+    if (style.hide) stream.print(text_hide, .{}) catch unreachable;
+    if (style.strike) stream.print(text_strike, .{}) catch unreachable;
 
     if (style.fg_color) |fg_color| {
         startFgColor(stream, fg_color);
@@ -205,20 +205,20 @@ pub fn startStyles(stream: anytype, style: TextStyle) void {
 
 /// Reset all style in the terminal
 pub fn resetStyle(stream: anytype) void {
-    stream.print(ansi_end, .{});
+    stream.print(ansi_end, .{}) catch unreachable;
 }
 
 /// Print the text using the given color
 pub fn printColor(stream: anytype, color: Color, comptime fmt: []const u8, args: anytype) void {
     startFgColor(stream, color);
-    stream.print(fmt, args);
+    stream.print(fmt, args) catch unreachable;
     resetStyle(stream);
 }
 
 /// Print the text using the given style description
 pub fn printStyled(stream: anytype, style: TextStyle, comptime fmt: []const u8, args: anytype) void {
     startStyles(stream, style);
-    stream.print(fmt, args);
+    stream.print(fmt, args) catch unreachable;
     resetStyle(stream);
 }
 
@@ -344,7 +344,7 @@ fn printC(stream: anytype, c: anytype) void {
 }
 
 /// Print a box with a given width and height, using the given style
-pub fn printBox(stream: anytype, str: []const u8, width: usize, height: usize, style: Box, text_style: []const u8) void {
+pub fn printBox(stream: anytype, str: []const u8, width: usize, height: usize, style: Box, text_style: TextStyle) void {
     const len: usize = str.len;
     const w: usize = @max(len + 2, width);
     const h: usize = @max(height, 3);
@@ -353,7 +353,7 @@ pub fn printBox(stream: anytype, str: []const u8, width: usize, height: usize, s
     const rpad: usize = w - len - lpad - 2;
 
     // Setup overall text style
-    print(stream, "{s}", .{text_style});
+    startStyles(stream, text_style);
 
     // Top row (┌─...─┐)
     print(stream, "{s}", .{style.tl});
@@ -368,7 +368,7 @@ pub fn printBox(stream: anytype, str: []const u8, width: usize, height: usize, s
     var j: u8 = 0;
     const mid = (h - 2) / 2;
     while (j < h - 2) : (j += 1) {
-        print(stream, "{s}", .{text_style});
+        startStyles(stream, text_style);
 
         i = 0;
         print(stream, "{s}", .{style.vb});
@@ -392,7 +392,7 @@ pub fn printBox(stream: anytype, str: []const u8, width: usize, height: usize, s
 
     // Bottom row (└─...─┘)
     i = 0;
-    print(stream, "{s}", .{text_style});
+    startStyles(stream, text_style);
     printC(stream, style.bl);
     while (i < w - 2) : (i += 1) {
         printC(stream, style.hb);

@@ -159,7 +159,7 @@ pub const DirectiveTokenizer = struct {
         }
 
         // We only match 2 or more '`' characters
-        if (end > 1) {
+        if (end > 2) {
             std.debug.print("found directive: {s}\n", .{text[0..end]});
             return Token{
                 .kind = TokenType.DIRECTIVE,

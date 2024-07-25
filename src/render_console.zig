@@ -28,8 +28,10 @@ const numlist_indent_100 = zd.Text{ .style = .{}, .text = "      " };
 const numlist_indent_1000 = zd.Text{ .style = .{}, .text = "       " };
 
 const code_fence_style = zd.TextStyle{ .fg_color = .PurpleGrey, .bold = true };
+const warn_box_style = zd.TextStyle{ .fg_color = .Red, .bold = true };
 const code_text_style = zd.TextStyle{ .bg_color = .DarkGrey, .fg_color = .PurpleGrey };
 const code_indent = zd.Text{ .style = code_fence_style, .text = "│ " };
+const warn_indent = zd.Text{ .style = warn_box_style, .text = "│ " };
 
 pub const RenderError = error{
     OutOfMemory,
@@ -267,6 +269,57 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                         continue;
                     }
                     if (c == '\n') {
+                        self.renderBreak();
+                        self.writeLeaders();
+                        continue;
+                    }
+                    self.write(&.{c});
+                }
+                self.write(" ");
+            }
+
+            // TODO: This still feels fishy
+            // backup over the trailing " " we added if the given text didn't have one
+            if (!std.mem.endsWith(u8, text, " ") and self.column > self.opts.indent) {
+                self.printno(cons.move_left, .{1});
+                self.writeno(cons.clear_line_end);
+                self.column -= 1;
+            }
+        }
+
+        /// Write the text, wrapping (with the current indentation) at 'width' characters
+        fn wrapTextWithTrailer(self: *Self, text: []const u8, trailer: zd.Text) void {
+            const len = text.len;
+            if (len == 0) return;
+
+            if (std.mem.startsWith(u8, text, " ")) {
+                self.write(" ");
+            }
+
+            var words = std.mem.tokenizeAny(u8, text, " ");
+            while (words.next()) |word| {
+                // idk if there's a cleaner way to do this...
+                const should_wrap: bool = (self.column + word.len + trailer.text.len + self.opts.indent) >= self.opts.width;
+                if (self.column > self.opts.indent and should_wrap) {
+                    // std.debug.print("col: {d}, width: {d}, indent: {d}\n", .{ self.column, self.opts.width, self.opts.indent });
+                    // WHY DOES THIS WORK???  MAGIC NUMBERS!!!! :( ;(
+                    self.writeNTimes(" ", self.opts.width + 2 * self.opts.indent - (self.column + trailer.text.len));
+                    self.startStyle(trailer.style);
+                    self.write(trailer.text);
+                    self.resetStyle();
+                    self.renderBreak();
+                    self.writeLeaders();
+                }
+                for (word) |c| {
+                    if (c == '\r') {
+                        continue;
+                    }
+                    if (c == '\n') {
+                        const count: usize = self.opts.width + self.opts.indent * 2 - self.column - trailer.text.len;
+                        self.writeNTimes(" ", count);
+                        self.startStyle(trailer.style);
+                        self.write(trailer.text);
+                        self.resetStyle();
                         self.renderBreak();
                         self.writeLeaders();
                         continue;
@@ -601,6 +654,10 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a raw block of code
         fn renderCode(self: *Self, c: zd.Code) !void {
+            if (c.directive) |_| {
+                try self.renderDirective(c);
+                return;
+            }
             self.writeLeaders();
             self.startStyle(code_fence_style);
             self.print("╭──────────────────── <{s}>", .{c.tag orelse "none"});
@@ -695,6 +752,38 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.writeLeaders();
             self.startStyle(code_fence_style);
             self.write("╰────────────────────");
+            self.resetStyle();
+            self.renderBreak();
+        }
+
+        fn renderDirective(self: *Self, d: zd.Code) !void {
+            const directive = d.directive orelse "note";
+
+            self.writeLeaders();
+            self.startStyle(warn_box_style);
+            self.print("╭─── {s} ", .{directive});
+            self.writeNTimes("─", self.opts.width - 9 - directive.len);
+            self.write("╮");
+            self.renderBreak();
+            self.resetStyle();
+
+            try self.leader_stack.append(warn_indent);
+            self.writeLeaders();
+
+            const source = d.text orelse "";
+
+            const trailer: zd.Text = .{ .text = " │", .style = warn_box_style };
+            self.wrapTextWithTrailer(source, trailer);
+
+            // cons.printBox(self.stream, source, self.opts.width, 10, cons.BoldBox, code_fence_style);
+
+            _ = self.leader_stack.pop();
+            self.resetLine();
+            self.writeLeaders();
+            self.startStyle(warn_box_style);
+            self.write("╰");
+            self.writeNTimes("─", self.opts.width - 4);
+            self.write("╯");
             self.resetStyle();
             self.renderBreak();
         }
