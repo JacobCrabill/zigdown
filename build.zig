@@ -98,7 +98,7 @@ pub fn build(b: *std.Build) !void {
     };
     addExecutable(b, exe_config, exe_opts);
 
-    if (build_lua) {
+    if (build_lua) |_| {
         // Compile Zigdown as a Lua module compatible with Neovim / LuaJIT 5.1
         // Requires LuaJIT 2.1 headers & Lua 5.1 library
         const lua_mod = b.addSharedLibrary(.{
