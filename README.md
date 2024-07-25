@@ -9,8 +9,9 @@ terminal or to HTML.
 This will likely forever be a WIP, but it currently supports the the most common features of simple
 Markdown files.
 
-> [!NOTE]
-> This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
+```{warning}
+This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
+```
 
 ## Features
 
@@ -108,4 +109,4 @@ queries to `$TS_CONFIG_DIR/queries`, which defaults to `$HOME/.config/tree-sitte
 
 ## Sample Render
 
-![Sample Render](sample-render.png)
+![Sample Render](sample-render-3.png)
