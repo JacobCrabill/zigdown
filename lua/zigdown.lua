@@ -18,11 +18,6 @@ M.use_lua_module = false
 -- Required version of the Zig compiler
 local zig_ver = "0.12.1"
 
--- Persistent variables
-local buf = nil      -- Buffer used for rendering
-local job_id = nil   -- PID of render process (cat to term)
-local tmp_file = nil -- tmp file containing rendered output
-
 --- Setup the plugin with user-provided options
 function M.setup(opts)
   M.opts = opts or {}

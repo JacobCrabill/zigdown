@@ -24,15 +24,16 @@ Markdown files.
   - Including syntax highlighting using TreeSitter
 - Images (rendered to the console using the
   [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)
-- Neovim integration (requires Lua 5.1 system libraries for building)
+- Neovim integration
+  - Optional: If you have Lua 5.1 system libraries, can build as a Lua plugin module
 
 ## Future Work
 
-2. Complete NeoVim integration (w/ image rendering)
-3. Task lists
-4. Tables
-5. Web-based images (fetch & display in-terminal)
-6. Autolinks, references
+1. Complete NeoVim integration (w/ image rendering)
+1. Task lists
+1. Tables
+1. Web-based images (fetch & display in-terminal)
+1. Autolinks, references
 
 ## Caveats
 
@@ -64,9 +65,25 @@ parsers and highlight queries for the languages you'd like to highlight. This ca
 building and installing each language into a location in your `$LD_LIBRARY_PATH` environment
 variable.
 
+### Using Zigdown
+
+The Zigdown cli tool can do this for you; for example, to download, build, and install the C and C++
+parsers and their highlight queries:
+
+```bash
+zigdown -p c,cpp # Assumes both exist at github.com/tree-sitter on the 'master' branch
+zigdown -p maxxnino:zig  # Specify the Github user; still assumes the 'master' branch
+zigdown -p tree-sitter:master:rust # Specify Github user, branch, and language
+```
+
+**TODO:** Load a color scheme and a capture name -> color mapping at runtime (from file) instead of
+a short hard-coded mapping.
+
 ### Installing Manually
 
-For example, to install the C++ parser from the default tree-sitter project on Github:
+You can also install manually if Zigdown doesn't properly fetch the repo for you (or if the repo is
+not setup in a standard manner and requires custom setup). For example, to install the C++ parser
+from the default tree-sitter project on Github:
 
 ```bash
 #!/usr/bin/env bash
@@ -88,20 +105,6 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.local/lib/
 In addition to having the parser libraries available for `dlopen`, you will also need the highlight
 queries. For this, use the provided bash script `./tools/fetch_queries.sh`. This will install the
 queries to `$TS_CONFIG_DIR/queries`, which defaults to `$HOME/.config/tree-sitter/queries`.
-
-### Using Zigdown
-
-The Zigdown cli tool can also do this for you; for example, to download, build, and install the C
-and C++ parsers and their highlight queries:
-
-```bash
-zigdown -p c,cpp # Assumes both exist at github.com/tree-sitter on the 'master' branch
-zigdown -p maxxnino:zig  # Specify the Github user; still assumes the 'master' branch
-zigdown -p tree-sitter:master:rust # Specify Github user, branch, and language
-```
-
-**TODO:** Load a color scheme and a capture name -> color mapping at runtime (from file) instead of
-a short hard-coded mapping.
 
 ## Sample Render
 

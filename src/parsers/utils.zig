@@ -240,7 +240,7 @@ pub fn isHeading(line: []const Token) bool {
 pub fn isCodeBlock(line: []const Token) bool {
     for (line) |tok| {
         switch (tok.kind) {
-            .CODE_BLOCK => return true,
+            .DIRECTIVE => return true,
             .SPACE, .INDENT => {},
             else => return false,
         }

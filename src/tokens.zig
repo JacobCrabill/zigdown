@@ -16,7 +16,7 @@ pub const TokenType = enum {
     SPACE,
     BREAK,
     HASH,
-    CODE_BLOCK, // TODO: Change to 'DIRECTIVE' with # of ticks
+    DIRECTIVE,
     CODE_INLINE,
     PLUS,
     MINUS,
@@ -126,7 +126,7 @@ pub fn LiteralTokenizer(comptime delim: []const u8, comptime kind: TokenType) ty
 /// Parser for a generic word
 pub const WordTokenizer = struct {
     pub fn peek(text: []const u8) ?Token {
-        var end = text.len;
+        var end = text.len; // TODO: Should be '0'?
         for (text, 0..) |c, i| {
             if (!std.ascii.isASCII(c) or std.ascii.isWhitespace(c) or zd.isPunctuation(c)) {
                 end = i;
@@ -145,11 +145,36 @@ pub const WordTokenizer = struct {
     }
 };
 
+/// Parser for a directive token
+pub const DirectiveTokenizer = struct {
+    pub fn peek(text: []const u8) ?Token {
+        if (text.len == 0) return null;
+
+        var end: usize = 0;
+        for (text, 0..) |c, i| {
+            if (c != '`') {
+                end = i;
+                break;
+            }
+        }
+
+        // We only match 2 or more '`' characters
+        if (end > 1) {
+            std.debug.print("found directive: {s}\n", .{text[0..end]});
+            return Token{
+                .kind = TokenType.DIRECTIVE,
+                .text = text[0..end],
+            };
+        }
+
+        return null;
+    }
+};
+
 /// Collect all available tokenizers
 pub const Tokenizers = .{
     LiteralTokenizer("\r\n", TokenType.BREAK),
     LiteralTokenizer("\n", TokenType.BREAK),
-    // LiteralTokenizer("  ", TokenType.INDENT),
     LiteralTokenizer("\t", TokenType.INDENT),
     LiteralTokenizer("***", TokenType.EMBOLD),
     LiteralTokenizer("_**", TokenType.EMBOLD),
@@ -159,7 +184,7 @@ pub const Tokenizers = .{
     LiteralTokenizer("___", TokenType.EMBOLD),
     LiteralTokenizer("**", TokenType.BOLD),
     LiteralTokenizer("__", TokenType.BOLD),
-    LiteralTokenizer("```", TokenType.CODE_BLOCK),
+    DirectiveTokenizer,
     SingularTokenizer('`', TokenType.CODE_INLINE),
     SingularTokenizer(' ', TokenType.SPACE),
     SingularTokenizer('#', TokenType.HASH),
@@ -206,7 +231,7 @@ pub fn typeStr(kind: TokenType) []const u8 {
         .SPACE => "SPACE",
         .BREAK => "BREAK",
         .HASH => "HASH",
-        .CODE_BLOCK => "CODE_BLOCK",
+        .DIRECTIVE => "DIRECTIVE",
         .CODE_INLINE => "CODE_INLINE",
         .PLUS => "PLUS",
         .MINUS => "MINUS",

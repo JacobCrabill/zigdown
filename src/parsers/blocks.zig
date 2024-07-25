@@ -624,8 +624,7 @@ pub const Parser = struct {
             if (trimmed_line.len < 1) return false;
 
             // Code block opener. We allow nesting (TODO), so track the specific chars
-            // ==== TODO: only "```" gets tokenized; allow variable tokens! ====
-            if (trimmed_line[0].kind == .CODE_BLOCK) {
+            if (trimmed_line[0].kind == .DIRECTIVE) {
                 code.opener = trimmed_line[0].text;
             } else {
                 return false;
@@ -641,7 +640,7 @@ pub const Parser = struct {
         // Check if we have the closing code block token on this line
         var have_closer: bool = false;
         for (self.cur_line) |tok| {
-            if (tok.kind == .CODE_BLOCK and std.mem.eql(u8, tok.text, code.opener.?)) {
+            if (tok.kind == .DIRECTIVE and std.mem.eql(u8, tok.text, code.opener.?)) {
                 have_closer = true;
                 break;
             }
@@ -771,7 +770,7 @@ pub const Parser = struct {
                 if (!self.handleLineHeading(&b, line))
                     try errorReturn(@src(), "Cannot parse line as heading: {any}", .{line});
             },
-            .CODE_BLOCK => {
+            .DIRECTIVE => {
                 b = Block.initLeaf(self.alloc, .Code, col);
                 if (!self.handleLineCode(&b, line))
                     try errorReturn(@src(), "Cannot parse line as code: {any}", .{line});
