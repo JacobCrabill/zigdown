@@ -202,7 +202,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.stream.writeAll(bytes) catch |err| {
                 errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
             };
-            self.column += bytes.len;
+            self.column += std.unicode.utf8CountCodepoints(bytes) catch bytes.len;
         }
 
         /// Write an array of bytes to the underlying writer, without updating the current column
@@ -260,7 +260,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             var words = std.mem.tokenizeAny(u8, text, " ");
             while (words.next()) |word| {
                 // idk if there's a cleaner way to do this...
-                if (self.column > self.opts.indent and self.column + word.len > self.opts.width) {
+                if (self.column > self.opts.indent and self.column + word.len + self.opts.indent > self.opts.width) {
                     self.renderBreak();
                     self.writeLeaders();
                 }
@@ -288,6 +288,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Write the text, wrapping (with the current indentation) at 'width' characters
+        /// TODO: Probably should simply make this "wrapTextBox" and bake in the knowledge
+        /// that we're using a 2-char unicode leader/trailer that's actually 5 bytes (UTF-8)
         fn wrapTextWithTrailer(self: *Self, text: []const u8, trailer: zd.Text) void {
             const len = text.len;
             if (len == 0) return;
@@ -296,14 +298,15 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 self.write(" ");
             }
 
+            const trailer_len = std.unicode.utf8CountCodepoints(trailer.text) catch trailer.text.len;
+
             var words = std.mem.tokenizeAny(u8, text, " ");
             while (words.next()) |word| {
+                const word_len = std.unicode.utf8CountCodepoints(word) catch word.len;
                 // idk if there's a cleaner way to do this...
-                const should_wrap: bool = (self.column + word.len + trailer.text.len + self.opts.indent) >= self.opts.width;
+                const should_wrap: bool = (self.column + word_len + trailer_len + self.opts.indent) >= self.opts.width;
                 if (self.column > self.opts.indent and should_wrap) {
-                    // std.debug.print("col: {d}, width: {d}, indent: {d}\n", .{ self.column, self.opts.width, self.opts.indent });
-                    // WHY DOES THIS WORK???  MAGIC NUMBERS!!!! :( ;(
-                    self.writeNTimes(" ", self.opts.width + 2 * self.opts.indent - (self.column + trailer.text.len));
+                    self.writeNTimes(" ", self.opts.width - (self.column + trailer_len + self.opts.indent));
                     self.startStyle(trailer.style);
                     self.write(trailer.text);
                     self.resetStyle();
@@ -315,7 +318,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                         continue;
                     }
                     if (c == '\n') {
-                        const count: usize = self.opts.width + self.opts.indent * 2 - self.column - trailer.text.len;
+                        const count: usize = self.opts.width - (self.column + trailer_len + self.opts.indent);
                         self.writeNTimes(" ", count);
                         self.startStyle(trailer.style);
                         self.write(trailer.text);
@@ -624,10 +627,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             // Indent
             self.writeNTimes(pad_char, 4);
             self.write(" ");
-            if (pad_char.len > 1) {
-                // Handle Unicode characters whose visible size is 1 but byte size is > 1
-                self.column -= 4 * (pad_char.len - 1);
-            }
 
             // Content
             for (leaf.inlines.items) |item| {
@@ -637,9 +636,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             // Right Pad
             if (self.column < self.opts.width - 1) {
                 self.write(" ");
-                while (self.column < self.opts.width) {
+                while (self.column < self.opts.width - self.opts.indent) {
                     self.write(pad_char);
-                    self.column -= pad_char.len - 1; // For Unicode characters
                 }
             }
 
@@ -762,7 +760,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.writeLeaders();
             self.startStyle(warn_box_style);
             self.print("╭─── {s} ", .{directive});
-            self.writeNTimes("─", self.opts.width - 9 - directive.len);
+            self.writeNTimes("─", self.opts.width - 7 - 2 * self.opts.indent - directive.len);
             self.write("╮");
             self.renderBreak();
             self.resetStyle();
@@ -775,14 +773,12 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             const trailer: zd.Text = .{ .text = " │", .style = warn_box_style };
             self.wrapTextWithTrailer(source, trailer);
 
-            // cons.printBox(self.stream, source, self.opts.width, 10, cons.BoldBox, code_fence_style);
-
             _ = self.leader_stack.pop();
             self.resetLine();
             self.writeLeaders();
             self.startStyle(warn_box_style);
             self.write("╰");
-            self.writeNTimes("─", self.opts.width - 4);
+            self.writeNTimes("─", self.opts.width - 2 * self.opts.indent - 2);
             self.write("╯");
             self.resetStyle();
             self.renderBreak();
