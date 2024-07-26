@@ -14,3 +14,7 @@ int main() {
   "baz": 2
 }
 ```
+
+```
+no language set
+```

@@ -631,7 +631,9 @@ pub const Parser = struct {
 
             // Parse the directive tag (language, or special command like "warning")
             const end: usize = utils.findFirstOf(trimmed_line, 1, &.{.BREAK}) orelse trimmed_line.len;
-            code.tag = zd.concatWords(block.allocator(), trimmed_line[1..end]) catch unreachable;
+            if (end > 1) {
+                code.tag = zd.concatWords(block.allocator(), trimmed_line[1..end]) catch unreachable;
+            }
 
             if (code.tag) |tag| {
                 // Check for a special directive block like "{warning}"
