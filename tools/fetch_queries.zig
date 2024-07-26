@@ -21,8 +21,9 @@ fn print_usage(alloc: Allocator) void {
         \\
     ;
 
-    cons.printColor(std.debug, .Green, "\nUsage:\n", .{});
-    cons.printColor(std.debug, .White, usage, .{arg0});
+    const stdout = std.io.getStdOut().writer();
+    cons.printColor(stdout, .Green, "\nUsage:\n", .{});
+    cons.printColor(stdout, .White, usage, .{arg0});
 }
 
 /// Fetch a list of queries and install to a standard location for later use.
@@ -95,12 +96,13 @@ pub fn main() !void {
         }
 
         const query = ts_queries.fetchStandardQuery(language, user, git_ref) catch |err| {
-            cons.printColor(std.debug, .Red, "  Error setting up {s}@{s}/{s}: ", .{ user, git_ref, language });
+            cons.printColor(std.io.getStdErr().writer(), .Red, "  Error setting up {s}@{s}/{s}: ", .{ user, git_ref, language });
             std.debug.print("{any}\n", .{err});
             continue;
         };
         try ts_queries.writeQueryFile(query, qd, lang);
 
-        cons.printColor(std.debug, .Green, "  Fetched {s}\n", .{lang});
+        const stdout = std.io.getStdOut().writer();
+        cons.printColor(stdout, .Green, "  Fetched {s}\n", .{lang});
     }
 }

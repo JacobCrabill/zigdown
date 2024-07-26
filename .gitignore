@@ -3,6 +3,6 @@
 *.o
 *.so
 *.a
-zig-cache/
-zig-out/
+zig-*
+.zig*
 docs/

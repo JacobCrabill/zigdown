@@ -16,14 +16,13 @@ M.zigdown_bin = M.root .. "/zig-out/bin/zigdown"
 M.use_lua_module = false
 
 -- Required version of the Zig compiler
-local zig_ver = "0.12.1"
+local zig_ver = "0.13.0"
 
 --- Setup the plugin with user-provided options
 function M.setup(opts)
   M.opts = opts or {}
 
   -- Check if the plugin has been built yet. Build it if not.
-  -- if not utils.file_exists(M.lua_module) then
   if not utils.file_exists(M.zigdown_bin) then
     build.install(zig_ver, M.root, M.use_lua_module)
   end

@@ -45,7 +45,7 @@ pub fn build(b: *std.Build) !void {
 
     // Export the zigdown module to downstream consumers
     const mod = b.addModule("zigdown", .{
-        .root_source_file = .{ .path = "src/zigdown.zig" },
+        .root_source_file = b.path("src/zigdown.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -72,14 +72,6 @@ pub fn build(b: *std.Build) !void {
     var dep_array = [_]Dependency{ stbi_dep, clap_dep, treez_dep, mod_dep };
     const deps: []Dependency = &dep_array;
 
-    // TODO
-    // const luajit = b.dependency("luajit", .{ .optimize = optimize, .target = target });
-    // const luajit_dep = Dependency{ .name = "luajit", .module = luajit.module("luajit") };
-    // const lua51 = b.dependency("lua51", .{ .optimize = optimize, .target = target });
-    // const lua51_dep = Dependency{ .name = "lua51", .module = lua51.module("lua51") };
-    // var lua_deps_array = [_]Dependency{ luajit_dep, lua51_dep };
-    // const lua_deps: []Dependency = &lua_deps_array;
-
     const exe_opts = BuildOpts{
         .target = target,
         .optimize = optimize,
@@ -99,6 +91,14 @@ pub fn build(b: *std.Build) !void {
     addExecutable(b, exe_config, exe_opts);
 
     if (build_lua) |_| {
+        // TODO
+        // const luajit = b.dependency("luajit", .{ .optimize = optimize, .target = target });
+        // const luajit_dep = Dependency{ .name = "luajit", .module = luajit.module("luajit") };
+        // const lua51 = b.dependency("lua51", .{ .optimize = optimize, .target = target });
+        // const lua51_dep = Dependency{ .name = "lua51", .module = lua51.module("lua51") };
+        // var lua_deps_array = [_]Dependency{ luajit_dep, lua51_dep };
+        // const lua_deps: []Dependency = &lua_deps_array;
+
         // Compile Zigdown as a Lua module compatible with Neovim / LuaJIT 5.1
         // Requires LuaJIT 2.1 headers & Lua 5.1 library
         const lua_mod = b.addSharedLibrary(.{
@@ -116,7 +116,7 @@ pub fn build(b: *std.Build) !void {
         // Point the compiler to the location of the Lua headers (lua.h and friends)
         // Note that we require Lua 5.1, specifically
         // This is compatible with the version of LuaJIT built into NeoVim
-        lua_mod.addIncludePath(.{ .path = "/usr/include/luajit-2.1" });
+        lua_mod.addIncludePath(b.path("/usr/include/luajit-2.1"));
         lua_mod.linkSystemLibrary("lua5.1");
 
         // "Install" to the output dir using the correct naming convention to load with lua
@@ -143,7 +143,7 @@ pub fn build(b: *std.Build) !void {
     // TODO: how to enable docs??
     const lib = b.addSharedLibrary(.{
         .name = "libzigdown",
-        .root_source_file = .{ .path = "src/zigdown.zig" },
+        .root_source_file = b.path("src/zigdown.zig"),
         .optimize = optimize,
         .target = target,
     });
@@ -192,7 +192,7 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
     // Compile the executable
     const exe = b.addExecutable(.{
         .name = config.name,
-        .root_source_file = .{ .path = config.root_path },
+        .root_source_file = b.path(config.root_path),
         .version = config.version,
         .optimize = opts.optimize,
         .target = opts.target orelse b.host,
@@ -233,7 +233,7 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
 /// @param[in] opts: Build target and optimization settings, along with any dependencies needed
 fn addTest(b: *std.Build, cmd: []const u8, description: []const u8, path: []const u8, opts: BuildOpts) void {
     const test_exe = b.addTest(.{
-        .root_source_file = .{ .path = path },
+        .root_source_file = b.path(path),
         .optimize = opts.optimize,
         .target = opts.target,
     });

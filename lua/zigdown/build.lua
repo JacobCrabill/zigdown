@@ -37,14 +37,24 @@ function M.install_zig()
   vim.fn.jobwait({tar_pid})
 end
 
-function M.build_zigdown()
+-- Build the Zigdown binary, and optionally the Lua plugin module
+---@param load_lib boolean Load the Lua module
+function M.build_zigdown(load_lib)
   vim.notify("Building zigdown:" .. table.concat(M.build_cmd, " "), vim.log.levels.INFO)
   vim.notify("Please wait...", vim.log.levels.INFO)
-  local build_jid = vim.fn.jobstart({ M.zig_binary, "build", "-Doptimize=ReleaseSafe" }, { cwd = M.root_dir })
+
+  local cmd = { M.zig_binary, "build", "-Doptimize=ReleaseSafe" }
+  if load_lib then
+    table.insert(cmd, "-Dlua")
+  end
+  local build_jid = vim.fn.jobstart(cmd, { cwd = M.root_dir })
   vim.fn.jobwait({build_jid})
 
-  vim.notify("Finished building Zigdown Lua module", vim.log.levels.INFO)
-  M.zigdown =  M.load_module()
+  vim.notify("Finished building Zigdown", vim.log.levels.INFO)
+
+  if load_lib then
+    M.zigdown =  M.load_module()
+  end
 
   -- Remove the archive after completion
   if vim.fn.filereadable(M.tarball) == 1 then
@@ -104,7 +114,7 @@ function M.install(zig_ver, root, load_lib)
       M.install_zig()
 
       -- Build the zigdown project
-      M.build_zigdown()
+      M.build_zigdown(load_lib)
 
       -- Now that the module is built, import it
       if load_lib then

@@ -115,7 +115,7 @@ pub fn get(query_alloc: Allocator, language: []const u8) ?[]const u8 {
 }
 
 // Capture Name: number
-const highlights_map = std.ComptimeStringMap(utils.Color, .{
+const highlights_map = std.StaticStringMap(utils.Color).initComptime(.{
     .{ "number", .Yellow },
     .{ "keyword", .Blue },
     .{ "operator", .Cyan },
