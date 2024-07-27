@@ -147,6 +147,10 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
 
         /// Render a raw block of code
         fn renderCode(self: *Self, c: zd.Code) !void {
+            if (c.directive) |_| {
+                try self.renderDirective(c);
+                return;
+            }
             try self.write("\n<pre><code");
 
             if (c.tag) |lang| {
@@ -158,6 +162,18 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             }
 
             try self.stream.print("</code></pre>\n", .{});
+        }
+
+        fn renderDirective(self: *Self, d: zd.Code) !void {
+            // TODO: Set of builtin directive types w/ aliases mapped to them
+            // const directive = d.directive orelse "note";
+            try self.write("\n<div class=\"directive\">\n");
+
+            if (d.text) |text| {
+                try self.stream.print("{s}", .{text});
+            }
+
+            try self.stream.print("\n</div>\n", .{});
         }
 
         /// Render a standard paragraph of text
