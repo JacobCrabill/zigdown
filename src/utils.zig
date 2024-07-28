@@ -46,6 +46,46 @@ pub const TextStyle = struct {
     strike: bool = false,
 };
 
+pub fn colorHex(color: Color) usize {
+    return switch (color) {
+        .Black => 0x000000,
+        .Red => 0xff0000,
+        .Green => 0x00ff00,
+        .Blue => 0x00ff00,
+        .Yellow => 0xffff00,
+        .Cyan => 0x00ffff,
+        .White => 0xffffff,
+        .Magenta => 0xff00ff,
+        .DarkYellow => 0xaeac30,
+        .PurpleGrey => 0xaa82fa,
+        .DarkGrey => 0x404040,
+        .DarkRed => 0x802020,
+        .Orange => 0xff9700,
+        .Coral => 0xd7649b,
+        .Default => 0xffffff,
+    };
+}
+
+pub fn colorHexStr(color: Color) []const u8 {
+    return switch (color) {
+        .Black => "#000000",
+        .Red => "#ff0000",
+        .Green => "#00ff00",
+        .Blue => "#00ff00",
+        .Yellow => "#ffff00",
+        .Cyan => "#00ffff",
+        .White => "#ffffff",
+        .Magenta => "#ff00ff",
+        .DarkYellow => "#aeac30",
+        .PurpleGrey => "#aa82fa",
+        .DarkGrey => "#404040",
+        .DarkRed => "#802020",
+        .Orange => "#ff9700",
+        .Coral => "#d7649b",
+        .Default => "#ffffff",
+    };
+}
+
 pub const Vec2i = struct {
     x: usize,
     y: usize,

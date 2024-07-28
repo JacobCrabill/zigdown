@@ -58,7 +58,7 @@ ol, ul {
 }
 
 code {
-  color: #c0b0f0
+  color: #c0b0f0;
 }
 
 .directive {
@@ -76,3 +76,12 @@ code {
  * ------------------------------------ */
 
 /* TODO: keyword, constant, identifier, function, ... */
+
+.code_block {
+  color: #c0b0f0;
+  font-family: monospace;
+  background-color: #424050;
+  border: 4px solid #333333;
+  border-radius: 10px;
+  padding: 12px;
+}

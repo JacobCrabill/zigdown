@@ -47,7 +47,7 @@ new features like special warnings, note boxes, and other custom directives.
 ## Usage
 
 The current version of Zig this code compiles with is
-[0.12.1](https://ziglang.org/builds/zig-linux-x86_64-0.12.1.tar.xz).
+[0.13.0](https://ziglang.org/builds/zig-linux-x86_64-0.13.0.tar.xz).
 
 ```bash
 zig build run -- -c test/sample.md

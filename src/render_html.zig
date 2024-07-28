@@ -6,6 +6,8 @@ const zd = struct {
     usingnamespace @import("leaves.zig");
     usingnamespace @import("containers.zig");
 };
+const syntax = @import("syntax.zig");
+const ts_queries = @import("ts_queries.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -20,6 +22,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         alloc: Allocator,
 
         pub fn init(stream: OutStream, alloc: Allocator) Self {
+            ts_queries.init(alloc);
             return Self{
                 .stream = stream,
                 .alloc = alloc,
@@ -33,7 +36,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             try self.stream.writeAll(bytes);
         }
 
-        pub fn print(self: *Self, fmt: []const u8, args: anytype) WriteError!void {
+        pub fn print(self: *Self, comptime fmt: []const u8, args: anytype) WriteError!void {
             try self.stream.print(fmt, args);
         }
 
@@ -151,17 +154,24 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
                 try self.renderDirective(c);
                 return;
             }
-            try self.write("\n<pre><code");
+            try self.write("\n<div class=\"code_block\"><pre>");
 
-            if (c.tag) |lang| {
-                try self.stream.print(" language=\"{s}\">", .{lang});
+            const language = c.tag orelse "none";
+            const source = c.text orelse "";
+
+            // Use TreeSitter to parse the code block and apply colors
+            if (syntax.getHighlights(self.alloc, source, language)) |ranges| {
+                defer self.alloc.free(ranges);
+
+                for (ranges) |range| {
+                    // Alternative: Have a CSS class for each color
+                    try self.print("<span style=\"color:{s}\">{s}</span>", .{ utils.colorHexStr(range.color), range.content });
+                }
+            } else |_| {
+                try self.write(source);
             }
 
-            if (c.text) |text| {
-                try self.stream.print("{s}", .{text});
-            }
-
-            try self.stream.print("</code></pre>\n", .{});
+            try self.print("</pre></div>\n", .{});
         }
 
         fn renderDirective(self: *Self, d: zd.Code) !void {
@@ -170,10 +180,10 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             try self.write("\n<div class=\"directive\">\n");
 
             if (d.text) |text| {
-                try self.stream.print("{s}", .{text});
+                try self.print("{s}", .{text});
             }
 
-            try self.stream.print("\n</div>\n", .{});
+            try self.print("\n</div>\n", .{});
         }
 
         /// Render a standard paragraph of text
