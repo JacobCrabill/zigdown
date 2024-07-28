@@ -44,7 +44,8 @@ fn print_usage(alloc: std.mem.Allocator) void {
 pub fn main() !void {
     const stdout = std.io.getStdOut().writer(); // Fun fact: This must be in function scope on Windows
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .never_unmap = true }){};
+
     defer _ = gpa.deinit();
     var alloc = gpa.allocator();
 

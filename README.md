@@ -52,7 +52,8 @@ The current version of Zig this code compiles with is
 ```bash
 zig build run -- -c test/sample.md
 zig build -l # List build options
-zig build -Dtarget=x86_64-linux-musl # Compile for x86-64 Linux using statically-linked MUSL libC
+zig build -Dtarget=x86_64-linux-musl # Compile for x86-64 Linux using
+                                     # statically-linked MUSL libC
 ```
 
 `zig build` will create a `zigdown` binary at `zig-out/bin/zigdown`. Add `-Doptimize=ReleaseSafe` to

@@ -5,13 +5,13 @@ const clap = @import("clap");
 const cons = @import("console.zig");
 const utils = @import("utils.zig");
 
-const Self = @This();
-
 const Allocator = std.mem.Allocator;
+const Self = @This();
 
 var initialized: bool = false;
 var allocator: Allocator = undefined;
 var queries: std.StringHashMap([]const u8) = undefined;
+var aliases: std.StringHashMap([]const u8) = undefined;
 
 pub fn init(alloc: Allocator) void {
     if (initialized) {
@@ -21,7 +21,11 @@ pub fn init(alloc: Allocator) void {
 
     allocator = alloc;
     queries = std.StringHashMap([]const u8).init(alloc);
+    aliases = std.StringHashMap([]const u8).init(alloc);
     initialized = true;
+
+    putAlias("c++", "cpp");
+    putAlias("cpp", "cpp");
 }
 
 pub fn deinit() void {
@@ -35,12 +39,41 @@ pub fn deinit() void {
     // Free the hashmap itself
     queries.deinit();
 
+    // Free all strings in the hash map
+    iter = aliases.iterator();
+    while (iter.next()) |*kv| {
+        allocator.free(kv.key_ptr.*);
+        allocator.free(kv.value_ptr.*);
+    }
+
+    // Free the hashmap itself
+    aliases.deinit();
+
     initialized = false;
 }
 
 /// Free a string that was allocated using our allocator
 pub fn free(string: []const u8) void {
     allocator.free(string);
+}
+
+/// Emplace a new language alias, copying the key and value strings
+pub fn putAlias(key: []const u8, value: []const u8) void {
+    const k = allocator.dupe(u8, key) catch unreachable;
+    const v = allocator.dupe(u8, value) catch unreachable;
+    aliases.put(k, v) catch unreachable;
+}
+
+/// Emplace a new language alias, copying the key and value strings
+pub fn putQuery(key: []const u8, value: []const u8) void {
+    const k = allocator.dupe(u8, key) catch unreachable;
+    const v = allocator.dupe(u8, value) catch unreachable;
+    queries.put(k, v) catch unreachable;
+}
+
+/// Return the alias for the given language
+pub fn alias(in_lang: []const u8) ?[]const u8 {
+    return aliases.get(in_lang);
 }
 
 /// Return the absolute path to our TreeSitter config directory
@@ -92,8 +125,11 @@ pub fn getTsQueryDir() ![]const u8 {
 ///
 /// Caller owns the returned string, allocated using query_alloc.
 pub fn get(query_alloc: Allocator, language: []const u8) ?[]const u8 {
-    var env_map: std.process.EnvMap = std.process.getEnvMap(allocator) catch unreachable;
-    defer env_map.deinit();
+    const lang_alias = alias(language) orelse language;
+
+    if (queries.get(lang_alias)) |query| {
+        return query_alloc.dupe(u8, query) catch return null;
+    }
 
     const query_dir: []const u8 = getTsQueryDir() catch return null;
     defer Self.free(query_dir);
@@ -106,12 +142,15 @@ pub fn get(query_alloc: Allocator, language: []const u8) ?[]const u8 {
     defer qd.close();
 
     var buffer: [1024]u8 = undefined;
-    const hfile = std.fmt.bufPrint(buffer[0..], "highlights-{s}.scm", .{language}) catch return null;
+    const hfile = std.fmt.bufPrint(buffer[0..], "highlights-{s}.scm", .{lang_alias}) catch return null;
 
     const file = qd.openFile(hfile, .{}) catch return null;
     defer file.close();
 
-    return file.readToEndAlloc(query_alloc, 1e7) catch null;
+    const query = file.readToEndAlloc(query_alloc, 1e7) catch return null;
+    putQuery(lang_alias, query);
+
+    return query;
 }
 
 // Capture Name: number
@@ -148,19 +187,23 @@ pub fn getHighlightFor(label: []const u8) ?utils.Color {
 /// @param[in] language: The tree-sitter language name (e.g. "cpp" for C++)
 /// @param[in] github_user: The Github account hosting tree-sitter-{language}
 pub fn fetchStandardQuery(language: []const u8, github_user: []const u8, git_ref: []const u8) ![]const u8 {
-    if (queries.get(language)) |query| {
+    // Handle any language aliases
+    const lang_alias = alias(language) orelse language;
+
+    // See if the query has already been cached
+    if (queries.get(lang_alias)) |query| {
         return try allocator.dupe(u8, query);
     }
 
     var url_buf: [1024]u8 = undefined;
     const url_s = try std.fmt.bufPrint(url_buf[0..], "https://raw.githubusercontent.com/{s}/tree-sitter-{s}/{s}/queries/highlights.scm", .{
         github_user,
-        language,
+        lang_alias,
         git_ref,
     });
     const uri = try std.Uri.parse(url_s);
 
-    std.debug.print("Fetching highlights query for {s} from {s}\n", .{ language, url_s });
+    std.debug.print("Fetching highlights query for {s} from {s}\n", .{ lang_alias, url_s });
 
     var client = std.http.Client{ .allocator = allocator };
     defer client.deinit();
@@ -185,7 +228,7 @@ pub fn fetchStandardQuery(language: []const u8, github_user: []const u8, git_ref
     }
 
     // Note that the std lib hash maps don't copy the given key and value strings
-    const lang = try allocator.dupe(u8, language);
+    const lang = try allocator.dupe(u8, lang_alias);
     const query = try allocator.dupe(u8, body);
     errdefer allocator.free(lang);
     errdefer allocator.free(body);
@@ -197,7 +240,10 @@ pub fn fetchStandardQuery(language: []const u8, github_user: []const u8, git_ref
 
 /// Fetch a TreeSitter parser repoo from Github
 pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: []const u8) !void {
-    std.debug.print("Fetching repo for {s}\n", .{language});
+    // Handle any language aliases
+    const lang_alias = aliases.get(language) orelse language;
+
+    std.debug.print("Fetching repo for {s}\n", .{lang_alias});
 
     // Open our config directory
     const config_dir: []const u8 = try getTsConfigDir();
@@ -207,7 +253,7 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
     defer configd.close();
 
     // Setup our parser directory
-    const parser_repo = try std.fmt.allocPrint(allocator, "tree-sitter-{s}", .{language});
+    const parser_repo = try std.fmt.allocPrint(allocator, "tree-sitter-{s}", .{lang_alias});
     defer Self.free(parser_repo);
 
     const parser_dir = try std.fs.path.join(allocator, &.{ config_dir, "parsers", parser_repo });
@@ -219,7 +265,7 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
     var url_buf: [1024]u8 = undefined;
     const url_s = try std.fmt.bufPrint(url_buf[0..], "https://github.com/{s}/tree-sitter-{s}/archive/refs/heads/{s}.tar.gz", .{
         github_user,
-        language,
+        lang_alias,
         git_ref,
     });
     const uri = try std.Uri.parse(url_s);
@@ -239,7 +285,7 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
         .headers = .{ .authorization = .omit },
         .response_storage = .{ .dynamic = &response_storage },
     }) catch |err| {
-        std.debug.print("Error fetching {s} at {s}: {any}\n", .{ language, url_s, err });
+        std.debug.print("Error fetching {s} at {s}: {any}\n", .{ lang_alias, url_s, err });
         return;
     };
 
@@ -247,7 +293,7 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
     const body = response_storage.items;
 
     if (status.status != .ok or body.len == 0) {
-        std.debug.print("Error fetching {s} (!ok)\n", .{language});
+        std.debug.print("Error fetching {s} (!ok)\n", .{lang_alias});
         return error.NoReply;
     }
 
@@ -283,7 +329,7 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
     // Copy the highlights query to the query dir
     configd.makeDir("queries") catch {};
     var fname_buf: [256]u8 = undefined;
-    const fname = try std.fmt.bufPrint(fname_buf[0..], "highlights-{s}.scm", .{language});
+    const fname = try std.fmt.bufPrint(fname_buf[0..], "highlights-{s}.scm", .{lang_alias});
     const query_sub: []const u8 = try std.fs.path.join(allocator, &.{ "queries", fname });
     const source_path: []const u8 = try std.fs.path.join(allocator, &.{ "queries", "highlights.scm" });
     defer Self.free(query_sub);

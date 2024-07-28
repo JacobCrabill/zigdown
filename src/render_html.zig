@@ -29,7 +29,9 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             };
         }
 
-        pub fn deinit(_: *Self) void {}
+        pub fn deinit(_: *Self) void {
+            ts_queries.deinit();
+        }
 
         // Write an array of bytes to the underlying writer
         pub fn write(self: *Self, bytes: []const u8) WriteError!void {

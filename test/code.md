@@ -1,4 +1,14 @@
-```c
+```cpp
+#include <stdio.h>
+
+int main() {
+    printf("Hello, World!\n");
+    const int64_t foo = 1234 + 5678;
+    return foo;
+}
+```
+
+```c++
 #include <stdio.h>
 
 int main() {
@@ -16,5 +26,5 @@ int main() {
 ```
 
 ```
-no language set
+code with no language set
 ```
