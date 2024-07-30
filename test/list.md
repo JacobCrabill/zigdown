@@ -37,3 +37,10 @@
    1. baz
 1. wtf
    > quote
+
+# List 3
+
+- [ ] Task Item
+- [x] Checked Item
+- [x]
+- ^ not a task item b/c empty

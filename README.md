@@ -13,28 +13,25 @@ Markdown files.
 This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 ```
 
-## Features
+## Features & Future Work
 
-- Headers
-- Basic text formatting (**Bold**, _italic_, ~underline~)
-- (Clickable) Links
-- Quote blocks
-- Unordered lists
-- Ordered lists
-- Code blocks
-  - Including syntax highlighting using TreeSitter
-- Images (rendered to the console using the
-  [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)
-- Neovim integration
-  - Optional: If you have Lua 5.1 system libraries, can build as a Lua plugin module
-
-## Future Work
-
-1. Complete NeoVim integration (w/ image rendering)
-1. Task lists
-1. Tables
-1. Web-based images (fetch & display in-terminal)
-1. Autolinks, references
+- [x] Headers
+- [x] Basic text formatting (**Bold**, _italic_, ~underline~)
+- [x] (Clickable) Links
+- [x] Quote blocks
+- [x] Unordered lists
+- [x] Ordered lists
+- [x] Code blocks
+      - Including syntax highlighting using TreeSitter
+- [x] Images (rendered to the console using the
+- [x] [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)
+- [x] Neovim integration
+      - Optional: If you have Lua 5.1 system libraries, can build as a Lua plugin module
+- [x] Task lists
+- [ ] Complete NeoVim integration (w/ image rendering)
+- [ ] Tables
+- [ ] Web-based images (fetch & display in-terminal)
+- [ ] Autolinks, references
 
 ## Caveats
 

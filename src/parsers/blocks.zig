@@ -122,6 +122,7 @@ fn trimContinuationMarkersList(line: []const Token) []const Token {
     // Find the first list-item marker (*, -, +, or digit)
     const trimmed = utils.trimLeadingWhitespace(line);
     std.debug.assert(trimmed.len > 0);
+    if (utils.isTaskListItem(line)) return trimContinuationMarkersTaskList(line);
     if (utils.isOrderedListItem(line)) return trimContinuationMarkersOrderedList(line);
     if (utils.isUnorderedListItem(line)) return trimContinuationMarkersUnorderedList(line);
 
@@ -173,6 +174,13 @@ fn trimContinuationMarkersOrderedList(line: []const Token) []const Token {
     }
 
     return trimmed;
+}
+
+fn trimContinuationMarkersTaskList(line: []const Token) []const Token {
+    if (utils.taskListLeadIdx(line)) |idx| {
+        return line[idx..];
+    }
+    @panic("Can't be here!");
 }
 
 /// Append a list of words to the given TextBlock as Text Inline objects
@@ -505,11 +513,16 @@ pub const Parser = struct {
 
             // Check if the line starts a new item of the wrong type
             // In that case, we must close and return false (A new List must be started)
-            const ordered: bool = block.Container.content.List.ordered;
-            const is_ol: bool = utils.isOrderedListItem(line);
-            const is_ul: bool = utils.isUnorderedListItem(line);
+            var kind: ?zd.List.Kind = undefined;
+            if (utils.isTaskListItem(line)) {
+                kind = .task;
+            } else if (utils.isUnorderedListItem(line)) {
+                kind = .unordered;
+            } else if (utils.isOrderedListItem(line)) {
+                kind = .ordered;
+            }
             const is_indented: bool = tline.len > 0 and tline[0].src.col > child.start_col() + 1;
-            const wrong_type: bool = (ordered and is_ul) or (!ordered and is_ol);
+            const wrong_type: bool = if (kind) |k| block.Container.content.List.kind != k else false;
             if (wrong_type and !is_indented) {
                 self.logger.log("Mismatched list type; ending List.\n", .{});
                 self.closeBlock(child);
@@ -518,7 +531,7 @@ pub const Parser = struct {
 
             // Check for the start of a new ListItem
             // If so, close the current ListItem (if any) and start a new one
-            if ((is_ul or is_ol) or !child.isOpen()) {
+            if (kind != null or !child.isOpen()) {
                 if (is_indented and child.isOpen()) {
                     self.logger.log("We have a new ListItem, but it belongs to a child list\n", .{});
                 } else {
@@ -552,18 +565,19 @@ pub const Parser = struct {
         var trimmed_line = utils.trimLeadingWhitespace(line);
         if (isContinuationLineList(line) and trimmed_line.len > 0 and trimmed_line[0].src.col < block.start_col() + 2) {
             self.logger.log("Line continues current list\n", .{});
+            // TODO: This is all highly unoptimized...
             trimmed_line = trimContinuationMarkersList(line);
+
+            // Check for a task list
+            if (utils.taskListLeadIdx(line)) |idx| {
+                block.Container.content.ListItem.checked = utils.isCheckedTaskListItem(line[0..idx]);
+            }
         } else {
             self.logger.log("Removing indent with start_col: {d}\n", .{block.start_col()});
             trimmed_line = utils.removeIndent(line, block.start_col());
 
             if (trimmed_line.len > 0 and trimmed_line[0].src.col > block.start_col() + 1) {
-                // Child / nested content
-                // TODO: PASS TO CHILD!!
-                // const child = self.parseNewBlock(utils.removeIndent(trimmed_line, block.start_col())) catch unreachable;
-                // block.container().children.append(child) catch unreachable;
-
-                // return true;
+                // Child / nested content - handled below
             } else if (trimmed_line.len == 0) {
                 // Empty list item - just create an empty paragraph child
                 var child = Block.initLeaf(self.alloc, .Paragraph, block.start_col());
@@ -739,7 +753,10 @@ pub const Parser = struct {
                     // Parse unorderd list block
                     self.logger.log("Parsing list with start_col {d}\n", .{col});
                     b = Block.initContainer(self.alloc, .List, col);
-                    b.Container.content.List = zd.List{ .ordered = false };
+                    var kind: zd.List.Kind = .unordered;
+                    if (utils.isTaskListItem(line))
+                        kind = .task;
+                    b.Container.content.List = zd.List{ .kind = kind };
                     if (!self.handleLineList(&b, line))
                         return error.ParseError;
                 } else {
@@ -753,7 +770,7 @@ pub const Parser = struct {
                 if (line.len > 1 and line[1].kind == .SPACE) {
                     // Parse unorderd list block
                     b = Block.initContainer(self.alloc, .List, col);
-                    b.Container.content.List = zd.List{ .ordered = false };
+                    b.Container.content.List = zd.List{ .kind = .unordered };
                     if (!self.handleLineList(&b, line))
                         return error.ParseError;
                 }
@@ -763,7 +780,7 @@ pub const Parser = struct {
                     // if (line.len > 1 and line[1].kind == .PERIOD) {
                     // Parse numbered list block
                     b = Block.initContainer(self.alloc, .List, col);
-                    b.Container.content.List.ordered = true;
+                    b.Container.content.List.kind = .ordered;
                     // todo: consider parsing and setting the start number here
                     if (!self.handleLineList(&b, line))
                         try errorReturn(@src(), "Cannot parse line as numlist: {any}", .{line});

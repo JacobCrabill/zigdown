@@ -455,10 +455,10 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a List of Items (may be ordered or unordered)
         fn renderList(self: *Self, list: zd.Container) !void {
-            if (list.content.List.ordered) {
-                try self.renderNumberedList(list);
-            } else {
-                try self.renderUnorderedList(list);
+            switch (list.content.List.kind) {
+                .ordered => try self.renderNumberedList(list),
+                .unordered => try self.renderUnorderedList(list),
+                .task => try self.renderTaskList(list),
             }
         }
 
@@ -513,6 +513,34 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 }
                 defer _ = self.leader_stack.pop();
 
+                try self.renderListItem(item.Container);
+            }
+        }
+
+        fn renderTaskList(self: *Self, list: zd.Container) !void {
+            for (list.children.items) |item| {
+                // Ensure we start each list item on a new line
+                if (self.column > self.opts.indent)
+                    self.renderBreak();
+
+                // print out list bullet
+                self.writeLeaders();
+                if (item.Container.content.ListItem.checked) {
+                    self.startStyle(.{ .fg_color = .Green, .bold = true });
+                    self.write(" 🗹  ");
+                    // self.write(" 󰄵 ");
+                } else {
+                    self.startStyle(.{ .fg_color = .Red, .bold = true });
+                    self.write(" 󰄱  ");
+                    // self.write("  "); // The nice checkbox doesn't work with color :(
+                }
+                self.resetStyle();
+
+                // Print out the contents; note the first line doesn't
+                // need the leaders (we did that already)
+                self.needs_leaders = false;
+                try self.leader_stack.append(list_indent);
+                defer _ = self.leader_stack.pop();
                 try self.renderListItem(item.Container);
             }
         }

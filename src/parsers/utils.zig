@@ -195,6 +195,87 @@ pub fn isUnorderedListItem(line: []const Token) bool {
     return false;
 }
 
+/// Check for the pattern like "- [ ]" or "- [x]"
+pub fn isTaskListItem(line: []const Token) bool {
+    return taskListLeadIdx(line) != null;
+}
+
+/// Find the index of the Token following the task list item leaders
+pub fn taskListLeadIdx(line: []const Token) ?usize {
+    const State = enum {
+        start,
+        have_bullet,
+        have_lbrack,
+        have_check,
+        have_rbrack,
+        have_space,
+    };
+
+    var state: State = .start;
+    for (line, 0..) |tok, i| {
+        switch (state) {
+            .start => {
+                switch (tok.kind) {
+                    .PLUS, .MINUS, .STAR => state = .have_bullet,
+                    .SPACE, .INDENT => {},
+                    else => return null,
+                }
+            },
+            .have_bullet => {
+                switch (tok.kind) {
+                    .LBRACK => state = .have_lbrack,
+                    .SPACE, .INDENT => {},
+                    else => return null,
+                }
+            },
+            .have_lbrack => {
+                switch (tok.kind) {
+                    .RBRACK => state = .have_rbrack,
+                    .SPACE, .INDENT => {},
+                    .WORD => {
+                        // We only allow a single character inside the '[]'
+                        if (tok.text.len == 1) {
+                            state = .have_check;
+                        } else {
+                            return null;
+                        }
+                    },
+                    else => return null,
+                }
+            },
+            .have_check => {
+                switch (tok.kind) {
+                    .RBRACK => state = .have_rbrack,
+                    .SPACE, .INDENT => {},
+                    else => return null,
+                }
+            },
+            .have_rbrack => {
+                switch (tok.kind) {
+                    .SPACE, .INDENT => state = .have_space,
+                    else => return null,
+                }
+            },
+            .have_space => return i,
+        }
+    }
+
+    return null;
+}
+
+/// Check if the task list item is checked or not
+/// 'leaders' must contain a valid task list start, e.g. '- [ ]'
+pub fn isCheckedTaskListItem(leaders: []const Token) bool {
+    for (leaders, 0..) |tok, i| {
+        if (tok.kind == .LBRACK and i < leaders.len - 1) {
+            if (leaders[i + 1].kind == .WORD)
+                return true;
+            return false;
+        }
+    }
+    return false;
+}
+
 /// Check for any kind of list item
 pub fn isListItem(line: []const Token) bool {
     return isUnorderedListItem(line) or isOrderedListItem(line);

@@ -142,7 +142,7 @@ pub const Container = struct {
             .Document => ContainerData{ .Document = {} },
             .Quote => ContainerData{ .Quote = {} },
             .List => ContainerData{ .List = zd.List{} },
-            .ListItem => ContainerData{ .ListItem = {} },
+            .ListItem => ContainerData{ .ListItem = zd.ListItem{} },
         };
 
         return block;

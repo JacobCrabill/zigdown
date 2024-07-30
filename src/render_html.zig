@@ -98,11 +98,13 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
 
         /// Render a List of Items (may be ordered or unordered)
         fn renderList(self: *Self, list: zd.Container) !void {
-            const ordered: bool = list.content.List.ordered;
-            if (ordered) {
-                try self.stream.print("<ol start={d}>\n", .{list.content.List.start});
-            } else {
-                try self.stream.print("<ul>\n", .{});
+            switch (list.content.List.kind) {
+                .ordered => try self.stream.print("<ol start={d}>\n", .{list.content.List.start}),
+                .unordered => try self.stream.print("<ul>\n", .{}),
+                .task => {
+                    // TODO
+                    try self.stream.print("<ul>\n", .{});
+                },
             }
 
             // Although Lists should only contain ListItems, we are simply
@@ -114,10 +116,13 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
                 try self.stream.print("</li>\n", .{});
             }
 
-            if (ordered) {
-                try self.stream.print("</ol>\n", .{});
-            } else {
-                try self.stream.print("</ul>\n", .{});
+            switch (list.content.List.kind) {
+                .ordered => try self.stream.print("</ol>\n", .{}),
+                .unordered => try self.stream.print("</ul>\n", .{}),
+                .task => {
+                    // TODO
+                    try self.stream.print("</ul>\n", .{});
+                },
             }
         }
 

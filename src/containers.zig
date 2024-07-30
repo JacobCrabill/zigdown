@@ -14,7 +14,7 @@ pub const ContainerData = union(ContainerType) {
     Document: void,
     Quote: void,
     List: List,
-    ListItem: void,
+    ListItem: ListItem,
 };
 
 /// List blocks contain only ListItems
@@ -22,6 +22,17 @@ pub const ContainerData = union(ContainerType) {
 /// store the list items for simplicity, as the ListItems are Container blocks
 /// which can hold any kind of Block.
 pub const List = struct {
-    ordered: bool = false,
+    pub const Kind = enum {
+        unordered,
+        ordered,
+        task,
+    };
+    // ordered: bool = false,
+    kind: Kind = .unordered,
     start: usize = 1, // Starting number, if ordered list
+};
+
+/// Single ListItem - Only needed for Task lists
+pub const ListItem = struct {
+    checked: bool = false, // 󱗜  or 🗹
 };
