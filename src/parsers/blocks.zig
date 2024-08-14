@@ -409,6 +409,7 @@ pub const Parser = struct {
                     .Quote => return self.handleLineQuote(block, line),
                     .List => return self.handleLineList(block, line),
                     .ListItem => return self.handleLineListItem(block, line),
+                    .Table => return self.handleLineTable(block, line),
                 }
             },
             .Leaf => |l| {
@@ -614,6 +615,13 @@ pub const Parser = struct {
         cblock.children.append(child) catch unreachable;
 
         return true;
+    }
+
+    pub fn handleLineTable(self: *Self, block: *Block, line: []const Token) bool {
+        _ = self;
+        _ = block;
+        _ = line;
+        @panic("Unimplemented");
     }
 
     ///////////////////////////////////////////////////////

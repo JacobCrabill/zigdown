@@ -94,6 +94,8 @@ pub fn main() !void {
 
     if (res.args.@"install-parsers") |s| {
         zd.ts_queries.init(alloc);
+        defer zd.ts_queries.deinit();
+
         var langs = std.mem.tokenize(u8, s, ",");
         while (langs.next()) |lang| {
             var user: []const u8 = "tree-sitter";

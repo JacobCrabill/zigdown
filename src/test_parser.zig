@@ -87,15 +87,18 @@ pub fn main() !void {
     cons.printStyled(stdout, style, "───────────────────────────────────────────────────\n", .{});
 
     var hrenderer = htmlRenderer(stdout, alloc);
+    defer hrenderer.deinit();
+
     style.fg_color = .Cyan;
     cons.printStyled(stdout, style, "────────────────── Rendered HTML ──────────────────\n", .{});
     try hrenderer.renderBlock(p.document);
     cons.printStyled(stdout, style, "───────────────────────────────────────────────────\n", .{});
 
-    style.fg_color = .Red;
-    cons.printStyled(stdout, style, "─────────────────────── Rendered Text ───────────────────────\n", .{});
     var crenderer = consoleRenderer(stdout, alloc, .{ .width = 70 });
     defer crenderer.deinit();
+
+    style.fg_color = .Red;
+    cons.printStyled(stdout, style, "─────────────────────── Rendered Text ───────────────────────\n", .{});
     try crenderer.renderBlock(p.document);
     cons.printStyled(stdout, style, "─────────────────────────────────────────────────────────────\n", .{});
 }

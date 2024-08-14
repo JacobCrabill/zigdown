@@ -40,7 +40,9 @@
 
 # List 3
 
-- [ ] Task Item
-- [x] Checked Item
-- [x]
-- ^ not a task item b/c empty
+1. Task List
+    - [ ] Task Item
+    - [x] Checked Item
+2. Not a Task List
+    - [x]
+    - ^ not a task item b/c empty

@@ -143,6 +143,7 @@ pub const Container = struct {
             .Quote => ContainerData{ .Quote = {} },
             .List => ContainerData{ .List = zd.List{} },
             .ListItem => ContainerData{ .ListItem = zd.ListItem{} },
+            .Table => ContainerData{ .Table = zd.Table{} },
         };
 
         return block;
@@ -353,6 +354,24 @@ fn createTestAst(alloc: Allocator) !Block {
     // Add the List to the Document
     try root.addChild(list);
 
+    // Try craeting a Table with 2 cols and 1 row
+    // Create another Paragraph
+    var table = Block.initContainer(alloc, .Table, 0);
+    table.Container.content.Table.ncol = 2;
+
+    var para2 = Block.initLeaf(alloc, .Paragraph, 4);
+    const text4 = Text{ .text = "Hello, " };
+    try para2.Leaf.addText(text4);
+
+    var para3 = Block.initLeaf(alloc, .Paragraph, 4);
+    const text5 = Text{ .text = "World" };
+    try para3.Leaf.addText(text5);
+
+    try table.addChild(para2);
+    try table.addChild(para3);
+
+    try root.addChild(table);
+
     return root;
 }
 
@@ -382,6 +401,7 @@ test "Render basic AST" {
 
     const stderr = std.io.getStdErr().writer();
     var renderer = htmlRenderer(stderr, alloc);
+    defer renderer.deinit();
 
     var root = try createTestAst(alloc);
     defer root.deinit();

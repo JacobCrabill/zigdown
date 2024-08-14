@@ -8,6 +8,7 @@ pub const ContainerType = enum(u8) {
     Quote,
     List, // Can only contain ListItems
     ListItem, // Can only be contained by a List
+    Table, // Can only be contained by a Document; Can only contain Paragraphs
 };
 
 pub const ContainerData = union(ContainerType) {
@@ -15,6 +16,7 @@ pub const ContainerData = union(ContainerType) {
     Quote: void,
     List: List,
     ListItem: ListItem,
+    Table: Table,
 };
 
 /// List blocks contain only ListItems
@@ -27,12 +29,16 @@ pub const List = struct {
         ordered,
         task,
     };
-    // ordered: bool = false,
     kind: Kind = .unordered,
     start: usize = 1, // Starting number, if ordered list
 };
 
 /// Single ListItem - Only needed for Task lists
 pub const ListItem = struct {
-    checked: bool = false, // 󱗜  or 🗹
+    checked: bool = false, // 󰄱  or 󰄵
+};
+
+/// Table
+pub const Table = struct {
+    ncol: usize = 0,
 };

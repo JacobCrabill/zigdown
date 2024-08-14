@@ -340,6 +340,7 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
 
 test "Fetch C parser" {
     Self.init(std.testing.allocator);
+    defer Self.deinit();
 
     try fetchParserRepo("c", "tree-sitter", "master");
 }

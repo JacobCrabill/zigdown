@@ -400,6 +400,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 .Quote => try self.renderQuote(block),
                 .List => try self.renderList(block),
                 .ListItem => try self.renderListItem(block),
+                .Table => try self.renderTable(block),
             }
         }
 
@@ -523,16 +524,13 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 if (self.column > self.opts.indent)
                     self.renderBreak();
 
-                // print out list bullet
                 self.writeLeaders();
                 if (item.Container.content.ListItem.checked) {
                     self.startStyle(.{ .fg_color = .Green, .bold = true });
-                    self.write(" 🗹  ");
-                    // self.write(" 󰄵 ");
+                    self.write(" 󰄵  ");
                 } else {
                     self.startStyle(.{ .fg_color = .Red, .bold = true });
                     self.write(" 󰄱  ");
-                    // self.write("  "); // The nice checkbox doesn't work with color :(
                 }
                 self.resetStyle();
 
@@ -551,6 +549,28 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     self.renderBreak();
                 }
                 try self.renderBlock(item);
+            }
+        }
+
+        fn renderTable(self: *Self, table: zd.Container) !void {
+            if (self.column > self.opts.indent)
+                self.renderBreak();
+
+            const ncol = table.content.Table.ncol;
+            // const col_w = @divFloor(self.opts.width - 2*self.opts.indent, ncol);
+
+            self.writeLeaders();
+            self.write(" |");
+            for (table.children.items, 0..) |item, i| {
+                if (@mod(i, ncol) == 0) {
+                    // start next row
+                    self.write(" |");
+                    self.renderBreak();
+                    self.writeLeaders();
+                }
+                self.write(" | ");
+                // TODO: Render wrapped text within a block
+                try self.renderParagraph(item.Leaf);
             }
         }
 
