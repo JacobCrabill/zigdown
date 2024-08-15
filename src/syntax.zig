@@ -17,7 +17,6 @@ pub const Range = struct {
 
 // TODO: Bake into an auto-generated file based on available parsers?
 fn getLanguage(_: Allocator, language: []const u8) ?*const treez.Language {
-    //return treez.languageFromLibrary(language) catch |err| {
     return treez.Language.loadFromDynLib(language) catch {
         // std.debug.print("Error loading {s} language: {any}\n", .{ language, err });
         return null;
