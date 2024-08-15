@@ -73,20 +73,21 @@ const Precedence = enum(u8) {
     BSLASH,
 };
 
-/// Generic parser for a single-character token from a list of possible characters
+/// Generic parser for a multi-character token from a list of possible characters
+/// Greedily accepts as many characters as it can
 pub fn AnyOfTokenizer(comptime chars: []const u8, comptime kind: TokenType) type {
     return struct {
         pub fn peek(text: []const u8) ?Token {
             if (text.len == 0)
                 return null;
 
-            if (std.mem.indexOfScalar(u8, chars, text[0])) |_| {
-                return Token{
-                    .kind = kind,
-                    .text = text[0..1],
-                };
-            }
-            return null;
+            var i: usize = 0;
+            while (std.mem.indexOfScalar(u8, chars, text[i]) != null) : (i += 1) {}
+            if (i == 0) return null;
+            return Token{
+                .kind = kind,
+                .text = text[0..i],
+            };
         }
     };
 }

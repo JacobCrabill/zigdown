@@ -789,7 +789,7 @@ pub const Parser = struct {
                     // Parse numbered list block
                     b = Block.initContainer(self.alloc, .List, col);
                     b.Container.content.List.kind = .ordered;
-                    // todo: consider parsing and setting the start number here
+                    b.Container.content.List.start = try std.fmt.parseInt(usize, line[0].text, 10);
                     if (!self.handleLineList(&b, line))
                         try errorReturn(@src(), "Cannot parse line as numlist: {any}", .{line});
                 } else {
