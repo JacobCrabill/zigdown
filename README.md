@@ -21,12 +21,11 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 - [x] Quote blocks
 - [x] Unordered lists
 - [x] Ordered lists
-- [x] Code blocks
-      - Including syntax highlighting using TreeSitter
+- [x] Code blocks, including syntax highlighting using TreeSitter
 - [x] Images (rendered to the console using the
 - [x] [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)
 - [x] Neovim integration
-      - Optional: If you have Lua 5.1 system libraries, can build as a Lua plugin module
+  - Optional: If you have Lua 5.1 system libraries, can build as a Lua plugin module
 - [x] Task lists
 - [ ] Complete NeoVim integration (w/ image rendering)
 - [ ] Tables
@@ -107,4 +106,4 @@ queries to `$TS_CONFIG_DIR/queries`, which defaults to `$HOME/.config/tree-sitte
 
 ## Sample Render
 
-![Sample Render](sample-render-3.png)
+![Sample Render](sample-render.png)

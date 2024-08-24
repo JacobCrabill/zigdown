@@ -5,6 +5,7 @@ const clap = @import("clap");
 const cons = @import("console.zig");
 const utils = @import("utils.zig");
 
+const builtin_queries = @import("queries").builtin_queries;
 const Allocator = std.mem.Allocator;
 const Self = @This();
 
@@ -12,6 +13,8 @@ var initialized: bool = false;
 var allocator: Allocator = undefined;
 var queries: std.StringHashMap([]const u8) = undefined;
 var aliases: std.StringHashMap([]const u8) = undefined;
+
+// TODO: Bake in my hand-tailored TS queries that are better than the ones on Github
 
 pub fn init(alloc: Allocator) void {
     if (initialized) {
@@ -26,6 +29,13 @@ pub fn init(alloc: Allocator) void {
 
     putAlias("c++", "cpp");
     putAlias("cpp", "cpp");
+
+    for (builtin_queries.keys()) |key| {
+        const query = builtin_queries.get(key).?;
+        const k = alloc.dupe(u8, key) catch unreachable;
+        const v = alloc.dupe(u8, query) catch unreachable;
+        queries.put(k, v) catch @panic("Query insertion error!");
+    }
 }
 
 pub fn deinit() void {

@@ -51,6 +51,15 @@ pub fn build(b: *std.Build) !void {
     });
     const mod_dep = Dependency{ .name = "zigdown", .module = mod };
 
+    // Module for our built-in TreeSitter queries
+    const query_mod = b.addModule("queries", .{
+        .root_source_file = b.path("data/queries.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const query_dep = Dependency{ .name = "queries", .module = query_mod };
+    mod.addImport("queries", query_mod);
+
     ///////////////////////////////////////////////////////////////////////////
     // Dependencies from build.zig.zon
     // ------------------------------------------------------------------------
@@ -69,7 +78,7 @@ pub fn build(b: *std.Build) !void {
     const treez_dep = Dependency{ .name = "treez", .module = treez.module("treez") };
     mod.addImport(treez_dep.name, treez_dep.module);
 
-    var dep_array = [_]Dependency{ stbi_dep, clap_dep, treez_dep, mod_dep };
+    var dep_array = [_]Dependency{ stbi_dep, clap_dep, treez_dep, mod_dep, query_dep };
     const deps: []Dependency = &dep_array;
 
     const exe_opts = BuildOpts{

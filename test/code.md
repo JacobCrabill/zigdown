@@ -1,6 +1,5 @@
 ```cpp
-#include <stdio.h>
-
+#include <stdio.h> /* Comment */
 int main() {
     printf("Hello, World!\n");
     const int64_t foo = 1234 + 5678;
@@ -9,12 +8,9 @@ int main() {
 ```
 
 ```c++
-#include <stdio.h>
-
+#include <iostream> // Comment
 int main() {
-    printf("Hello, World!\n");
-    const int64_t foo = 1234 + 5678;
-    return foo;
+    std::cout << "Hello, World!" << std::endl;
 }
 ```
 
@@ -23,6 +19,18 @@ int main() {
   "foo": "bar",
   "baz": 2
 }
+```
+
+```bash
+echo -e "Hello, World!"
+```
+
+```yaml
+root:
+  foo: "bar"
+  baz: hello
+  bash: |
+    echo -e Hello, World!
 ```
 
 ```
