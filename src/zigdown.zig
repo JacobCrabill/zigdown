@@ -2,6 +2,7 @@
 
 // Expose dependencies to downstream consumers
 pub const stbi = @import("stb_image");
+pub const flags = @import("flags");
 
 // Expose public namespaces for building docs
 pub const cons = @import("console.zig");

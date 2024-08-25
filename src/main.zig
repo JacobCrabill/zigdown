@@ -15,7 +15,7 @@ const TokenList = zd.TokenList;
 
 fn print_usage() void {
     const stdout = std.io.getStdOut().writer();
-    flags.help.printUsage(Zigdown, null, stdout) catch unreachable;
+    flags.help.printUsage(Zigdown, null, 85, stdout) catch unreachable;
 }
 
 /// Command-line arguments definition for the Flags module
@@ -29,11 +29,10 @@ const Zigdown = struct {
         .timeit = "Time the parsing & rendering and display the results",
         .verbose = "Enable verbose output from the parser",
         .install_parsers =
-        \\
-        \\    Install one or more TreeSitter language parsers from Github
-        \\    Comma-separated list of <lang> or <github_user>:<lang>
-        \\    Example: "c,tree-sitter:cpp,maxxnino:master:zig,rust,html"
-        \\    Requires 'make' and 'gcc'
+        \\Install one or more TreeSitter language parsers from Github.
+        \\Comma-separated list of <lang>, <github_user>:<lang>, or <user>:<branch>:<lang>.
+        \\Example: "cpp,tree-sitter:rust,maxxnino:master:zig".
+        \\Requires 'make' and 'gcc'.
         ,
     };
 
@@ -72,7 +71,7 @@ pub fn main() !void {
 
     var args = try std.process.argsWithAllocator(alloc);
     defer args.deinit();
-    const result = flags.parse(&args, Zigdown, .{}) catch std.process.exit(1);
+    const result = flags.parse(&args, Zigdown, .{ .max_line_len = 85 }) catch std.process.exit(1);
 
     // Process the command-line arguments
     const do_console: bool = result.console;
