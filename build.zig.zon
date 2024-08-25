@@ -2,7 +2,11 @@
     .name = "zigdown",
     .version = "0.1.0",
     .paths = .{
+        "data",
+        "lua",
+        "plugin",
         "src",
+        "tools",
         "build.zig",
         "build.zig.zon",
     },
@@ -13,8 +17,8 @@
         },
         .flags = .{
             // Forked from n0s4/flags
-            .url = "https://github.com/JacobCrabill/zig-flags/archive/8594bac416f3c3d3bd21c8c4a721f491240bcf64.tar.gz",
-            .hash = "122076570518d5a9035ddf96435f4fb96c7712f3637128f53a9bc514ae02c33424f5",
+            .url = "https://github.com/JacobCrabill/zig-flags/archive/95bfcf22ffd2f28b98f132d195bd6b8f6c25baa4.tar.gz",
+            .hash = "12209e876a24e3b03e712b91aaaa88c124ac1a831343a0120642d3aa8fb1eefc1142",
             // .path = "../zig-tools/flags",
         },
         .treez = .{
