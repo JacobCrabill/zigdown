@@ -68,17 +68,17 @@ pub fn build(b: *std.Build) !void {
     const stbi_dep = Dependency{ .name = "stb_image", .module = stbi.module("stb_image") };
     mod.addImport(stbi_dep.name, stbi_dep.module);
 
-    // Zig-Clap
-    const clap = b.dependency("zig_clap", .{ .optimize = optimize, .target = target });
-    const clap_dep = Dependency{ .name = "clap", .module = clap.module("clap") };
-    mod.addImport(clap_dep.name, clap_dep.module);
+    // Flags
+    const flags = b.dependency("flags", .{ .optimize = optimize, .target = target });
+    const flags_dep = Dependency{ .name = "flags", .module = flags.module("flags") };
+    mod.addImport(flags_dep.name, flags_dep.module);
 
     // Treez (TreeSitter wrapper library)
     const treez = b.dependency("treez", .{ .optimize = optimize, .target = target });
     const treez_dep = Dependency{ .name = "treez", .module = treez.module("treez") };
     mod.addImport(treez_dep.name, treez_dep.module);
 
-    var dep_array = [_]Dependency{ stbi_dep, clap_dep, treez_dep, mod_dep, query_dep };
+    var dep_array = [_]Dependency{ stbi_dep, flags_dep, treez_dep, mod_dep, query_dep };
     const deps: []Dependency = &dep_array;
 
     const exe_opts = BuildOpts{
@@ -209,6 +209,7 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
 
     // Add the executable to the default 'zig build' command
     b.installArtifact(exe);
+    const install_step = b.addInstallArtifact(exe, .{});
 
     // Add dependencies
     if (opts.dependencies) |deps| {
@@ -220,6 +221,7 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
     // Add a build-only step
     const build_step = b.step(config.build_cmd, config.build_description);
     build_step.dependOn(&exe.step);
+    build_step.dependOn(&install_step.step);
 
     // Configure how the main executable should be run
     const run_exe = b.addRunArtifact(exe);

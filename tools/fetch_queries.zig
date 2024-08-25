@@ -1,5 +1,5 @@
 const std = @import("std");
-const clap = @import("clap");
+const flags = @import("flags");
 const zd = @import("zigdown");
 
 const Allocator = std.mem.Allocator;
@@ -7,24 +7,30 @@ const cons = zd.cons;
 const ts_queries = zd.ts_queries;
 
 /// Print cli usage
-fn print_usage(alloc: Allocator) void {
-    var argi = std.process.argsWithAllocator(alloc) catch return;
-    const arg0: []const u8 = argi.next().?;
-
-    const usage =
-        \\    {s} [lang1] [lang2] [github_user:lang3] ...
-        \\
-        \\    Provide a list of languages to download highlight queries for
-        \\    (assumed to come from the tree-sitter project on Github) OR
-        \\    provide a <github_user>:<language> pair, e.g. maxxnino:zig
-        \\
-        \\
-    ;
-
+fn print_usage() void {
     const stdout = std.io.getStdOut().writer();
-    cons.printColor(stdout, .Green, "\nUsage:\n", .{});
-    cons.printColor(stdout, .White, usage, .{arg0});
+    flags.help.printUsage(FetchArgs, "fetch_queries", stdout) catch unreachable;
 }
+
+const FetchArgs = struct {
+    positional: struct {
+        language_list: []const u8,
+
+        pub const descriptions = .{
+            .language_list =
+            \\
+            \\    Whitespace-separated list of TreeSitter languages to configure
+            \\
+            \\    [lang1] [github_user:lang2] [gh_user:gh_branch:lang3] ...
+            \\
+            \\    It is assumed these reside at github.com/tree-sitter/tree-sitter-{language}
+            \\    If not, provide a colon-separated user:language pair, e.g. "maxxnino:zig".
+            \\    If the desired branch of the Git repo is not 'master', specify it in between
+            \\    the user and the language
+            ,
+        };
+    },
+};
 
 /// Fetch a list of queries and install to a standard location for later use.
 /// Used as a one-time setup for installing syntax highlighting capabilities
@@ -38,23 +44,11 @@ pub fn main() !void {
     ts_queries.init(alloc);
     defer ts_queries.deinit();
 
-    // Use Zig-Clap to parse a list of arguments
+    // Use Flags to parse a list of arguments
     // Each arg has a short and/or long variant with optional type and help description
-    const params = comptime clap.parseParamsComptime(
-        \\     --help         Display help and exit
-        \\ <str>              Whitespace-separated list of TreeSitter languages to configure
-        \\                    It is assumed these reside at github.com/tree-sitter/tree-sitter-{language}
-        \\                    If not, provide a colon-separated user:language pair, e.g. "maxxnino:zig".
-    );
-
-    // Have Clap parse the command-line arguments
-    var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{ .allocator = alloc });
-    defer res.deinit();
-
-    if (res.args.help != 0 or res.positionals.len == 0) {
-        print_usage(alloc);
-        std.process.exit(0);
-    }
+    var args = try std.process.argsWithAllocator(alloc);
+    defer args.deinit();
+    const params = flags.parse(&args, FetchArgs, .{ .command_name = "fetch_queries" }) catch std.process.exit(1);
 
     var env_map: std.process.EnvMap = std.process.getEnvMap(alloc) catch unreachable;
     defer env_map.deinit();
@@ -79,7 +73,8 @@ pub fn main() !void {
     defer qd.close();
 
     // Download and save each language's highlights query to disk
-    for (res.positionals) |lang| {
+    var iter = std.mem.tokenize(u8, params.positional.language_list, " ");
+    while (iter.next()) |lang| {
         var user: []const u8 = "tree-sitter";
         var git_ref: []const u8 = "master";
         var language: []const u8 = lang;

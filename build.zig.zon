@@ -11,9 +11,10 @@
             .url = "https://github.com/JacobCrabill/zig-stb-image/archive/88cf7d7b42a279183abf3ac8bc1e7bec3c7e5906.tar.gz",
             .hash = "1220be50d5bf071aed75e8bc0119661d520ed20f2c47b140e5871f3839a00f9f79a3",
         },
-        .zig_clap = .{
-            .url = "https://github.com/Hejsil/zig-clap/archive/c0193e9247335a6c1688b946325060289405de2a.tar.gz",
-            .hash = "12207ee987ce045596cb992cfb15b0d6d9456e50d4721c3061c69dabc2962053644d",
+        .flags = .{
+            // Forked from n0s4/flags
+            .url = "https://github.com/JacobCrabill/zig-flags/archive/7a01b81a6fb4bcbe83eea103faaaf503805dab21.tar.gz",
+            .hash = "12205c7b259bbbf0a22724ea1da2a0cdc05db5a87089a4863496a53a627f38bd0e3e",
         },
         .treez = .{
             .url = "https://github.com/JacobCrabill/treez/archive/3b9ec06205b5d0fc56b51613262ef3658051d97c.tar.gz",

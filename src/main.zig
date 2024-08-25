@@ -1,6 +1,6 @@
 const std = @import("std");
-const clap = @import("clap");
 const zd = @import("zigdown");
+const flags = @import("flags");
 
 const ArrayList = std.ArrayList;
 const File = std.fs.File;
@@ -13,33 +13,54 @@ const consoleRenderer = zd.consoleRenderer;
 const Parser = zd.Parser;
 const TokenList = zd.TokenList;
 
-fn print_usage(alloc: std.mem.Allocator) void {
-    var argi = std.process.argsWithAllocator(alloc) catch return;
-    const arg0: []const u8 = argi.next().?;
-
-    const usage = "    {s} [options] [filename.md]\n\n";
-    const options =
-        \\ -c, --console         Render to the console (default)
-        \\ -h, --html            Render to HTML
-        \\ -o, --output [file]   Direct output to a file, instead of stdout
-        \\ -t, --timeit          Time the parsing & rendering
-        \\ -v, --verbose         Verbose output from the parser
-        \\ -p, --install-parsers Install one or more TreeSitter language parsers from Github
-        \\                       Comma-separated list of <lang> or <github_user>:<lang>
-        \\                       Example: "c,tree-sitter:cpp,maxxnino:master:zig,rust,html"
-        \\                       Requires 'make' and 'gcc'
-        \\
-        \\
-    ;
-
+fn print_usage() void {
     const stdout = std.io.getStdOut().writer();
-    const Green = TextStyle{ .fg_color = .Green, .bold = true };
-    const White = TextStyle{ .fg_color = .White };
-    cons.printStyled(stdout, Green, "\nUsage:\n", .{});
-    cons.printStyled(stdout, White, usage, .{arg0});
-    cons.printStyled(stdout, Green, "Options:\n", .{});
-    cons.printStyled(stdout, White, options, .{});
+    flags.help.printUsage(Zigdown, null, stdout) catch unreachable;
 }
+
+/// Command-line arguments definition for the Flags module
+const Zigdown = struct {
+    pub const description = "Markdown parser supporting console and HTML rendering";
+
+    pub const descriptions = .{
+        .console = "Render to the console [default]",
+        .html = "Render to HTML",
+        .output = "Output to a file, instead of to stdout",
+        .timeit = "Time the parsing & rendering and display the results",
+        .verbose = "Enable verbose output from the parser",
+        .install_parsers =
+        \\
+        \\    Install one or more TreeSitter language parsers from Github
+        \\    Comma-separated list of <lang> or <github_user>:<lang>
+        \\    Example: "c,tree-sitter:cpp,maxxnino:master:zig,rust,html"
+        \\    Requires 'make' and 'gcc'
+        ,
+    };
+
+    console: bool = true,
+    html: bool = false,
+    timeit: bool = false,
+    verbose: bool = false,
+    output: ?[]const u8 = null,
+    install_parsers: ?[]const u8 = null,
+
+    positional: struct {
+        file: ?[]const u8,
+
+        pub const descriptions = .{
+            .file = "Markdown file to render",
+        };
+    },
+
+    pub const switches = .{
+        .console = 'c',
+        .html = 'h',
+        .timeit = 't',
+        .verbose = 'v',
+        .output = 'o',
+        .install_parsers = 'p',
+    };
+};
 
 pub fn main() !void {
     const stdout = std.io.getStdOut().writer(); // Fun fact: This must be in function scope on Windows
@@ -49,50 +70,26 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     var alloc = gpa.allocator();
 
-    // Use Zig-Clap to parse a list of arguments
-    // Each arg has a short and/or long variant with optional type and help description
-    const params = comptime clap.parseParamsComptime(
-        \\     --help                  Display help and exit
-        \\ -c, --console               Render to the console (default)
-        \\ -h, --html                  Render to HTML
-        \\ -o, --output <str>          Direct output to a file, instead of stdout
-        \\ -t, --timeit                Time the parsing & rendering
-        \\ -v, --verbose               Verbose parser output
-        \\ -p, --install-parsers <str> Install one or more TreeSitter language parsers from Github
-        \\
-        \\                             (Used for syntax highlighting of code blocks).
-        \\
-        \\                             Comma-separated list of:
-        \\                                  lang
-        \\                               or [github_user]:lang
-        \\                               or [github_user]:[branch]:lang
-        \\
-        \\                             e.g.: "c,cpp,maxxnino:master:zig,tre-sitter:rust"
-        \\
-        \\                             Requires 'make' and 'gcc'
-        \\
-        \\ <str>                       Markdown file to render
-    );
-
-    // Have Clap parse the command-line arguments
-    var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{ .allocator = alloc });
-    defer res.deinit();
+    var args = try std.process.argsWithAllocator(alloc);
+    defer args.deinit();
+    const result = flags.parse(&args, Zigdown, .{}) catch std.process.exit(1);
 
     // Process the command-line arguments
-    const do_console: bool = res.args.console != 0;
-    const do_html: bool = res.args.html != 0;
-    const timeit: bool = res.args.timeit != 0;
-    const verbose_parsing: bool = res.args.verbose != 0;
-    var filename: ?[]const u8 = null;
-    var outfile: ?[]const u8 = null;
+    const do_console: bool = result.console;
+    const do_html: bool = result.html;
+    const timeit: bool = result.timeit;
+    const verbose_parsing: bool = result.verbose;
+    const filename: ?[]const u8 = result.positional.file;
+    const outfile: ?[]const u8 = result.output;
 
-    if (res.args.help != 0) {
-        print_usage(alloc);
-        try clap.help(stdout, clap.Help, &params, .{});
-        std.process.exit(0);
+    if (filename) |f| {
+        if (std.mem.eql(u8, f, "help")) {
+            print_usage();
+            std.process.exit(0);
+        }
     }
 
-    if (res.args.@"install-parsers") |s| {
+    if (result.install_parsers) |s| {
         zd.ts_queries.init(alloc);
         defer zd.ts_queries.deinit();
 
@@ -118,19 +115,10 @@ pub fn main() !void {
         std.process.exit(0);
     }
 
-    if (res.args.output) |ostr| {
-        outfile = ostr;
-    }
-
-    for (res.positionals) |pstr| {
-        filename = pstr;
-        break;
-    }
-
     if (filename == null) {
-        cons.printColor(stdout, .Red, "ERROR: ", .{});
+        cons.printColor(stdout, .Red, "Error: ", .{});
         cons.printColor(stdout, .White, "No filename provided\n\n", .{});
-        print_usage(alloc);
+        print_usage();
         std.process.exit(2);
     }
 

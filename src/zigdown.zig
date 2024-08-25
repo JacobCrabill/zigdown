@@ -1,7 +1,6 @@
 /// Package up the entire Zigdown library
 
 // Expose dependencies to downstream consumers
-pub const clap = @import("clap");
 pub const stbi = @import("stb_image");
 
 // Expose public namespaces for building docs
