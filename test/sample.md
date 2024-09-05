@@ -14,7 +14,9 @@ italic_**~.
   1. Nested numbered list
   1. Numbers auto-increment
      - more nesting!
-     - > nested quote
+       - > nested quote
+     - `list` with `lots of code` to test `inline code` being `wrapped` on `line breaks` `foo` `bar`
+  1. Numbers _continue_ to auto-increment
 -
 - ^ Empty list item
 - with **_simple_ formatting**!

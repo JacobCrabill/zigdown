@@ -366,12 +366,12 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             const style = self.cur_style;
             self.resetStyle();
             self.writeno(cons.clear_line);
-            self.startStyle(style);
             for (self.leader_stack.items) |text| {
                 self.startStyle(text.style);
                 self.write(text.text);
                 self.resetStyle();
             }
+            self.startStyle(style);
         }
 
         /// Get the width of the current leader_stack
@@ -433,12 +433,13 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a Quote block
         pub fn renderQuote(self: *Self, block: zd.Container) !void {
-            self.writeLeaders();
             try self.leader_stack.append(quote_indent);
             if (!self.needs_leaders) {
                 self.startStyle(quote_indent.style);
                 self.write(quote_indent.text);
                 self.resetStyle();
+            } else {
+                self.writeLeaders();
             }
 
             for (block.children.items, 0..) |child, i| {
