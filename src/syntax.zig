@@ -6,6 +6,7 @@ const debug = @import("debug.zig");
 const gfx = @import("image.zig");
 const ts_queries = @import("ts_queries.zig");
 const utils = @import("utils.zig");
+const wasm = @import("wasm.zig");
 
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
@@ -15,8 +16,15 @@ pub const Range = struct {
     content: []const u8,
 };
 
-// TODO: Bake into an auto-generated file based on available parsers?
+/// TODO: Bake into an auto-generated file based on available parsers?
+/// TODO: Allow loading from statically linked libraries to bake some parsers in
 fn getLanguage(_: Allocator, language: []const u8) ?*const treez.Language {
+    if (ts_queries.builtin_languages.get(language)) |pair| {
+        return pair.language;
+    }
+
+    if (wasm.is_wasm) return null;
+
     return treez.Language.loadFromDynLib(language) catch {
         // std.debug.print("Error loading {s} language: {any}\n", .{ language, err });
         return null;

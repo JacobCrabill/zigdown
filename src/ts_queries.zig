@@ -3,17 +3,35 @@
 const std = @import("std");
 const cons = @import("console.zig");
 const utils = @import("utils.zig");
+const treez = @import("treez");
+const config = @import("config");
+
+const TsParserPair = struct {
+    name: []const u8,
+    language: *const treez.Language,
+};
 
 const builtin_queries = @import("queries").builtin_queries;
 const Allocator = std.mem.Allocator;
 const Self = @This();
+
+pub var builtin_languages: std.StringHashMap(TsParserPair) = undefined;
 
 var initialized: bool = false;
 var allocator: Allocator = undefined;
 var queries: std.StringHashMap([]const u8) = undefined;
 var aliases: std.StringHashMap([]const u8) = undefined;
 
-// TODO: Bake in my hand-tailored TS queries that are better than the ones on Github
+const mylanglist = blk: {
+    var result: []const []const u8 = &.{};
+
+    var iter = std.mem.tokenize(u8, config.wasm_ts_parsers, ",");
+    while (iter.next()) |name| {
+        result = result ++ [1][]const u8{name};
+    }
+
+    break :blk result;
+};
 
 pub fn init(alloc: Allocator) void {
     if (initialized) {
@@ -34,6 +52,12 @@ pub fn init(alloc: Allocator) void {
         const k = alloc.dupe(u8, key) catch unreachable;
         const v = alloc.dupe(u8, query) catch unreachable;
         queries.put(k, v) catch @panic("Query insertion error!");
+    }
+
+    builtin_languages = std.StringHashMap(TsParserPair).init(alloc);
+    inline for (mylanglist) |lang| {
+        const language = treez.Language.get(lang) catch unreachable;
+        builtin_languages.put(lang, .{ .name = lang, .language = language }) catch unreachable;
     }
 }
 

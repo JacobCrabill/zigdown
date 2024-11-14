@@ -1,10 +1,16 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const cons = @import("console.zig");
+const wasm = @import("wasm.zig");
 const zd = struct {
     usingnamespace @import("tokens.zig");
 };
 
 pub fn errorReturn(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) !void {
+    switch (builtin.cpu.arch) {
+        .wasm32, .wasm64 => return error.ParseError,
+        else => {},
+    }
     const stderr = std.io.getStdErr().writer();
     cons.printStyled(stderr, .{ .fg_color = .Red, .bold = true }, "{s}-{d}: ERROR: ", .{ src.fn_name, src.line });
     cons.printStyled(stderr, .{ .bold = true }, fmt, args);
@@ -13,13 +19,17 @@ pub fn errorReturn(comptime src: std.builtin.SourceLocation, comptime fmt: []con
 }
 
 pub fn errorMsg(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) void {
+    switch (builtin.cpu.arch) {
+        .wasm32, .wasm64 => return,
+        else => {},
+    }
     const stderr = std.io.getStdErr().writer();
     cons.printStyled(stderr, .{ .fg_color = .Red, .bold = true }, "{s}-{d}: ERROR: ", .{ src.fn_name, src.line });
     cons.printStyled(stderr, .{ .bold = true }, fmt, args);
     std.debug.print("\n", .{});
 }
 
-/// Helper struct to log debug messages
+/// Helper struct to log debug messages (normal host-cpu logger)
 pub const Logger = struct {
     const Self = @This();
     depth: usize = 0,
@@ -32,7 +42,11 @@ pub const Logger = struct {
 
     pub fn raw(self: Self, comptime fmt: []const u8, args: anytype) void {
         if (self.enabled) {
-            std.debug.print(fmt, args);
+            if (wasm.is_wasm) {
+                wasm.Console.log(fmt, args);
+            } else {
+                std.debug.print(fmt, args);
+            }
         }
     }
 

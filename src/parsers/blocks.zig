@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
@@ -43,6 +44,13 @@ const InlineParser = zd.InlineParser;
 
 /// Global logger
 var g_logger = Logger{ .enabled = false };
+
+fn assert(ok: bool) void {
+    switch (builtin.cpu.arch) {
+        .wasm32, .wasm64 => if (!ok) @panic("Assertion failed"),
+        else => std.debug.assert(ok),
+    }
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Continuation Line Logic
@@ -113,15 +121,15 @@ fn isLazyContinuationLineList(line: []const Token) bool {
 fn trimContinuationMarkersQuote(line: []const Token) []const Token {
     // Turn '  > Foo' into 'Foo'
     const trimmed = utils.trimLeadingWhitespace(line);
-    std.debug.assert(trimmed.len > 0);
-    std.debug.assert(trimmed[0].kind == .GT);
+    assert(trimmed.len > 0);
+    assert(trimmed[0].kind == .GT);
     return utils.trimLeadingWhitespace(trimmed[1..]);
 }
 
 fn trimContinuationMarkersList(line: []const Token) []const Token {
     // Find the first list-item marker (*, -, +, or digit)
     const trimmed = utils.trimLeadingWhitespace(line);
-    std.debug.assert(trimmed.len > 0);
+    assert(trimmed.len > 0);
     if (utils.isTaskListItem(line)) return trimContinuationMarkersTaskList(line);
     if (utils.isOrderedListItem(line)) return trimContinuationMarkersOrderedList(line);
     if (utils.isUnorderedListItem(line)) return trimContinuationMarkersUnorderedList(line);
@@ -132,7 +140,7 @@ fn trimContinuationMarkersList(line: []const Token) []const Token {
 
 fn trimContinuationMarkersUnorderedList(line: []const Token) []const Token {
     const trimmed = utils.trimLeadingWhitespace(line);
-    std.debug.assert(trimmed.len > 0);
+    assert(trimmed.len > 0);
 
     switch (trimmed[0].kind) {
         .MINUS, .PLUS, .STAR => {
@@ -155,7 +163,7 @@ fn trimContinuationMarkersOrderedList(line: []const Token) []const Token {
             .DIGIT => {},
             .PERIOD => {
                 have_dot = true;
-                std.debug.assert(trimmed[1].kind == .PERIOD);
+                assert(trimmed[1].kind == .PERIOD);
                 return utils.trimLeadingWhitespace(trimmed[2..]);
             },
             else => {
@@ -163,11 +171,6 @@ fn trimContinuationMarkersOrderedList(line: []const Token) []const Token {
                     return utils.trimLeadingWhitespace(trimmed[i + 1 ..]);
 
                 g_logger.printText(line, false);
-                std.debug.print("{s}-{d}: ERROR: Shouldn't be here! List line: '{any}'\n", .{
-                    @src().fn_name,
-                    @src().line,
-                    line,
-                });
                 return trimmed;
             },
         }
@@ -425,8 +428,8 @@ pub const Parser = struct {
 
     pub fn handleLineDocument(self: *Self, block: *Block, line: []const Token) bool {
         self.logger.log("Document Scope\n", .{});
-        std.debug.assert(block.isOpen());
-        std.debug.assert(block.isContainer());
+        assert(block.isOpen());
+        assert(block.isContainer());
 
         // Check for an open child
         var cblock = block.container();
@@ -451,8 +454,8 @@ pub const Parser = struct {
     }
 
     pub fn handleLineQuote(self: *Self, block: *Block, line: []const Token) bool {
-        std.debug.assert(block.isOpen());
-        std.debug.assert(block.isContainer());
+        assert(block.isOpen());
+        assert(block.isContainer());
 
         self.logger.depth += 1;
         defer self.logger.depth -= 1;
@@ -489,8 +492,8 @@ pub const Parser = struct {
     }
 
     pub fn handleLineList(self: *Self, block: *Block, line: []const Token) bool {
-        std.debug.assert(block.isOpen());
-        std.debug.assert(block.isContainer());
+        assert(block.isOpen());
+        assert(block.isContainer());
 
         self.logger.depth += 1;
         defer self.logger.depth -= 1;
@@ -555,8 +558,8 @@ pub const Parser = struct {
     }
 
     pub fn handleLineListItem(self: *Self, block: *Block, line: []const Token) bool {
-        std.debug.assert(block.isOpen());
-        std.debug.assert(block.isContainer());
+        assert(block.isOpen());
+        assert(block.isContainer());
 
         self.logger.depth += 1;
         defer self.logger.depth -= 1;
@@ -693,8 +696,8 @@ pub const Parser = struct {
     pub fn handleLineHeading(self: *Self, block: *Block, line: []const Token) bool {
         self.logger.depth += 1;
         defer self.logger.depth -= 1;
-        std.debug.assert(block.isOpen());
-        std.debug.assert(block.isLeaf());
+        assert(block.isOpen());
+        assert(block.isLeaf());
 
         var level: u8 = 0;
         for (line) |tok| {
@@ -715,8 +718,8 @@ pub const Parser = struct {
     }
 
     pub fn handleLineParagraph(self: *Self, block: *Block, line: []const Token) bool {
-        std.debug.assert(block.isOpen());
-        std.debug.assert(block.isLeaf());
+        assert(block.isOpen());
+        assert(block.isLeaf());
 
         self.logger.depth += 1;
         defer self.logger.depth -= 1;

@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const utils = @import("utils.zig");
 const zd = struct {
     usingnamespace @import("blocks.zig");
@@ -8,6 +9,7 @@ const zd = struct {
 };
 const syntax = @import("syntax.zig");
 const ts_queries = @import("ts_queries.zig");
+const wasm = @import("wasm.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -22,7 +24,9 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         alloc: Allocator,
 
         pub fn init(stream: OutStream, alloc: Allocator) Self {
+            //if (!wasm.is_wasm) {
             ts_queries.init(alloc);
+            //}
             return Self{
                 .stream = stream,
                 .alloc = alloc,
@@ -30,7 +34,9 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         pub fn deinit(_: *Self) void {
+            //if (!wasm.is_wasm) {
             ts_queries.deinit();
+            //}
         }
 
         // Write an array of bytes to the underlying writer
@@ -181,16 +187,24 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             const language = c.tag orelse "none";
             const source = c.text orelse "";
 
-            // Use TreeSitter to parse the code block and apply colors
-            if (syntax.getHighlights(self.alloc, source, language)) |ranges| {
-                defer self.alloc.free(ranges);
-
-                for (ranges) |range| {
-                    // Alternative: Have a CSS class for each color
-                    self.print("<span style=\"color:{s}\">{s}</span>", .{ utils.colorHexStr(range.color), range.content });
-                }
-            } else |_| {
+            // TODO: Statically link a few common TreeSitter parsers
+            if (wasm.is_wasm) {
                 self.write(source);
+            } else {
+                // Use TreeSitter to parse the code block and apply colors
+                // TODO: Print in table; use first column for line numbers
+                // TODO: Escape HTML-specific characters like '<', '>', etc.
+                // https://mateam.net/html-escape-characters/
+                if (syntax.getHighlights(self.alloc, source, language)) |ranges| {
+                    defer self.alloc.free(ranges);
+
+                    for (ranges) |range| {
+                        // Alternative: Have a CSS class for each color
+                        self.print("<span style=\"color:{s}\">{s}</span>", .{ utils.colorHexStr(range.color), range.content });
+                    }
+                } else |_| {
+                    self.write(source);
+                }
             }
 
             self.print("</pre></div>\n", .{});

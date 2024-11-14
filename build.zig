@@ -2,6 +2,10 @@ const std = @import("std");
 const Build = std.Build;
 const Allocator = std.mem.Allocator;
 
+const fetcher = @import("tools/fetch_queries.zig");
+
+const Options = std.Build.Step.Options;
+
 const Dependency = struct {
     name: []const u8,
     module: *std.Build.Module,
@@ -21,6 +25,7 @@ const BuildOpts = struct {
     optimize: std.builtin.OptimizeMode,
     target: ?std.Build.ResolvedTarget = null,
     dependencies: ?[]Dependency = null,
+    options: *Options,
 };
 
 pub fn build(b: *std.Build) !void {
@@ -43,6 +48,14 @@ pub fn build(b: *std.Build) !void {
 
     const build_lua = b.option(bool, "lua", "Build Zigdown as a Lua module");
 
+    // Add an option to list the set of TreeSitter parsers to statically link into the WASM build
+    const wasm_ts_option = "wasm_ts_parsers";
+    const wasm_ts_option_desc = "List of TreeSitter parsers to bake into the WASM build";
+    const wasm_ts_parser_list = b.option([]const u8, wasm_ts_option, wasm_ts_option_desc) orelse "bash,c,cpp,python,rust,zig";
+
+    const options: *Options = b.addOptions();
+    options.addOption([]const u8, wasm_ts_option, wasm_ts_parser_list);
+
     // Export the zigdown module to downstream consumers
     const mod = b.addModule("zigdown", .{
         .root_source_file = b.path("src/zigdown.zig"),
@@ -59,6 +72,7 @@ pub fn build(b: *std.Build) !void {
     });
     const query_dep = Dependency{ .name = "queries", .module = query_mod };
     mod.addImport("queries", query_mod);
+    mod.addOptions("config", options);
 
     ///////////////////////////////////////////////////////////////////////////
     // Dependencies from build.zig.zon
@@ -85,6 +99,7 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
         .dependencies = deps,
+        .options = options,
     };
 
     // Compile the main executable
@@ -161,9 +176,35 @@ pub fn build(b: *std.Build) !void {
     lib_step.dependOn(&lib.step);
     b.getInstallStep().dependOn(lib_step);
 
+    // Add WASM Target
+    const wasm = b.addExecutable(.{
+        .name = "zigdown-wasm",
+        .root_source_file = b.path("src/wasm_main.zig"),
+        .optimize = .ReleaseSmall,
+        .target = b.resolveTargetQuery(.{
+            .cpu_arch = .wasm32,
+            .os_tag = .freestanding,
+        }),
+    });
+    wasm.entry = .disabled;
+    wasm.rdynamic = true;
+    wasm.root_module.addOptions("config", options);
+    wasm.root_module.addImport("zigdown", mod);
+    wasm.root_module.addImport("queries", query_mod);
+    wasm.root_module.addImport("treez", treez_dep.module);
+
+    // Link in some TreeSitter parsers
+    const languages = [_][]const u8{ "bash", "c", "cpp", "bash", "python", "zig", "rust" };
+    try setupTreeSitterLibraries(b, wasm, &languages);
+
+    b.installArtifact(wasm);
+    const wasm_step = b.step("wasm", "Build Zigdown as a WASM library");
+    wasm_step.dependOn(&wasm.step);
+    b.getInstallStep().dependOn(wasm_step);
+
     // Add unit tests
 
-    const test_opts = BuildOpts{ .optimize = optimize, .dependencies = deps };
+    const test_opts = BuildOpts{ .optimize = optimize, .dependencies = deps, .options = options };
 
     addTest(b, "test-lexer", "Run Lexer unit tests", "src/lexer.zig", test_opts);
     addTest(b, "test-parser", "Run the new paresr tests", "src/parser.zig", test_opts);
@@ -206,6 +247,9 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
         .optimize = opts.optimize,
         .target = opts.target orelse b.host,
     });
+
+    const languages = [_][]const u8{ "bash", "c", "cpp", "bash", "python", "zig", "rust" };
+    setupTreeSitterLibraries(b, exe, &languages) catch @panic("Unable to link tree-sitter parsers");
 
     // Add the executable to the default 'zig build' command
     b.installArtifact(exe);
@@ -259,4 +303,30 @@ fn addTest(b: *std.Build, cmd: []const u8, description: []const u8, path: []cons
     run_step.has_side_effects = true; // Force the test to always be run on command
     const step = b.step(cmd, description);
     step.dependOn(&run_step.step);
+}
+
+fn setupTreeSitterLibraries(b: *std.Build, exe: *std.Build.Step.Compile, languages: []const []const u8) !void {
+    // Link in some TreeSitter parsers
+    var env_map: std.process.EnvMap = std.process.getEnvMap(b.allocator) catch unreachable;
+    defer env_map.deinit();
+    var ts_config_dir: []const u8 = undefined;
+    if (env_map.get("TS_CONFIG_DIR")) |d| {
+        ts_config_dir = try b.allocator.dupe(u8, d);
+    } else {
+        if (env_map.get("HOME")) |home| {
+            ts_config_dir = try std.fmt.allocPrint(b.allocator, "{s}/.config/tree-sitter/", .{home});
+        } else {
+            std.debug.print("ERROR: Could not get home directory. Defaulting to current directory\n", .{});
+            ts_config_dir = try b.allocator.dupe(u8, "./tree-sitter/");
+        }
+    }
+    defer b.allocator.free(ts_config_dir);
+    const ts_lib_dir = try std.fmt.allocPrint(b.allocator, "{s}/lib", .{ts_config_dir});
+    defer b.allocator.free(ts_lib_dir);
+    exe.addLibraryPath(.{ .cwd_relative = ts_lib_dir });
+
+    for (languages) |lang| {
+        const lib = std.fmt.allocPrint(b.allocator, "tree-sitter-{s}", .{lang}) catch continue;
+        exe.linkSystemLibrary2(lib, .{ .preferred_link_mode = .static });
+    }
 }

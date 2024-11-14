@@ -36,7 +36,7 @@ const Zigdown = struct {
         ,
     };
 
-    console: bool = true,
+    console: bool = false,
     html: bool = false,
     timeit: bool = false,
     verbose: bool = false,
