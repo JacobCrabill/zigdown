@@ -82,6 +82,8 @@ pub fn deinit() void {
     // Free the hashmap itself
     aliases.deinit();
 
+    builtin_languages.deinit();
+
     initialized = false;
 }
 

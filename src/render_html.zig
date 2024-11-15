@@ -15,6 +15,10 @@ const Allocator = std.mem.Allocator;
 
 const css = @embedFile("style.css");
 
+const google_fonts =
+    \\ <link href="https://fonts.googleapis.com/css2?family=Ubuntu+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+;
+
 // Render a Markdown document to HTML to the given output stream
 pub fn HtmlRenderer(comptime OutStream: type) type {
     return struct {
@@ -314,7 +318,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         fn renderBegin(self: *Self) !void {
-            self.print("<html><body>\n<style>\n{s}</style>", .{css});
+            self.print("<html><body>{s}\n<style>\n{s}</style>", .{ google_fonts, css });
         }
 
         fn renderEnd(self: *Self) !void {

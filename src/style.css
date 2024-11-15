@@ -1,4 +1,4 @@
-/* -------- Markdown Render Styling -------- */
+/* -------- Extra Fonts -------- */
 
 @font-face {
   font-family: "mononoki";
@@ -29,6 +29,8 @@
   font-display: swap;
 }
 
+/* -------- Markdown Render Styling -------- */
+
 html, body {
   height: fit-content;
   overflow-wrap: break-word;
@@ -39,18 +41,17 @@ body {
   --color-rosewater: #f2d5cf;
   --color-flamingo: #eebebe;
   --color-pink: #f4b8e4;
-  --color-mauve: #ca9ee6;
+  --color-mauve: #cda1e6;
   --color-red: #e78284;
   --color-maroon: #ea999c;
   --color-peach: #ef9f76;
-  --color-yellow: #e5c890;
-  --color-green: #a6d189;
+  --color-yellow: #eaca60;
+  --color-green: #96dd87;
   --color-teal: #81c8be;
   --color-sky: #99d1db;
   --color-sapphire: #85c1dc;
-  --color-blue: #8caaee;
+  --color-blue: #66aaff;
   --color-lavender: #babbf1;
-  /* --color-text: #c6d0f5; */
   --color-text: #d6e0ff;
   --color-subtext1: #b5bfe2;
   --color-subtext0: #a5adce;
@@ -65,16 +66,17 @@ body {
   --color-crust: #232634;
 
   background-image: none;
-  background-color: var(--color-base); /* #323040; */
+  background-color: var(--color-base);
 
   text-align: left;
-  font-family: mononoki;
+  font-family: "Ubuntu Mono";
+  // font-family: mononoki;
   font-size: 20px;
   color: var(--color-text);
 
   --padding-vertical: clamp(1.5em, 5vh, 2.5em);
   margin: 0 auto;
-  max-width: min(80ch, 100%);
+  max-width: min(90ch, 100%);
   min-height: calc(100% - 2 * var(--padding-vertical));
   padding: var(--padding-vertical) clamp(1.5em, 5vw, 2.5em);
 }
@@ -101,25 +103,25 @@ body {
 }
 
 h1 {
-  color: var(--color-blue); /* #30ee80; */
+  color: var(--color-blue);
   margin-top: 20px;
   margin-bottom: 0px;
 }
 
 h2 {
-  color: var(--color-green); /* #30ee80; */
+  color: var(--color-peach);
   margin-top: 20px;
   margin-bottom: 0px;
 }
 
 h3 {
-  color: var(--color-mauve); /* #9870e0; */
+  color: var(--color-green);
   margin-top: 16px;
   margin-bottom: 0px;
 }
 
 h4 {
-  color: var(--color-sapphire); /* #9870e0; */
+  color: var(--color-mauve);
   margin-top: 16px;
   margin-bottom: 0px;
 }
@@ -168,7 +170,10 @@ code {
   padding: 0px 12px;
 }
 
-/* https://git.sr.ht/~ashie/blog/tree/master/item/assets/main.scss */
+/**
+ * Bits from a a very nicely styled blog I found:
+ * https://git.sr.ht/~ashie/blog/tree/master/item/assets/main.scss
+ */
 
 a {
     color: var(--color-sky);
@@ -197,10 +202,11 @@ blockquote {
     margin-left: 0.75em;
     max-width: fit-content;
     padding: 0.5em;
+    font-style: italic;
+    margin: 0;
 
-    & > p {
-        /* font-style: italic; */
-        margin: 0;
+    i {
+      font-style: normal;
     }
 }
 
