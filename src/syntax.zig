@@ -14,6 +14,7 @@ const Allocator = std.mem.Allocator;
 pub const Range = struct {
     color: utils.Color,
     content: []const u8,
+    newline: bool = false,
 };
 
 /// TODO: Bake into an auto-generated file based on available parsers?
@@ -80,11 +81,11 @@ pub fn getHighlights(alloc: Allocator, code: []const u8, lang_name: []const u8) 
 
                 if (start > idx) {
                     // We've missed something in between captures
-                    try ranges.append(.{ .color = .Default, .content = code[idx..start] });
+                    try splitByLines(&ranges, color, code[idx..start]);
                 }
 
                 if (end > idx) {
-                    try ranges.append(.{ .color = color, .content = content });
+                    try splitByLines(&ranges, color, content);
                     idx = end;
                 }
             }
@@ -92,11 +93,39 @@ pub fn getHighlights(alloc: Allocator, code: []const u8, lang_name: []const u8) 
 
         if (idx < code.len) {
             // We've missed something un-captured at the end; probably a '}\n'
-            try ranges.append(.{ .color = .Default, .content = code[idx..] });
+            // Skip the traiilng newline if it's present
+            var trailing_content = code[idx..];
+            if (trailing_content.len > 1 and std.mem.endsWith(u8, trailing_content, "\n")) {
+                trailing_content = trailing_content[0 .. trailing_content.len - 1];
+            }
+            try splitByLines(&ranges, .Default, trailing_content);
         }
 
         return ranges.toOwnedSlice();
     }
 
     return error.LangNotFound;
+}
+
+/// Split a range of content by newlines
+/// This allows the renderer to easily know when the current source line needs to end
+fn splitByLines(ranges: *ArrayList(Range), color: utils.Color, content: []const u8) !void {
+    var split_content = content;
+    std.debug.print("Missed range: '{s}'\n", .{split_content});
+
+    while (std.mem.indexOf(u8, split_content, "\n")) |l_end| {
+        std.debug.print("Appending missed range: '{s}'\n", .{split_content[0..l_end]});
+        try ranges.append(.{ .color = color, .content = split_content[0..l_end], .newline = true });
+
+        if (l_end + 1 < split_content.len) {
+            split_content = split_content[l_end + 1 ..];
+        } else {
+            split_content = "";
+            break;
+        }
+    }
+
+    if (split_content.len > 0) {
+        try ranges.append(.{ .color = color, .content = split_content });
+    }
 }
