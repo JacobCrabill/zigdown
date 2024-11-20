@@ -140,3 +140,19 @@ pub fn stdout(comptime fmt: []const u8, args: anytype) void {
     const out = std.io.getStdOut().writer();
     out.print(fmt, args) catch @panic("stdout failed!");
 }
+
+/// Color enum -> CSS Class
+pub fn colorToCss(color: Color) []const u8 {
+    return switch (color) {
+        .Yellow => "var(--color-yellow)",
+        .Blue => "var(--color-blue)",
+        .DarkYellow => "var(--color-maroon)",
+        .Cyan => "var(--color-sapphire)",
+        .Green => "var(--color-green)",
+        .Magenta => "var(--color-pink)",
+        .Red => "var(--color-mauve)",
+        .White => "var(--color-text)",
+        .Coral => "var(--color-peach)",
+        else => "var(--color-text)",
+    };
+}

@@ -201,15 +201,14 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
                 if (syntax.getHighlights(self.alloc, source, language)) |ranges| {
                     defer self.alloc.free(ranges);
 
-                    var lino: usize = 0;
+                    var lino: usize = 1;
                     self.write("<table><tbody>\n");
-                    //self.print("<tr><td>{d}</td><td><pre>", .{lino});
                     self.print("<tr><td><span style=\"color:var(--color-peach)\">{d}</span></td><td><pre>", .{lino});
                     for (ranges) |range| {
                         // Alternative: Have a CSS class for each color ( 'var(--color-x)' )
                         // Split by line into a table with line numbers
                         if (range.content.len > 0) {
-                            self.print("<span style=\"color:{s}\">{s}</span>", .{ utils.colorHexStr(range.color), range.content });
+                            self.print("<span style=\"color:{s}\">{s}</span>", .{ utils.colorToCss(range.color), range.content });
                         }
                         if (range.newline) {
                             self.write("</pre></td></tr>\n");

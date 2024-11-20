@@ -727,6 +727,10 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     self.startStyle(style);
                     self.wrapTextRaw(range.content);
                     self.endStyle(style);
+                    if (range.newline) {
+                        self.renderBreak();
+                        self.writeLeaders();
+                    }
                 }
             } else |_| {
                 self.writeLeaders();

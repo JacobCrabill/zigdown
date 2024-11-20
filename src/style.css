@@ -168,6 +168,17 @@ code {
   font-family: monospace;
   background-color: var(--color-mantle); /* #424050; */
   padding: 0px 12px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+tr {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+td {
+  padding-left: 6px;
 }
 
 /**

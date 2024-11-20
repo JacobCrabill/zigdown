@@ -188,35 +188,6 @@ pub fn get(query_alloc: Allocator, language: []const u8) ?[]const u8 {
     return query;
 }
 
-// Capture Name: number
-const highlights_map = std.StaticStringMap(utils.Color).initComptime(.{
-    .{ "number", .Yellow },
-    .{ "keyword", .Blue },
-    .{ "delimiter", .DarkYellow },
-    .{ "operator", .Cyan },
-    .{ "string", .Green },
-    .{ "include", .Green },
-    .{ "property", .Magenta },
-    .{ "label", .Magenta },
-    .{ "type", .Red },
-    .{ "function", .Cyan },
-    .{ "function.special", .Blue },
-    .{ "string.special.key", .Red },
-    .{ "variable", .Cyan },
-    .{ "constant", .White },
-    .{ "constant.builtin", .White },
-    .{ "variable.builtin", .White },
-    .{ "comment", .Coral },
-    .{ "escape", .Coral },
-});
-
-/// Get the highlight color for a specific capture group
-/// TODO: Load from JSON, possibly on a per-language basis
-/// TODO: Setup RGB color schemes and a Vim-style subset of highlight groups
-pub fn getHighlightFor(label: []const u8) ?utils.Color {
-    return highlights_map.get(label);
-}
-
 /// Fetch a TreeSitter highlights query from Github
 /// This module's 'queries' map owns the returned string; Call Self.deinit() to free
 ///
