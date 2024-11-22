@@ -71,6 +71,25 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
     const query_dep = Dependency{ .name = "queries", .module = query_mod };
+
+    // Baked-In TreeSitter Parser Libraries
+    const tsc = b.dependency("tree_sitter_c", .{ .optimize = optimize, .target = target });
+    const tscpp = b.dependency("tree_sitter_cpp", .{ .optimize = optimize, .target = target });
+    const tsbash = b.dependency("tree_sitter_bash", .{ .optimize = optimize, .target = target });
+    const tspython = b.dependency("tree_sitter_python", .{ .optimize = optimize, .target = target });
+    const tszig = b.dependency("tree_sitter_zig", .{ .optimize = optimize, .target = target });
+    const tsrust = b.dependency("tree_sitter_rust", .{ .optimize = optimize, .target = target });
+    query_mod.addCSourceFile(.{ .file = tsc.path("src/parser.c") });
+    query_mod.addCSourceFile(.{ .file = tscpp.path("src/parser.c") });
+    query_mod.addCSourceFile(.{ .file = tscpp.path("src/scanner.c") });
+    query_mod.addCSourceFile(.{ .file = tsbash.path("src/parser.c") });
+    query_mod.addCSourceFile(.{ .file = tsbash.path("src/scanner.c") });
+    query_mod.addCSourceFile(.{ .file = tspython.path("src/parser.c") });
+    query_mod.addCSourceFile(.{ .file = tspython.path("src/scanner.c") });
+    query_mod.addCSourceFile(.{ .file = tszig.path("src/parser.c") });
+    query_mod.addCSourceFile(.{ .file = tsrust.path("src/parser.c") });
+    query_mod.addCSourceFile(.{ .file = tsrust.path("src/scanner.c") });
+
     mod.addImport("queries", query_mod);
     mod.addOptions("config", options);
 
@@ -193,9 +212,9 @@ pub fn build(b: *std.Build) !void {
     wasm.root_module.addImport("queries", query_mod);
     wasm.root_module.addImport("treez", treez_dep.module);
 
-    // Link in some TreeSitter parsers
-    const languages = [_][]const u8{ "bash", "c", "cpp", "bash", "python", "zig", "rust" };
-    try setupTreeSitterLibraries(b, wasm, &languages);
+    // // Link in some TreeSitter parsers
+    // const languages = [_][]const u8{ "rust" };
+    // try setupTreeSitterLibraries(b, wasm, &languages);
 
     b.installArtifact(wasm);
     const wasm_step = b.step("wasm", "Build Zigdown as a WASM library");
@@ -248,8 +267,8 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
         .target = opts.target orelse b.host,
     });
 
-    const languages = [_][]const u8{ "bash", "c", "cpp", "bash", "python", "zig", "rust" };
-    setupTreeSitterLibraries(b, exe, &languages) catch @panic("Unable to link tree-sitter parsers");
+    // const languages = [_][]const u8{ "zig", "rust" };
+    // setupTreeSitterLibraries(b, exe, &languages) catch @panic("Unable to link tree-sitter parsers");
 
     // Add the executable to the default 'zig build' command
     b.installArtifact(exe);

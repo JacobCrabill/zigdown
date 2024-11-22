@@ -26,6 +26,32 @@
             .hash = "1220cfa4f0bd3772e603acda6527ecf0e915280da307b4353c40636e8e93b26e0f32",
         },
 
+        // Individual TreeSitter language parsers
+        .tree_sitter_c = .{
+            .url = "https://github.com/tree-sitter/tree-sitter-c/archive/e8841a6a9431b7365ac9055688429e1deb8db90f.tar.gz",
+            .hash = "1220f617a55dd4b4aa6b48ecf9eea46b07da9e95cc52732141eabae131e1be848094",
+        },
+        .tree_sitter_cpp = .{
+            .url = "https://github.com/tree-sitter/tree-sitter-cpp/archive/f41b4f66a42100be405f96bdc4ebc4a61095d3e8.tar.gz",
+            .hash = "1220784ed9f43050822cec5d5142940b4ed22fec2a61afb6c92bacedeabea9afd0a2",
+        },
+        .tree_sitter_bash = .{
+            .url = "https://github.com/tree-sitter/tree-sitter-bash/archive/49c31006d8307dcb12bc5770f35b6d5b9e2be68e.tar.gz",
+            .hash = "1220e5f57de3c4b08647a76c073923957f13621b5d082be89ce52bb3a83fb7841043",
+        },
+        .tree_sitter_python = .{
+            .url = "https://github.com/tree-sitter/tree-sitter-python/archive/de0c01e7102e755f6c2e1b3055ae6ca85f261a10.tar.gz",
+            .hash = "1220bec8103d97cebb1a878c9fde65d18fd0f42033722cc0eea953f6fabf89ff9a3c",
+        },
+        .tree_sitter_zig = .{
+            .url = "https://github.com/maxxnino/tree-sitter-zig/archive/a80a6e9be81b33b182ce6305ae4ea28e29211bd5.tar.gz",
+            .hash = "12206ccd464fbf96131b23b964dcb135cbae47c301de620c26b65fc66526ed56b2c8",
+        },
+        .tree_sitter_rust = .{
+            .url = "https://github.com/tree-sitter/tree-sitter-rust/archive/c447dcce961ac438aaeaf117347749fe7d1e8365.tar.gz",
+            .hash = "122069aea87586a13ac6cb46ac0256738c4bdeed477c9e8f963e84935b1e0027ac84",
+        },
+
         // // We do not use the lua.org version of Lua 5.1.5 because there is a known security issue
         // // (CVE-2014-5461) that will not be backported. This is the most resonable solution at
         // // the moment. Maybe there will be a way to apply a patch with the build system in the

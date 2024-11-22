@@ -162,10 +162,17 @@ pub fn getTsQueryDir() ![]const u8 {
 pub fn get(query_alloc: Allocator, language: []const u8) ?[]const u8 {
     const lang_alias = alias(language) orelse language;
 
+    // Check for any queries built in at compile time
+    if (builtin_queries.get(lang_alias)) |query| {
+        return query_alloc.dupe(u8, query) catch return null;
+    }
+
+    // Check for any cached queries from previous calls
     if (queries.get(lang_alias)) |query| {
         return query_alloc.dupe(u8, query) catch return null;
     }
 
+    // Last, check for a highlights file a $TS_CONFIG_DIR/queries
     const query_dir: []const u8 = getTsQueryDir() catch return null;
     defer Self.free(query_dir);
 

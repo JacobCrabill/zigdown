@@ -123,8 +123,8 @@ pub fn getHighlightFor(label: []const u8) ?utils.Color {
     return highlights_map.get(label);
 }
 
-/// TODO: Bake into an auto-generated file based on available parsers?
-/// TODO: Allow loading from statically linked libraries to bake some parsers in
+/// Get the TreeSitter language parser, either built-in at compile time,
+/// or dynamically loaded from a shared library
 fn getLanguage(_: Allocator, language: []const u8) ?*const treez.Language {
     if (ts_queries.builtin_languages.get(language)) |pair| {
         return pair.language;

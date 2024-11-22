@@ -153,6 +153,7 @@ pub fn colorToCss(color: Color) []const u8 {
         .Red => "var(--color-mauve)",
         .White => "var(--color-text)",
         .Coral => "var(--color-peach)",
+        .DarkGrey => "var(--color-mantle)",
         else => "var(--color-text)",
     };
 }
