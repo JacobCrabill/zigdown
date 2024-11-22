@@ -25,7 +25,7 @@ var aliases: std.StringHashMap([]const u8) = undefined;
 const mylanglist = blk: {
     var result: []const []const u8 = &.{};
 
-    var iter = std.mem.tokenize(u8, config.wasm_ts_parsers, ",");
+    var iter = std.mem.tokenize(u8, config.builtin_ts_parsers, ",");
     while (iter.next()) |name| {
         result = result ++ [1][]const u8{name};
     }
