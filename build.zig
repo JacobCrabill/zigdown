@@ -217,6 +217,7 @@ pub fn build(b: *std.Build) !void {
     wasm.root_module.addImport("zigdown", mod);
     wasm.root_module.addImport("queries", query_mod);
     wasm.root_module.addImport("treez", treez_dep.module);
+    wasm.addCSourceFile(.{ .file = b.path("src/wasm/stdlib.c") });
 
     b.installArtifact(wasm);
     const wasm_step = b.step("wasm", "Build Zigdown as a WASM library");
