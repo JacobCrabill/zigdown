@@ -23,6 +23,11 @@
 (function_declarator
   declarator: (identifier) @function)
 
+[
+ "delete"
+ "new"
+] @function.builtin
+
 ; Types
 
 ((namespace_identifier) @type
@@ -43,92 +48,121 @@
 ; Keywords
 
 [
- "break"
- "catch"
  "class"
- "co_await"
- "co_return"
- "co_yield"
+ "enum"
+ "struct"
+ "union"
+] @keyword.type
+
+[
+ "throw"
+ "try"
+ "catch"
+] @keyword.exception
+
+[
+ "if"
+ "else"
+ "switch"
+ "case"
+] @keyword.conditional
+
+[
+ "continue"
+ "do"
+ "while"
+ "for"
+ "break"
+] @keyword.repeat
+
+[
  "const"
  "constexpr"
  "constinit"
  "consteval"
- "delete"
- "enum"
  "explicit"
  "extern"
- "final"
- "friend"
  "inline"
  "mutable"
- "namespace"
- "noexcept"
- "new"
  "override"
  "private"
  "protected"
  "public"
+ "static"
  "template"
- "throw"
- "try"
+ "volatile"
+ "virtual"
+] @keyword.modifier
+
+"return" @keyword.return
+
+[
+  "and"
+  "or"
+] @keyword.operator
+
+[
+ "co_await"
+ "co_return"
+ "co_yield"
+ "final"
+ "friend"
+ "namespace"
+ "noexcept"
  "typename"
  "typedef"
  "using"
  "concept"
  "requires"
- "return"
  "sizeof"
- "static"
- "struct"
- "union"
  "using"
- "volatile"
- "if"
- "else"
- "while"
- "for"
- "switch"
- "case"
- (virtual)
 ] @keyword
 
-"#include" @keyword
+(preproc_directive) @keyword.directive
+
 ; Strings
 
 (string_literal) @string
 (system_lib_string) @string
 (raw_string_literal) @string
 
-"--" @operator
-"-" @operator
-"-=" @operator
-"->" @operator
-"=" @operator
-"!=" @operator
-"*" @operator
-"&" @operator
-"&&" @operator
-"&=" @operator
-"+" @operator
-"++" @operator
-"+=" @operator
-"<" @operator
-"<<" @operator
-"==" @operator
-">" @operator
-">>" @operator
-"|" @operator
-"||" @operator
-"|=" @operator
-"[" @operator
-"]" @operator
+[
+  "--"
+  "-"
+  "-="
+  "->"
+  "="
+  "!="
+  "*"
+  "&"
+  "&&"
+  "&="
+  "+"
+  "++"
+  "+="
+  "<"
+  "<<"
+  "=="
+  ">"
+  ">>"
+  "|"
+  "||"
+  "|="
+] @operator
 
-"{" @delimiter
-"}" @delimiter
-"(" @delimiter
-")" @delimiter
-"." @delimiter
-"::" @delimiter
-";" @delimiter
+[
+  "["
+  "]"
+  "{"
+  "}"
+  "("
+  ")"
+] @punctuation.bracket
+
+[
+  "."
+  "::"
+  ";"
+] @punctuation.delimiter
 
 (comment) @comment

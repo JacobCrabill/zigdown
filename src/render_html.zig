@@ -192,35 +192,35 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             const source = c.text orelse "";
 
             // TODO: Statically link a few common TreeSitter parsers
-            if (wasm.is_wasm) {
-                self.write(source);
-            } else {
-                // Use TreeSitter to parse the code block and apply colors
-                // TODO: Escape HTML-specific characters like '<', '>', etc.
-                //       https://mateam.net/html-escape-characters/
-                if (syntax.getHighlights(self.alloc, source, language)) |ranges| {
-                    defer self.alloc.free(ranges);
+            // if (wasm.is_wasm) {
+            //     self.write(source);
+            // } else {
+            // Use TreeSitter to parse the code block and apply colors
+            // TODO: Escape HTML-specific characters like '<', '>', etc.
+            //       https://mateam.net/html-escape-characters/
+            if (syntax.getHighlights(self.alloc, source, language)) |ranges| {
+                defer self.alloc.free(ranges);
 
-                    var lino: usize = 1;
-                    self.write("<table><tbody>\n");
-                    self.print("<tr><td><span style=\"color:var(--color-peach)\">{d}</span></td><td><pre>", .{lino});
-                    for (ranges) |range| {
-                        // Alternative: Have a CSS class for each color ( 'var(--color-x)' )
-                        // Split by line into a table with line numbers
-                        if (range.content.len > 0) {
-                            self.print("<span style=\"color:{s}\">{s}</span>", .{ utils.colorToCss(range.color), range.content });
-                        }
-                        if (range.newline) {
-                            self.write("</pre></td></tr>\n");
-                            lino += 1;
-                            self.print("<tr><td><span style=\"color:var(--color-peach)\">{d}</span></td><td><pre>", .{lino});
-                        }
+                var lino: usize = 1;
+                self.write("<table><tbody>\n");
+                self.print("<tr><td><span style=\"color:var(--color-peach)\">{d}</span></td><td><pre>", .{lino});
+                for (ranges) |range| {
+                    // Alternative: Have a CSS class for each color ( 'var(--color-x)' )
+                    // Split by line into a table with line numbers
+                    if (range.content.len > 0) {
+                        self.print("<span style=\"color:{s}\">{s}</span>", .{ utils.colorToCss(range.color), range.content });
                     }
-                    self.write("</pre></td></tr></tbody></table>\n");
-                } else |_| {
-                    self.write(source);
+                    if (range.newline) {
+                        self.write("</pre></td></tr>\n");
+                        lino += 1;
+                        self.print("<tr><td><span style=\"color:var(--color-peach)\">{d}</span></td><td><pre>", .{lino});
+                    }
                 }
+                self.write("</pre></td></tr></tbody></table>\n");
+            } else |_| {
+                self.write(source);
             }
+            // }
 
             self.print("</div>\n", .{});
         }

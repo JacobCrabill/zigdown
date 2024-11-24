@@ -733,6 +733,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     }
                 }
             } else |_| {
+                // Useful for debugging TreeSitter queries
+                // Note: Can do ':TSPlaygroundToggle' then hit 'o' in the tree to enter the live query editor
+                // std.debug.print("TreeSitter error: {any}\n", .{err});
                 self.writeLeaders();
                 self.startStyle(code_fence_style);
                 self.wrapTextRaw(source);

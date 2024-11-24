@@ -71,6 +71,7 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
+    query_mod.addIncludePath(b.path("data"));
     const query_dep = Dependency{ .name = "queries", .module = query_mod };
 
     // Baked-In TreeSitter Parser Libraries
@@ -94,6 +95,7 @@ pub fn build(b: *std.Build) !void {
         if (parser.scanner) |scanner| {
             query_mod.addCSourceFile(.{ .file = ts.path(scanner) });
         }
+        query_mod.addIncludePath(ts.path("src"));
     }
 
     mod.addImport("queries", query_mod);
@@ -116,6 +118,7 @@ pub fn build(b: *std.Build) !void {
     const treez = b.dependency("treez", .{ .optimize = optimize, .target = target });
     const treez_dep = Dependency{ .name = "treez", .module = treez.module("treez") };
     mod.addImport(treez_dep.name, treez_dep.module);
+    query_mod.addImport(treez_dep.name, treez_dep.module);
 
     var dep_array = [_]Dependency{ stbi_dep, flags_dep, treez_dep, mod_dep, query_dep };
     const deps: []Dependency = &dep_array;
@@ -202,27 +205,32 @@ pub fn build(b: *std.Build) !void {
     b.getInstallStep().dependOn(lib_step);
 
     // Add WASM Target
-    const wasm = b.addExecutable(.{
-        .name = "zigdown-wasm",
-        .root_source_file = b.path("src/wasm_main.zig"),
-        .optimize = .ReleaseSmall,
-        .target = b.resolveTargetQuery(.{
-            .cpu_arch = .wasm32,
-            .os_tag = .freestanding,
-        }),
-    });
-    wasm.entry = .disabled;
-    wasm.rdynamic = true;
-    wasm.root_module.addOptions("config", options);
-    wasm.root_module.addImport("zigdown", mod);
-    wasm.root_module.addImport("queries", query_mod);
-    wasm.root_module.addImport("treez", treez_dep.module);
-    wasm.addCSourceFile(.{ .file = b.path("src/wasm/stdlib.c") });
+    // Note that we need all of our dependencies to also built for WASM,
+    // so this target should only be "enabled" when the global target is
+    // set to wasm32-freestanding
+    if (target.query.cpu_arch == .wasm32 and target.query.os_tag == .freestanding) {
+        const wasm = b.addExecutable(.{
+            .name = "zigdown-wasm",
+            .root_source_file = b.path("src/wasm_main.zig"),
+            .optimize = .ReleaseSmall,
+            .target = b.resolveTargetQuery(.{
+                .cpu_arch = .wasm32,
+                .os_tag = .freestanding,
+            }),
+        });
+        wasm.entry = .disabled;
+        wasm.rdynamic = true;
+        wasm.root_module.addOptions("config", options);
+        wasm.root_module.addImport("zigdown", mod);
+        wasm.root_module.addImport("queries", query_mod);
+        wasm.root_module.addImport("treez", treez_dep.module);
+        wasm.addCSourceFile(.{ .file = b.path("src/wasm/stdlib.c") });
 
-    b.installArtifact(wasm);
-    const wasm_step = b.step("wasm", "Build Zigdown as a WASM library");
-    wasm_step.dependOn(&wasm.step);
-    b.getInstallStep().dependOn(wasm_step);
+        b.installArtifact(wasm);
+        const wasm_step = b.step("wasm", "Build Zigdown as a WASM library");
+        wasm_step.dependOn(&wasm.step);
+        b.getInstallStep().dependOn(wasm_step);
+    }
 
     // Add unit tests
 

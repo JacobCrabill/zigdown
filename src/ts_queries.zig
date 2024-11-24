@@ -5,13 +5,19 @@ const cons = @import("console.zig");
 const utils = @import("utils.zig");
 const treez = @import("treez");
 const config = @import("config");
+const wasm = @import("wasm.zig");
 
 const TsParserPair = struct {
     name: []const u8,
     language: *const treez.Language,
 };
 
-const builtin_queries = @import("queries").builtin_queries;
+const queries_mod = @import("queries");
+
+const tree_sitter_cpp = queries_mod.tree_sitter_cpp;
+const tree_sitter_bash = queries_mod.tree_sitter_bash;
+
+const builtin_queries = queries_mod.builtin_queries;
 const Allocator = std.mem.Allocator;
 const Self = @This();
 
@@ -54,11 +60,20 @@ pub fn init(alloc: Allocator) void {
         queries.put(k, v) catch @panic("Query insertion error!");
     }
 
+    // TODO: This is a lot of boilerplate. Cleanup.
     builtin_languages = std.StringHashMap(TsParserPair).init(alloc);
-    inline for (mylanglist) |lang| {
-        const language = treez.Language.get(lang) catch unreachable;
-        builtin_languages.put(lang, .{ .name = lang, .language = language }) catch unreachable;
-    }
+    builtin_languages.put("bash", .{ .name = "bash", .language = queries_mod.tree_sitter_bash() }) catch unreachable;
+    builtin_languages.put("c", .{ .name = "c", .language = queries_mod.tree_sitter_c() }) catch unreachable;
+    builtin_languages.put("cpp", .{ .name = "cpp", .language = queries_mod.tree_sitter_cpp() }) catch unreachable;
+    builtin_languages.put("json", .{ .name = "json", .language = queries_mod.tree_sitter_json() }) catch unreachable;
+    builtin_languages.put("python", .{ .name = "python", .language = queries_mod.tree_sitter_python() }) catch unreachable;
+    builtin_languages.put("rust", .{ .name = "rust", .language = queries_mod.tree_sitter_rust() }) catch unreachable;
+    builtin_languages.put("zig", .{ .name = "zig", .language = queries_mod.tree_sitter_zig() }) catch unreachable;
+
+    // inline for (mylanglist) |lang| {
+    //     const language = treez.Language.get(lang) catch unreachable;
+    //     builtin_languages.put(lang, .{ .name = lang, .language = language }) catch unreachable;
+    // }
 }
 
 pub fn deinit() void {
@@ -171,6 +186,8 @@ pub fn get(query_alloc: Allocator, language: []const u8) ?[]const u8 {
     if (queries.get(lang_alias)) |query| {
         return query_alloc.dupe(u8, query) catch return null;
     }
+
+    if (wasm.is_wasm) return null;
 
     // Last, check for a highlights file a $TS_CONFIG_DIR/queries
     const query_dir: []const u8 = getTsQueryDir() catch return null;

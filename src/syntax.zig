@@ -88,14 +88,14 @@ const highlights_map = std.StaticStringMap(utils.Color).initComptime(.{
     .{ "markup.italic", .White }, // italic text
     .{ "markup.strikethrough", .White }, // struck-through text
     .{ "markup.underline", .White }, // underlined text (only for literal underline markup!)
-    // TODO: Rotate heading colors
+    // TODO: Review rotated heading colors
     .{ "markup.heading", .Red }, // headings, titles (including markers)
     .{ "markup.heading.1", .Red }, // top-level heading
-    .{ "markup.heading.2", .Red }, // section heading
-    .{ "markup.heading.3", .Red }, // subsection heading
-    .{ "markup.heading.4", .Red }, // and so on
-    .{ "markup.heading.5", .Red }, // and so forth
-    .{ "markup.heading.6", .Red }, // six levels ought to be enough for anybody
+    .{ "markup.heading.2", .Magenta }, // section heading
+    .{ "markup.heading.3", .Blue }, // subsection heading
+    .{ "markup.heading.4", .Green }, // and so on
+    .{ "markup.heading.5", .Cyan }, // and so forth
+    .{ "markup.heading.6", .White }, // six levels ought to be enough for anybody
     .{ "markup.quote", .Blue }, // block quotes
     .{ "markup.math", .Blue }, // math environments (e.g. `$ ... $` in LaTeX)
     .{ "markup.link", .White }, // text references, footnotes, citations, etc.
