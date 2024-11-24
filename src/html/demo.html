@@ -4,22 +4,25 @@
   <meta charset="utf-8">
   <title>Minimal zig-wasm</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script type="text/javascript" src="script.js"></script>
+  <script type="text/javascript" src="zigdown_wrapper.js"></script>
+  <style>
+    textarea {
+      display: inline-block;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px;
+      resize: none;
+    };
+    .renderbox {
+      display: inline-block;
+      box-sizing: border-box;
+      width: 100%;
+    }
+  </style>
 </head>
 <body>
-  <style>
-  /* WHY DOES THIS NOT WORK?!?!? */
-  textarea {
-    width: 100%;
-    box-sizing: border-box; /* Include padding and border in the element's total width */
-    padding: 10px; /* Optional: add some padding for better aesthetics */
-    /* cols: 120; */
-    resize: none;
-  };
-  </style>
-  <textarea id="input_box" rows="20" placeholder="Type Markdown here..."></textarea>
-  <button id="submit" onclick="renderFromInput()">Render</button>
-  <div id="renderbox"></div>
+    <textarea id="input_box" rows="20" placeholder="Type Markdown here..."></textarea>
+    <div class="renderbox" id="renderbox">Rendered Markdown will appear here</div>
 </body>
 </html>
 

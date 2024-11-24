@@ -3,6 +3,13 @@ const text_encoder = new TextEncoder();
 let console_log_buffer = "";
 let html_render_buffer = "";
 
+const placeholder_markdown = `
+# Live WASM Markdown Previewer
+
+Enter Markdown above; it will be rendered here in real-time in the browser
+using the WebAssembly version of [Zigdown](https://github.com/JacobCrabill/zigdown).
+`;
+
 let wasm = {
     instance: undefined,
 
@@ -62,20 +69,21 @@ let importObject = {
 };
 
 function renderFromInput() {
-  wasm.renderToHtml(document.getElementById("input_box").value);
+  const text = document.getElementById("input_box").value
+  if (text == "") {
+    wasm.renderToHtml(placeholder_markdown);
+  } else {
+    wasm.renderToHtml(document.getElementById("input_box").value);
+  }
 }
 
 async function bootstrap() {
     wasm.init(await WebAssembly.instantiateStreaming(fetch("zigdown-wasm.wasm"), importObject));
 
-    const hello = wasm.instance.exports.hello;
-    hello();
-
-    // wasm.renderToHtml("# Hello, World!\n## Heading 2\n\n> Quote\n");
+    wasm.renderToHtml(placeholder_markdown);
 
     let input = document.getElementById("input_box");
     input.addEventListener("input", renderFromInput, false);
 }
 
 bootstrap();
-
