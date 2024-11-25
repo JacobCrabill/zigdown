@@ -39,12 +39,16 @@ pub fn build(b: *std.Build) !void {
     // when running 'zig build'.  This applies to downstream consumers of this package
     // as well, e.g. when added as a dependency in build.zig.zon.
     // Default to Debug, but allow the user to specify ReleaseSafe or ReleaseFast builds
-    var optimize = b.standardOptimizeOption(.{});
+    var optimize: std.builtin.OptimizeMode = b.standardOptimizeOption(.{});
     if (b.option(bool, "safe", "Build ReleaseSafe mode") != null) {
         optimize = .ReleaseSafe;
+    } else if (b.option(bool, "small", "Build ReleaseSmall mode") != null) {
+        optimize = .ReleaseSmall;
     } else if (b.option(bool, "fast", "Build ReleaseFast mode") != null) {
         optimize = .ReleaseFast;
     }
+
+    // const wasm_optimize = b.option(std.builtin.OptimizeMode, "wasm-optimize", "Optimization mode for WASM targets") orelse .ReleaseSmall;
 
     const build_lua = b.option(bool, "lua", "Build Zigdown as a Lua module");
 
@@ -52,10 +56,10 @@ pub fn build(b: *std.Build) !void {
     // This should match the list of parsers defined below and added to the 'queries' module
     const builtin_ts_option = "builtin_ts_parsers";
     const builtin_ts_option_desc = "List of TreeSitter parsers to bake into the build";
-    const wasm_ts_parser_list = b.option([]const u8, builtin_ts_option, builtin_ts_option_desc) orelse "bash,c,cpp,json,python,rust,zig";
+    const ts_parser_list = b.option([]const u8, builtin_ts_option, builtin_ts_option_desc) orelse "bash,c,cpp,json,python,rust,zig";
 
     const options: *Options = b.addOptions();
-    options.addOption([]const u8, builtin_ts_option, wasm_ts_parser_list);
+    options.addOption([]const u8, builtin_ts_option, ts_parser_list);
 
     // Export the zigdown module to downstream consumers
     const mod = b.addModule("zigdown", .{
@@ -65,68 +69,21 @@ pub fn build(b: *std.Build) !void {
     });
     const mod_dep = Dependency{ .name = "zigdown", .module = mod };
 
-    // Module for our built-in TreeSitter queries
-    const query_mod = b.addModule("queries", .{
-        .root_source_file = b.path("data/queries.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    query_mod.addIncludePath(b.path("data"));
-    const query_dep = Dependency{ .name = "queries", .module = query_mod };
-
-    // Baked-In TreeSitter Parser Libraries
-    const TsParserConfig = struct {
-        name: []const u8,
-        scanner: ?[]const u8 = null,
-    };
-    const parsers: []const TsParserConfig = &[_]TsParserConfig{
-        .{ .name = "bash", .scanner = "src/scanner.c" },
-        .{ .name = "c" },
-        .{ .name = "cpp", .scanner = "src/scanner.c" },
-        .{ .name = "json" },
-        .{ .name = "python", .scanner = "src/scanner.c" },
-        .{ .name = "rust", .scanner = "src/scanner.c" },
-        .{ .name = "zig" },
-    };
-    for (parsers) |parser| {
-        const dep_name = try std.fmt.allocPrint(b.allocator, "tree_sitter_{s}", .{parser.name});
-        const ts = b.dependency(dep_name, .{ .optimize = optimize, .target = target });
-        query_mod.addCSourceFile(.{ .file = ts.path("src/parser.c") });
-        if (parser.scanner) |scanner| {
-            query_mod.addCSourceFile(.{ .file = ts.path(scanner) });
-        }
-        query_mod.addIncludePath(ts.path("src"));
-    }
-
-    mod.addImport("queries", query_mod);
     mod.addOptions("config", options);
 
-    ///////////////////////////////////////////////////////////////////////////
-    // Dependencies from build.zig.zon
-    // ------------------------------------------------------------------------
-    // STB-Image
-    const stbi = b.dependency("stbi", .{ .optimize = optimize, .target = target });
-    const stbi_dep = Dependency{ .name = "stb_image", .module = stbi.module("stb_image") };
-    mod.addImport(stbi_dep.name, stbi_dep.module);
+    // Get all of our dependencies, both from build.zig.zon and our TreeSitter module
+    var deps: std.ArrayList(Dependency) = try getDependencies(b, target, optimize);
 
-    // Flags
-    const flags = b.dependency("flags", .{ .optimize = optimize, .target = target });
-    const flags_dep = Dependency{ .name = "flags", .module = flags.module("flags") };
-    mod.addImport(flags_dep.name, flags_dep.module);
-
-    // Treez (TreeSitter wrapper library)
-    const treez = b.dependency("treez", .{ .optimize = optimize, .target = target });
-    const treez_dep = Dependency{ .name = "treez", .module = treez.module("treez") };
-    mod.addImport(treez_dep.name, treez_dep.module);
-    query_mod.addImport(treez_dep.name, treez_dep.module);
-
-    var dep_array = [_]Dependency{ stbi_dep, flags_dep, treez_dep, mod_dep, query_dep };
-    const deps: []Dependency = &dep_array;
+    // Add all dependencies to our "root" Zigdown module, then add that to the dependencies list
+    for (deps.items) |dep| {
+        mod.addImport(dep.name, dep.module);
+    }
+    try deps.append(mod_dep);
 
     const exe_opts = BuildOpts{
         .target = target,
         .optimize = optimize,
-        .dependencies = deps,
+        .dependencies = deps.items,
         .options = options,
     };
 
@@ -204,37 +161,74 @@ pub fn build(b: *std.Build) !void {
     lib_step.dependOn(&lib.step);
     b.getInstallStep().dependOn(lib_step);
 
+    ////////////////////////////////////////////////////////////////////////////
     // Add WASM Target
-    // Note that we need all of our dependencies to also built for WASM,
-    // so this target should only be "enabled" when the global target is
-    // set to wasm32-freestanding
-    if (target.query.cpu_arch == .wasm32 and target.query.os_tag == .freestanding) {
-        const wasm = b.addExecutable(.{
-            .name = "zigdown-wasm",
-            .root_source_file = b.path("src/wasm_main.zig"),
-            .optimize = .ReleaseSmall,
-            .target = b.resolveTargetQuery(.{
-                .cpu_arch = .wasm32,
-                .os_tag = .freestanding,
-            }),
-        });
-        wasm.entry = .disabled;
-        wasm.rdynamic = true;
-        wasm.root_module.addOptions("config", options);
-        wasm.root_module.addImport("zigdown", mod);
-        wasm.root_module.addImport("queries", query_mod);
-        wasm.root_module.addImport("treez", treez_dep.module);
-        wasm.addCSourceFile(.{ .file = b.path("src/wasm/stdlib.c") });
+    // Requires a 'wasm32-freestanding' copy of all necessary dependencies
+    // TODO: Still requires some implementation of most of libC to link
+    // See: https://github.com/floooh/pacman.zig/blob/main/build.zig for an
+    // example of using Emscripten as the linker
+    ////////////////////////////////////////////////////////////////////////////
+    // const wasm_target = b.resolveTargetQuery(.{
+    //     .cpu_arch = .wasm32,
+    //     .os_tag = .freestanding,
+    //     // .abi = .none,
+    // });
 
-        b.installArtifact(wasm);
-        const wasm_step = b.step("wasm", "Build Zigdown as a WASM library");
-        wasm_step.dependOn(&wasm.step);
-        b.getInstallStep().dependOn(wasm_step);
-    }
+    // var wasm_deps: std.ArrayList(Dependency) = try getDependencies(b, wasm_target, wasm_optimize);
 
+    // const wasm_mod = b.addModule("zigdown_wasm", .{
+    //     .root_source_file = b.path("src/zigdown.zig"),
+    //     .target = wasm_target,
+    //     .optimize = wasm_optimize,
+    // });
+    // const wasm_mod_dep = Dependency{ .name = "zigdown", .module = wasm_mod };
+
+    // wasm_mod.addOptions("config", options);
+
+    // for (wasm_deps.items) |dep| {
+    //     wasm_mod.addImport(dep.name, dep.module);
+    // }
+    // try wasm_deps.append(wasm_mod_dep);
+
+    // const wasm = b.addExecutable(.{
+    //     .name = "zigdown-wasm",
+    //     .root_source_file = b.path("src/wasm_main.zig"),
+    //     .optimize = .ReleaseSmall,
+    //     .target = b.resolveTargetQuery(.{
+    //         .cpu_arch = .wasm32,
+    //         .os_tag = .freestanding,
+    //         // .abi = .gnu,
+    //     }),
+    //     .link_libc = true,
+    // });
+    // wasm.entry = .disabled;
+    // wasm.rdynamic = true;
+
+    // const wasm_libc = b.addStaticLibrary(.{
+    //     .name = "wasm-libc",
+    //     .root_source_file = b.path("src/wasm/stdlib.zig"),
+    //     .target = wasm_target,
+    //     .optimize = wasm_optimize,
+    //     .link_libc = true,
+    // });
+    // wasm_libc.addCSourceFile(.{ .file = b.path("src/wasm/stdlib.c") });
+    // wasm.linkLibrary(wasm_libc);
+
+    // wasm.root_module.addOptions("config", options);
+    // for (wasm_deps.items) |dep| {
+    //     wasm.root_module.addImport(dep.name, dep.module);
+    // }
+
+    // b.installArtifact(wasm);
+    // const wasm_step = b.step("wasm", "Build Zigdown as a WASM library");
+    // wasm_step.dependOn(&wasm.step);
+    // b.getInstallStep().dependOn(wasm_step);
+
+    ////////////////////////////////////////////////////////////////////////////
     // Add unit tests
+    ////////////////////////////////////////////////////////////////////////////
 
-    const test_opts = BuildOpts{ .optimize = optimize, .dependencies = deps, .options = options };
+    const test_opts = BuildOpts{ .optimize = optimize, .dependencies = deps.items, .options = options };
 
     addTest(b, "test-lexer", "Run Lexer unit tests", "src/lexer.zig", test_opts);
     addTest(b, "test-parser", "Run the new paresr tests", "src/parser.zig", test_opts);
@@ -332,4 +326,78 @@ fn addTest(b: *std.Build, cmd: []const u8, description: []const u8, path: []cons
     run_step.has_side_effects = true; // Force the test to always be run on command
     const step = b.step(cmd, description);
     step.dependOn(&run_step.step);
+}
+
+fn isWasm(target: std.Build.ResolvedTarget) bool {
+    if (target.query.cpu_arch) |arch| {
+        return switch (arch) {
+            .wasm32, .wasm64 => true,
+            else => false,
+        };
+    }
+    return false;
+}
+
+fn getDependencies(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) !std.ArrayList(Dependency) {
+    var dependencies = std.ArrayList(Dependency).init(b.allocator);
+
+    ///////////////////////////////////////////////////////////////////////////
+    // Module for our built-in TreeSitter queries
+    // ------------------------------------------------------------------------
+    const query_mod = b.addModule("queries", .{
+        .root_source_file = b.path("data/queries.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    query_mod.addIncludePath(b.path("data"));
+    const query_dep = Dependency{ .name = "queries", .module = query_mod };
+
+    // Baked-In TreeSitter Parser Libraries
+    const TsParserConfig = struct {
+        name: []const u8,
+        scanner: ?[]const u8 = null,
+    };
+    const parsers: []const TsParserConfig = &[_]TsParserConfig{
+        .{ .name = "bash", .scanner = "src/scanner.c" },
+        .{ .name = "c" },
+        .{ .name = "cpp", .scanner = "src/scanner.c" },
+        .{ .name = "json" },
+        .{ .name = "python", .scanner = "src/scanner.c" },
+        .{ .name = "rust", .scanner = "src/scanner.c" },
+        .{ .name = "zig" },
+    };
+    for (parsers) |parser| {
+        const dep_name = try std.fmt.allocPrint(b.allocator, "tree_sitter_{s}", .{parser.name});
+        const ts = b.dependency(dep_name, .{ .optimize = optimize, .target = target });
+        query_mod.addCSourceFile(.{ .file = ts.path("src/parser.c") });
+        if (parser.scanner) |scanner| {
+            query_mod.addCSourceFile(.{ .file = ts.path(scanner) });
+        }
+        query_mod.addIncludePath(ts.path("src"));
+    }
+
+    try dependencies.append(query_dep);
+
+    ///////////////////////////////////////////////////////////////////////////
+    // Dependencies from build.zig.zon
+    // ------------------------------------------------------------------------
+    if (!isWasm(target)) {
+        // STB-Image
+        const stbi = b.dependency("stbi", .{ .optimize = optimize, .target = target });
+        const stbi_dep = Dependency{ .name = "stb_image", .module = stbi.module("stb_image") };
+        try dependencies.append(stbi_dep);
+
+        // Flags
+        const flags = b.dependency("flags", .{ .optimize = optimize, .target = target });
+        const flags_dep = Dependency{ .name = "flags", .module = flags.module("flags") };
+        try dependencies.append(flags_dep);
+    }
+
+    // Treez (TreeSitter wrapper library)
+    const treez = b.dependency("treez", .{ .optimize = optimize, .target = target });
+    const treez_dep = Dependency{ .name = "treez", .module = treez.module("treez") };
+    try dependencies.append(treez_dep);
+    query_mod.addImport(treez_dep.name, treez_dep.module);
+
+    return dependencies;
 }

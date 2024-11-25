@@ -191,10 +191,6 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             const language = c.tag orelse "none";
             const source = c.text orelse "";
 
-            // TODO: Statically link a few common TreeSitter parsers
-            // if (wasm.is_wasm) {
-            //     self.write(source);
-            // } else {
             // Use TreeSitter to parse the code block and apply colors
             // TODO: Escape HTML-specific characters like '<', '>', etc.
             //       https://mateam.net/html-escape-characters/
@@ -217,10 +213,11 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
                     }
                 }
                 self.write("</pre></td></tr></tbody></table>\n");
-            } else |_| {
+            } else |err| {
+                // TODO: Still need to implement the rest of libc for WASM
+                self.print("<!-- Error using TreeSitter: {any} -->", .{err});
                 self.write(source);
             }
-            // }
 
             self.print("</div>\n", .{});
         }

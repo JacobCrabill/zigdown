@@ -14,6 +14,7 @@ pub const utils = @import("utils.zig");
 pub const blocks = @import("blocks.zig");
 pub const gfx = @import("image.zig");
 pub const ts_queries = @import("ts_queries.zig");
+pub const wasm = @import("wasm.zig");
 
 // Global public Zigdown types
 // pub const Markdown = markdown.Markdown;

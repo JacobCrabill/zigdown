@@ -15,44 +15,62 @@ extern void tree_sitter_debug_message(const char *, size_t);
 #define PAGESIZE 0x10000
 #define MAX_HEAP_SIZE (4 * 1024 * 1024)
 
-// TODO: Need a proper implementation! This is just a placeholder for now.
-bool iswspace(int wc) {
-  const int wspace_chars[] = { ' ', '\t', '\n', '\r', 0x0B, 0x0C };
-  for (size_t i = 0; i < sizeof(wspace_chars); i++) {
-    if (wc == wspace_chars[i])
-      return true;
-  }
-  return false;
+// // TODO: May need a proper implementation! This is just a placeholder for now.
+// bool iswspace(int wc) {
+//   const int wspace_chars[] = { ' ', '\t', '\n', '\r', 0x0B, 0x0C };
+//   for (size_t i = 0; i < sizeof(wspace_chars); i++) {
+//     if (wc == wspace_chars[i])
+//       return true;
+//   }
+//   return false;
+// }
+//
+// // TODO: May need a proper implementation! This is just a placeholder for now.
+// bool iswalpha(int wc) {
+//   const bool is_cap = (wc >= (int)'A' && wc <= (int)'Z');
+//   const bool is_lower = (wc >= (int)'a' && wc <= (int)'z');
+//   return is_cap || is_lower;
+// }
+//
+// bool iswalnum(int wc) {
+//   const bool is_cap = (wc >= (int)'A' && wc <= (int)'Z');
+//   const bool is_lower = (wc >= (int)'a' && wc <= (int)'z');
+//   const bool is_number = (wc >= (int)'0' && wc <= (int)'9');
+//   return is_cap || is_lower || is_number;
+// }
+//
+// int strcmp(const char *s1, const char *s2) {
+//     const unsigned char *p1 = ( const unsigned char * )s1;
+//     const unsigned char *p2 = ( const unsigned char * )s2;
+//
+//     while ( *p1 && *p1 == *p2 ) {
+//       ++p1; ++p2;
+//     }
+//
+//     return *p1 - *p2;
+// }
+//
+//
+// int strncmp(const char *s1, const char *s2, size_t n) {
+//     const unsigned char *p1 = ( const unsigned char * )s1;
+//     const unsigned char *p2 = ( const unsigned char * )s2;
+//
+//     size_t i = 0;
+//     while ( *p1 && i < n && *p1 == *p2 ) {
+//       ++p1; ++p2; ++i;
+//     }
+//
+//     return *p1 - *p2;
+// }
+
+int fprintf(FILE *stream, const char *format, ...) {
+  // Is this even relevant for WASM?  Probably not.
+  return 0;
 }
 
-// TODO: Need a proper implementation! This is just a placeholder for now.
-bool iswalpha(int wc) {
-  const bool is_cap = (wc >= (int)'A' && wc <= (int)'Z');
-  const bool is_lower = (wc >= (int)'a' && wc <= (int)'z');
-  return is_cap || is_lower;
-}
-
-bool iswalnum(int wc) {
-  const bool is_cap = (wc >= (int)'A' && wc <= (int)'Z');
-  const bool is_lower = (wc >= (int)'a' && wc <= (int)'z');
-  const bool is_number = (wc >= (int)'0' && wc <= (int)'9');
-  return is_cap || is_lower || is_number;
-}
-
-int strcmp(const char *s1, const char *s2) {
-    const unsigned char *p1 = ( const unsigned char * )s1;
-    const unsigned char *p2 = ( const unsigned char * )s2;
-
-    while ( *p1 && *p1 == *p2 ) {
-      ++p1; ++p2;
-    }
-
-    return *p1 - *p2;
-}
-
-void __assert_fail() {
-  // do nothing
-}
+// void __assert_fail() {
+//   // do nothing
+// }
 
 typedef struct {
   size_t size;

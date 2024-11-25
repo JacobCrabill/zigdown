@@ -53,7 +53,7 @@ const Zigdown = struct {
 
     pub const switches = .{
         .console = 'c',
-        .html = 'h',
+        .html = 'x', // note: '-h' is reserved by Flags for 'help'
         .timeit = 't',
         .verbose = 'v',
         .output = 'o',

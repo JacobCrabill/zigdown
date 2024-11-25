@@ -1,6 +1,7 @@
 const std = @import("std");
-const zd = @import("zigdown.zig");
-const wasm = @import("wasm.zig");
+const zd = @import("zigdown");
+const stdlib = @import("wasm/stdlib.zig");
+const wasm = zd.wasm;
 
 const ArrayList = std.ArrayList;
 const htmlRenderer = zd.htmlRenderer;

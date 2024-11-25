@@ -1,5 +1,4 @@
 const std = @import("std");
-const zd = @import("zigdown.zig");
 
 /// Global flag for building for WASM or not
 pub const is_wasm = switch (@import("builtin").cpu.arch) {
