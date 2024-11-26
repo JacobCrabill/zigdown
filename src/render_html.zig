@@ -236,9 +236,11 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
 
         /// Render a standard paragraph of text
         fn renderParagraph(self: *Self, leaf: zd.Leaf) !void {
+            self.write("<p>");
             for (leaf.inlines.items) |item| {
                 try self.renderInline(item);
             }
+            self.write("</p>");
         }
 
         // Inline rendering functions -----------------------------------------
