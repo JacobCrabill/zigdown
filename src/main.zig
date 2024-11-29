@@ -25,6 +25,7 @@ const Zigdown = struct {
     pub const descriptions = .{
         .console = "Render to the console [default]",
         .html = "Render to HTML",
+        .width = "Console width to render within (default: 90 chars)",
         .output = "Output to a file, instead of to stdout",
         .timeit = "Time the parsing & rendering and display the results",
         .verbose = "Enable verbose output from the parser",
@@ -38,6 +39,7 @@ const Zigdown = struct {
 
     console: bool = false,
     html: bool = false,
+    width: ?usize = null,
     timeit: bool = false,
     verbose: bool = false,
     output: ?[]const u8 = null,
@@ -54,6 +56,7 @@ const Zigdown = struct {
     pub const switches = .{
         .console = 'c',
         .html = 'x', // note: '-h' is reserved by Flags for 'help'
+        .width = 'w',
         .timeit = 't',
         .verbose = 'v',
         .output = 'o',
@@ -151,11 +154,18 @@ pub fn main() !void {
         md.print(0);
     }
 
+    const render_opts = RenderOpts{
+        .do_console = do_console,
+        .do_html = do_html,
+        .root_dir = md_dir,
+        .console_width = result.width,
+    };
+
     if (outfile) |outname| {
         var out_file: File = try std.fs.cwd().createFile(outname, .{ .truncate = true });
-        try render(out_file.writer(), md, do_console, do_html, md_dir);
+        try render(out_file.writer(), md, render_opts);
     } else {
-        try render(stdout, md, do_console, do_html, md_dir);
+        try render(stdout, md, render_opts);
     }
 
     const t2 = timer.read();
@@ -165,22 +175,40 @@ pub fn main() !void {
     }
 }
 
-fn render(stream: anytype, md: zd.Block, do_console: bool, do_html: bool, root: ?[]const u8) !void {
-    if (do_html) {
+const RenderOpts = struct {
+    do_console: bool = true,
+    do_html: bool = false,
+    root_dir: ?[]const u8 = null,
+    console_width: ?usize = null,
+};
+
+fn render(stream: anytype, md: zd.Block, opts: RenderOpts) !void {
+    if (opts.do_html) {
         var h_renderer = htmlRenderer(stream, md.allocator());
         defer h_renderer.deinit();
         try h_renderer.renderBlock(md);
     }
 
-    if (do_console or !do_html) {
+    if (opts.do_console or !opts.do_html) {
         // Get the terminal size; limit our width to that
-        const tsize = try zd.gfx.getTerminalSize();
-        const opts = zd.render.render_console.RenderOpts{
-            .root_dir = root,
+        // Some tools like `fzf --preview` cause the getTerminalSize() to fail, so work around that
+        // Kinda hacky, but :shrug:
+        var columns: usize = 90;
+        if (opts.console_width) |width| {
+            columns = width;
+        } else {
+            const tsize = zd.gfx.getTerminalSize() catch blk: {
+                break :blk zd.gfx.TermSize{ .cols = columns, .rows = 150 };
+            };
+            columns = tsize.cols;
+        }
+
+        const render_opts = zd.render.render_console.RenderOpts{
+            .root_dir = opts.root_dir,
             .indent = 2,
-            .width = @min(tsize.cols - 2, 90),
+            .width = columns,
         };
-        var c_renderer = consoleRenderer(stream, md.allocator(), opts);
+        var c_renderer = consoleRenderer(stream, md.allocator(), render_opts);
         defer c_renderer.deinit();
         try c_renderer.renderBlock(md);
     }
