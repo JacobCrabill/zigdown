@@ -41,4 +41,5 @@ pub const ListItem = struct {
 /// Table
 pub const Table = struct {
     ncol: usize = 0,
+    row: usize = 0,
 };

@@ -400,3 +400,11 @@ pub fn validateLink(in_line: []const Token) bool {
 
     return false;
 }
+
+pub fn countKind(line: []const Token, kind: TokenType) usize {
+    var count: usize = 0;
+    for (line) |tok| {
+        if (tok.kind == kind) count += 1;
+    }
+    return count;
+}

@@ -186,6 +186,13 @@ fn trimContinuationMarkersTaskList(line: []const Token) []const Token {
     @panic("Can't be here!");
 }
 
+fn trimContinuationMarkersTable(line: []const Token) []const Token {
+    for (line, 0..) |tok, i| {
+        if (tok.kind == .PIPE and i + 1 < line.len) return line[i + 1 ..];
+    }
+    @panic("Can't be here!");
+}
+
 /// Append a list of words to the given TextBlock as Text Inline objects
 fn appendWords(alloc: Allocator, inlines: *ArrayList(zd.Inline), words: *ArrayList([]const u8), style: zd.TextStyle) Allocator.Error!void {
     if (words.items.len > 0) {
@@ -621,10 +628,64 @@ pub const Parser = struct {
     }
 
     pub fn handleLineTable(self: *Self, block: *Block, line: []const Token) bool {
-        _ = self;
-        _ = block;
-        _ = line;
-        @panic("Unimplemented");
+        assert(block.isOpen());
+        assert(block.isContainer());
+
+        if (line[0].kind == .EOF) return true;
+        assert(line[0].kind == .PIPE);
+
+        self.logger.log("TABLE\n", .{});
+        self.logger.printText(line, false);
+
+        // A table row must contain *at least* '||'
+        if (utils.countKind(line, .PIPE) < 2)
+            return false;
+
+        var cblock = block.container();
+        var table = &cblock.content.Table;
+
+        // Check the 2nd row - this should be the "header" / formatting row
+        if (table.row == 1) {
+            if (utils.countKind(line, .PIPE) != table.ncol + 1) {
+                return false;
+            }
+            table.row += 1;
+            return true;
+        }
+
+        var column_count: usize = 0;
+        var i: usize = 1;
+        while (i < line.len) {
+            const tok = line[i];
+            if (tok.kind == .PIPE) {
+                // End of this cell
+                column_count += 1;
+                self.logger.log("Incrementing table column_count\n", .{});
+            } else if (tok.kind == .BREAK) {
+                // End of line
+            } else if (i < line.len) {
+                std.debug.print("Parsing new block from {any}\n", .{tok});
+                if (utils.findFirstOf(line, i, &.{.PIPE})) |idx| {
+                    const child = self.parseNewBlock(line[i..idx]) catch unreachable;
+                    cblock.children.append(child) catch unreachable;
+                    i = idx - 1;
+                }
+            }
+            i += 1;
+        }
+
+        const cur_ncol = table.ncol;
+        if (cur_ncol == 0) {
+            table.ncol = column_count;
+        } else if (cur_ncol != column_count) {
+            self.logger.log("Error: Mismatched column counts in Table: old: {d}, new: {d}\n", .{
+                cur_ncol,
+                column_count,
+            });
+        }
+        table.row += 1;
+
+        return true;
     }
 
     ///////////////////////////////////////////////////////
@@ -815,6 +876,12 @@ pub const Parser = struct {
             .BREAK => {
                 b = Block.initLeaf(self.alloc, .Break, col);
                 b.Leaf.content.Break = {};
+            },
+            .PIPE => {
+                b = Block.initContainer(self.alloc, .Table, col);
+                if (!self.handleLineTable(&b, line)) {
+                    try errorReturn(@src(), "Cannot parse line as table: {any}", .{line});
+                }
             },
             else => {
                 // Fallback - parse paragraph

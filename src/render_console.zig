@@ -561,15 +561,14 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             // const col_w = @divFloor(self.opts.width - 2*self.opts.indent, ncol);
 
             self.writeLeaders();
-            self.write(" |");
             for (table.children.items, 0..) |item, i| {
-                if (@mod(i, ncol) == 0) {
+                if (i > 0 and @mod(i, ncol) == 0) {
                     // start next row
-                    self.write(" |");
+                    self.write(" │");
                     self.renderBreak();
                     self.writeLeaders();
                 }
-                self.write(" | ");
+                self.write(" │ ");
                 // TODO: Render wrapped text within a block
                 try self.renderParagraph(item.Leaf);
             }
