@@ -664,7 +664,6 @@ pub const Parser = struct {
             } else if (tok.kind == .BREAK) {
                 // End of line
             } else if (i < line.len) {
-                std.debug.print("Parsing new block from {any}\n", .{tok});
                 if (utils.findFirstOf(line, i, &.{.PIPE})) |idx| {
                     const child = self.parseNewBlock(line[i..idx]) catch unreachable;
                     cblock.children.append(child) catch unreachable;

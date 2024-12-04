@@ -70,9 +70,11 @@ pub const RenderOpts = struct {
     max_image_cols: usize = 45,
     box_style: cons.Box = cons.BoldBox,
     root_dir: ?[]const u8 = null,
+    rendering_to_buffer: bool = false, // Whether we're rendering to a buffer or to the final output
 };
 
-// Render a Markdown document to the console using ANSI escape characters
+/// Render a Markdown document to the console using ANSI escape characters
+/// The return type is specific go the given OutStream (writer) type
 pub fn ConsoleRenderer(comptime OutStream: type) type {
     return struct {
         const Self = @This();
@@ -150,6 +152,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.cur_style = style;
         }
 
+        /// Reset all active style flags
         pub fn endStyle(self: *Self, style: zd.TextStyle) void {
             if (style.bold) self.writeno(cons.end_bold);
             if (style.italic) self.writeno(cons.end_italic);
@@ -230,18 +233,25 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             };
         }
 
-        /// ----------------------------------------------
-        /// Private implementation methods
+        ////////////////////////////////////////////////////////////////////////
+        // Private implementation methods
+        ////////////////////////////////////////////////////////////////////////
+
+        /// Begin the rendering
         fn renderBegin(self: *Self) void {
             self.renderBreak();
         }
 
+        /// Complete the rendering
         fn renderEnd(self: *Self) void {
-            self.printno(cons.move_left, .{1000});
-            self.writeno(cons.clear_line);
+            if (!self.opts.rendering_to_buffer) {
+                self.printno(cons.move_left, .{1000});
+                self.writeno(cons.clear_line);
+            }
             self.column = 0;
         }
 
+        /// Write the given text 'count' times
         fn writeNTimes(self: *Self, text: []const u8, count: usize) void {
             var i: usize = 0;
             while (i < count) : (i += 1) {
@@ -281,7 +291,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             // TODO: This still feels fishy
             // backup over the trailing " " we added if the given text didn't have one
-            if (!std.mem.endsWith(u8, text, " ") and self.column > self.opts.indent) {
+            if (!std.mem.endsWith(u8, text, " ") and self.column > self.opts.indent and !self.opts.rendering_to_buffer) {
                 self.printno(cons.move_left, .{1});
                 self.writeno(cons.clear_line_end);
                 self.column -= 1;
@@ -335,7 +345,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             // TODO: This still feels fishy
             // backup over the trailing " " we added if the given text didn't have one
-            if (!std.mem.endsWith(u8, text, " ") and self.column > self.opts.indent) {
+            if (!std.mem.endsWith(u8, text, " ") and self.column > self.opts.indent and !self.opts.rendering_to_buffer) {
                 self.printno(cons.move_left, .{1});
                 self.writeno(cons.clear_line_end);
                 self.column -= 1;
@@ -362,10 +372,13 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
         }
 
+        /// Write the row leaders
         pub fn writeLeaders(self: *Self) void {
             const style = self.cur_style;
             self.resetStyle();
-            self.writeno(cons.clear_line);
+            if (!self.opts.rendering_to_buffer) {
+                self.writeno(cons.clear_line);
+            }
             for (self.leader_stack.items) |text| {
                 self.startStyle(text.style);
                 self.write(text.text);
@@ -464,6 +477,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
         }
 
+        /// Render an unordered list of items
         fn renderUnorderedList(self: *Self, list: zd.Container) !void {
             for (list.children.items) |item| {
                 // Ensure we start each list item on a new line
@@ -485,6 +499,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
         }
 
+        /// Render an ordered (numbered) list of items
         fn renderNumberedList(self: *Self, list: zd.Container) !void {
             const start: usize = list.content.List.start;
             var buffer: [16]u8 = undefined;
@@ -519,6 +534,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
         }
 
+        /// Render a list of task items
         fn renderTaskList(self: *Self, list: zd.Container) !void {
             for (list.children.items) |item| {
                 // Ensure we start each list item on a new line
@@ -544,6 +560,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
         }
 
+        /// Render a single ListItem
         fn renderListItem(self: *Self, list: zd.Container) !void {
             for (list.children.items, 0..) |item, i| {
                 if (i > 0) {
@@ -553,25 +570,144 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
         }
 
+        /// Render a table
         fn renderTable(self: *Self, table: zd.Container) !void {
             if (self.column > self.opts.indent)
                 self.renderBreak();
 
             const ncol = table.content.Table.ncol;
-            // const col_w = @divFloor(self.opts.width - 2*self.opts.indent, ncol);
+            const col_w = @divFloor(self.opts.width - (2 * self.opts.indent) - (ncol + 1), ncol);
 
-            self.writeLeaders();
-            for (table.children.items, 0..) |item, i| {
-                if (i > 0 and @mod(i, ncol) == 0) {
-                    // start next row
-                    self.write(" │");
-                    self.renderBreak();
-                    self.writeLeaders();
-                }
-                self.write(" │ ");
-                // TODO: Render wrapped text within a block
-                try self.renderParagraph(item.Leaf);
+            // Create a new renderer to render into a buffer for each cell
+            // Use an arena to simplify memory management here
+            var arena = std.heap.ArenaAllocator.init(self.alloc);
+            defer arena.deinit();
+            const alloc = arena.allocator();
+
+            const Cell = struct {
+                text: []const u8 = undefined,
+                idx: usize = 0, // The current index into 'text'
+                row: usize = 0,
+            };
+            var cells = ArrayList(Cell).init(alloc);
+
+            for (table.children.items) |item| {
+                // Render the table cell into a new buffer
+                var buf_writer = ArrayList(u8).init(self.alloc);
+                const stream = buf_writer.writer();
+                const sub_opts = RenderOpts{
+                    .width = col_w,
+                    .indent = 1,
+                    .max_image_rows = self.opts.max_image_rows,
+                    .max_image_cols = col_w - 2 * self.opts.indent,
+                    .box_style = self.opts.box_style,
+                    .root_dir = self.opts.root_dir,
+                    .rendering_to_buffer = true,
+                };
+
+                var sub_renderer = ConsoleRenderer(@TypeOf(stream)).init(stream, alloc, sub_opts);
+                try sub_renderer.renderBlock(item);
+
+                try cells.append(.{ .text = buf_writer.items });
             }
+
+            // Demultiplex the rendered text for every cell into
+            // individual lines of text for all cells in each row
+            var cell_idx: usize = 0;
+            var max_rows: usize = 0; // Track max # of rows of text for cells in each row
+
+            self.writeTableBorderTop(ncol, col_w);
+
+            while (cell_idx < cells.items.len) {
+                // For each row...
+                self.writeLeaders();
+                for (0..ncol) |i| {
+                    // For each cell in the row...
+                    self.write(self.opts.box_style.vb);
+                    self.write(" ");
+                    var cell = cells.items[cell_idx + i];
+                    if (cell.idx < cell.text.len) {
+                        // Write the next line of text from that cell,
+                        // then increment the write head index of that cell
+                        const text = cell.text[cell.idx..];
+                        if (std.mem.indexOfScalar(u8, text, '\n')) |end_idx| {
+                            self.write(text[0..end_idx]);
+                            cell.idx = end_idx + 1;
+                            cell.row += 1;
+                            max_rows = @max(max_rows, cell.row);
+                        } else {
+                            self.write(text);
+                        }
+                        // Move the cursor to the start of the next cell
+                        self.printno(cons.set_col, .{self.opts.indent + (i + 2) + (i + 1) * col_w});
+                    } else {
+                        self.writeNTimes(" ", col_w - 1);
+                    }
+                }
+
+                // End the current row
+                // TODO: Grid lines between rows
+                self.write(self.opts.box_style.vb);
+                self.renderBreak();
+                self.writeLeaders();
+
+                if (cell_idx + ncol >= cells.items.len) {
+                    self.writeTableBorderBottom(ncol, col_w);
+                } else {
+                    self.writeTableBorderMiddle(ncol, col_w);
+                }
+                cell_idx += ncol;
+            }
+        }
+
+        fn writeTableBorderTop(self: *Self, ncol: usize, col_w: usize) void {
+            self.write(self.opts.box_style.tl);
+            for (0..ncol) |i| {
+                for (0..col_w) |_| {
+                    self.write(self.opts.box_style.hb);
+                }
+                if (i < ncol - 1) {
+                    self.write(self.opts.box_style.tj);
+                } else {
+                    self.write(self.opts.box_style.tr);
+                }
+            }
+            self.renderBreak();
+            self.writeLeaders();
+        }
+
+        fn writeTableBorderMiddle(self: *Self, ncol: usize, col_w: usize) void {
+            self.write(self.opts.box_style.lj);
+            for (0..ncol) |i| {
+                for (0..col_w) |_| {
+                    self.write(self.opts.box_style.hb);
+                }
+                if (i < ncol - 1) {
+                    self.write(self.opts.box_style.cj);
+                } else {
+                    self.write(self.opts.box_style.rj);
+                }
+            }
+            self.renderBreak();
+            self.writeLeaders();
+        }
+
+        fn writeTableBorderBottom(self: *Self, ncol: usize, col_w: usize) void {
+            self.write(self.opts.box_style.bl);
+            for (0..ncol) |i| {
+                for (0..col_w) |_| {
+                    self.write(self.opts.box_style.hb);
+                }
+                if (i < ncol - 1) {
+                    self.write(self.opts.box_style.bj);
+                    // self.write("┼");
+                } else {
+                    self.write(self.opts.box_style.br);
+                    // self.write("┤");
+                }
+            }
+            self.renderBreak();
+            self.writeLeaders();
         }
 
         // Leaf Rendering Functions -------------------------------------------
@@ -582,7 +718,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             // Reset all styles before wrting the newline and indent
             const cur_style = self.cur_style;
             self.resetStyle();
-            self.writeno(cons.clear_line_end);
+            if (!self.opts.rendering_to_buffer) {
+                self.writeno(cons.clear_line_end);
+            }
             self.writeno("\n");
             self.column = 0;
             self.writeNTimes(" ", self.opts.indent);
@@ -595,8 +733,10 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             // Reset all styles before wrting the newline and indent
             const cur_style = self.cur_style;
             self.resetStyle();
-            self.writeno(cons.clear_line_end);
-            self.writeno(cons.move_home);
+            if (!self.opts.rendering_to_buffer) {
+                self.writeno(cons.clear_line_end);
+                self.writeno(cons.move_home);
+            }
             self.column = 0;
             self.writeNTimes(" ", self.opts.indent);
             self.startStyle(cur_style);
@@ -692,7 +832,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             // Reset
             self.resetStyle();
-            self.writeno(cons.clear_line_end);
+            if (!self.opts.rendering_to_buffer) {
+                self.writeno(cons.clear_line_end);
+            }
             if (overridden)
                 self.style_override = null;
 

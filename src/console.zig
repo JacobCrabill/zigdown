@@ -241,17 +241,17 @@ test "styled printing" {
 
 // "base class" for all our box-drawing character sets
 pub const Box = struct {
-    hb: []const u8 = undefined,
-    vb: []const u8 = undefined,
-    tl: []const u8 = undefined,
-    tr: []const u8 = undefined,
-    bl: []const u8 = undefined,
-    br: []const u8 = undefined,
-    lj: []const u8 = undefined,
-    tj: []const u8 = undefined,
-    rj: []const u8 = undefined,
-    bj: []const u8 = undefined,
-    cj: []const u8 = undefined,
+    hb: []const u8 = undefined, // horizontal bar
+    vb: []const u8 = undefined, // vertical bar
+    tl: []const u8 = undefined, // top-left
+    tr: []const u8 = undefined, // top-right
+    bl: []const u8 = undefined, // bottom-left
+    br: []const u8 = undefined, // bottom-right
+    lj: []const u8 = undefined, // left junction
+    tj: []const u8 = undefined, // top junction
+    rj: []const u8 = undefined, // right junction
+    bj: []const u8 = undefined, // bottom junction
+    cj: []const u8 = undefined, // center junction
 };
 
 // Dummy style using plain ASCII characters

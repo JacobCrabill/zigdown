@@ -183,8 +183,11 @@ const RenderOpts = struct {
 };
 
 fn render(stream: anytype, md: zd.Block, opts: RenderOpts) !void {
+    var arena = std.heap.ArenaAllocator.init(md.allocator());
+    defer arena.deinit(); // Could do this, but no reason to do so
+
     if (opts.do_html) {
-        var h_renderer = htmlRenderer(stream, md.allocator());
+        var h_renderer = htmlRenderer(stream, arena.allocator());
         defer h_renderer.deinit();
         try h_renderer.renderBlock(md);
     }
@@ -200,7 +203,7 @@ fn render(stream: anytype, md: zd.Block, opts: RenderOpts) !void {
             const tsize = zd.gfx.getTerminalSize() catch blk: {
                 break :blk zd.gfx.TermSize{ .cols = columns, .rows = 150 };
             };
-            columns = tsize.cols;
+            columns = @min(90, tsize.cols);
         }
 
         const render_opts = zd.render.render_console.RenderOpts{
@@ -208,7 +211,7 @@ fn render(stream: anytype, md: zd.Block, opts: RenderOpts) !void {
             .indent = 2,
             .width = columns,
         };
-        var c_renderer = consoleRenderer(stream, md.allocator(), render_opts);
+        var c_renderer = consoleRenderer(stream, arena.allocator(), render_opts);
         defer c_renderer.deinit();
         try c_renderer.renderBlock(md);
     }
