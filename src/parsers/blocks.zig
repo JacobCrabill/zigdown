@@ -631,8 +631,7 @@ pub const Parser = struct {
         assert(block.isOpen());
         assert(block.isContainer());
 
-        if (line[0].kind == .EOF) return true;
-        assert(line[0].kind == .PIPE);
+        if (line[0].kind != .PIPE) return false;
 
         self.logger.log("TABLE\n", .{});
         self.logger.printText(line, false);

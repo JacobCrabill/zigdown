@@ -291,7 +291,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             // TODO: This still feels fishy
             // backup over the trailing " " we added if the given text didn't have one
-            if (!std.mem.endsWith(u8, text, " ") and self.column > self.opts.indent and !self.opts.rendering_to_buffer) {
+            if (!std.mem.endsWith(u8, text, " ") and self.column > self.opts.indent) {
                 self.printno(cons.move_left, .{1});
                 self.writeno(cons.clear_line_end);
                 self.column -= 1;
@@ -345,7 +345,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             // TODO: This still feels fishy
             // backup over the trailing " " we added if the given text didn't have one
-            if (!std.mem.endsWith(u8, text, " ") and self.column > self.opts.indent and !self.opts.rendering_to_buffer) {
+            if (!std.mem.endsWith(u8, text, " ") and self.column > self.opts.indent) {
                 self.printno(cons.move_left, .{1});
                 self.writeno(cons.clear_line_end);
                 self.column -= 1;
@@ -587,7 +587,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             const Cell = struct {
                 text: []const u8 = undefined,
                 idx: usize = 0, // The current index into 'text'
-                row: usize = 0,
             };
             var cells = ArrayList(Cell).init(alloc);
 
@@ -613,50 +612,66 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             // Demultiplex the rendered text for every cell into
             // individual lines of text for all cells in each row
-            var cell_idx: usize = 0;
-            var max_rows: usize = 0; // Track max # of rows of text for cells in each row
+            // var cell_idx: usize = 0;
+            const nrow: usize = @divFloor(cells.items.len, ncol);
+            std.debug.assert(cells.items.len == ncol * nrow);
 
             self.writeTableBorderTop(ncol, col_w);
 
-            while (cell_idx < cells.items.len) {
-                // For each row...
-                self.writeLeaders();
-                for (0..ncol) |i| {
-                    // For each cell in the row...
-                    self.write(self.opts.box_style.vb);
-                    self.write(" ");
-                    var cell = cells.items[cell_idx + i];
-                    if (cell.idx < cell.text.len) {
-                        // Write the next line of text from that cell,
-                        // then increment the write head index of that cell
-                        const text = cell.text[cell.idx..];
-                        if (std.mem.indexOfScalar(u8, text, '\n')) |end_idx| {
-                            self.write(text[0..end_idx]);
-                            cell.idx = end_idx + 1;
-                            cell.row += 1;
-                            max_rows = @max(max_rows, cell.row);
-                        } else {
-                            self.write(text);
-                        }
-                        // Move the cursor to the start of the next cell
-                        self.printno(cons.set_col, .{self.opts.indent + (i + 2) + (i + 1) * col_w});
-                    } else {
-                        self.writeNTimes(" ", col_w - 1);
+            for (0..nrow) |i| {
+                // Get the max number of rows of text for any cell in the table row
+                var max_rows: usize = 0; // Track max # of rows of text for cells in each row
+                for (0..ncol) |j| {
+                    const cell_idx: usize = i * ncol + j;
+                    const cell = cells.items[cell_idx];
+                    var iter = std.mem.tokenize(u8, cell.text, "\n");
+                    var n_lines: usize = 0;
+                    while (iter.next()) |_| {
+                        n_lines += 1;
                     }
+                    max_rows = @max(max_rows, n_lines);
+                    // std.debug.print("{d}\n", .{max_rows});
+                }
+
+                // Loop over the # of rows of text in this single row of the table
+                for (0..max_rows) |_| {
+                    self.writeLeaders();
+                    for (0..ncol) |j| {
+                        const cell_idx: usize = i * ncol + j;
+                        const cell: *Cell = &cells.items[cell_idx];
+
+                        // For each cell in the row...
+                        self.write(self.opts.box_style.vb);
+                        self.write(" ");
+
+                        if (cell.idx < cell.text.len) {
+                            // Write the next line of text from that cell,
+                            // then increment the write head index of that cell
+                            var text = trimLeadingWhitespace(cell.text[cell.idx..]);
+                            if (std.mem.indexOfAny(u8, text, "\n")) |end_idx| {
+                                text = text[0..end_idx];
+                            }
+                            self.write(text);
+                            cell.idx += text.len + 1;
+
+                            // Move the cursor to the start of the next cell
+                            self.printno(cons.set_col, .{self.opts.indent + (j + 2) + (j + 1) * col_w});
+                        } else {
+                            self.writeNTimes(" ", col_w - 1);
+                        }
+                    }
+                    self.write(self.opts.box_style.vb);
+                    self.renderBreak();
                 }
 
                 // End the current row
-                // TODO: Grid lines between rows
-                self.write(self.opts.box_style.vb);
-                self.renderBreak();
                 self.writeLeaders();
 
-                if (cell_idx + ncol >= cells.items.len) {
+                if (i == nrow - 1) {
                     self.writeTableBorderBottom(ncol, col_w);
                 } else {
                     self.writeTableBorderMiddle(ncol, col_w);
                 }
-                cell_idx += ncol;
             }
         }
 
@@ -700,10 +715,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 }
                 if (i < ncol - 1) {
                     self.write(self.opts.box_style.bj);
-                    // self.write("┼");
                 } else {
                     self.write(self.opts.box_style.br);
-                    // self.write("┤");
                 }
             }
             self.renderBreak();
@@ -1043,4 +1056,14 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
         }
     };
+}
+
+fn trimLeadingWhitespace(line: []const u8) []const u8 {
+    for (line, 0..) |c, i| {
+        switch (c) {
+            ' ', '\n' => {},
+            else => return line[i..],
+        }
+    }
+    return line;
 }
