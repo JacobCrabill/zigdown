@@ -133,8 +133,6 @@ pub fn main() !void {
 
     const md_dir: ?[]const u8 = std.fs.path.dirname(realpath);
 
-    var timer = try std.time.Timer.start();
-
     // Parse the input text
     const opts = zd.parser.ParserOpts{
         .copy_input = false,
@@ -143,9 +141,9 @@ pub fn main() !void {
     var parser = zd.Parser.init(alloc, opts);
     defer parser.deinit();
 
-    timer.reset();
+    var ptimer = zd.utils.Timer.start();
     try parser.parseMarkdown(md_text);
-    const t1 = timer.read();
+    const ptime_s = ptimer.read();
 
     const md: zd.Block = parser.document;
 
@@ -161,17 +159,18 @@ pub fn main() !void {
         .console_width = result.width,
     };
 
+    var rtimer = zd.utils.Timer.start();
     if (outfile) |outname| {
         var out_file: File = try std.fs.cwd().createFile(outname, .{ .truncate = true });
         try render(out_file.writer(), md, render_opts);
     } else {
         try render(stdout, md, render_opts);
     }
+    const rtime_s = rtimer.read();
 
-    const t2 = timer.read();
     if (timeit) {
-        cons.printColor(stdout, .Green, "  Parsed in:   {d}us\n", .{t1 / 1000});
-        cons.printColor(stdout, .Green, "  Rendered in: {d}us\n", .{(t2 - t1) / 1000});
+        cons.printColor(stdout, .Green, "  Parsed in:   {d:.3} ms\n", .{ptime_s * 1000});
+        cons.printColor(stdout, .Green, "  Rendered in: {d:.3} ms\n", .{rtime_s * 1000});
     }
 }
 

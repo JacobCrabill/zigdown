@@ -157,3 +157,17 @@ pub fn colorToCss(color: Color) []const u8 {
         else => "var(--color-text)",
     };
 }
+
+/// A simple timer that operates in seconds using f64 time points
+pub const Timer = struct {
+    timer_: std.time.Timer = undefined,
+
+    pub fn start() Timer {
+        return .{ .timer_ = std.time.Timer.start() catch unreachable };
+    }
+
+    pub fn read(timer: *Timer) f64 {
+        const t: f64 = @floatFromInt(timer.timer_.read());
+        return t / 1_000_000_000.0;
+    }
+};
