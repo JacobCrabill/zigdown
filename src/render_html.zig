@@ -314,7 +314,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         fn renderNumlist(self: *Self, list: zd.List) !void {
-            self.print("<ol>\n", .{});
+            self.print("<ol start=\"{d}\">\n", .{list.start});
             for (list.lines.items) |line| {
                 // TODO: Number
                 self.print("<li>", .{});
