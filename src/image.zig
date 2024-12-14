@@ -236,9 +236,9 @@ pub fn getTerminalSize() !TermSize {
 
     if (builtin.os.tag == .windows) {
         var binfo: windows.CONSOLE_SCREEN_BUFFER_INFO = undefined;
-        const stdio_h = windows.GetStdHandle(windows.STD_OUTPUT_HANDLE);
+        const stdio_h = try windows.GetStdHandle(windows.STD_OUTPUT_HANDLE);
 
-        if (windows.kernel32.GetConsoleScreenBufferInfo(stdio_h, &binfo)) {
+        if (windows.kernel32.GetConsoleScreenBufferInfo(stdio_h, &binfo) > 0) {
             const cols: i32 = binfo.srWindow.Right - binfo.srWindow.Left + 1;
             const rows: i32 = binfo.srWindow.Bottom - binfo.srWindow.Top + 1;
             return TermSize{ .rows = @intCast(rows), .cols = @intCast(cols) };

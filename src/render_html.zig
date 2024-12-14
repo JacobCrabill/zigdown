@@ -325,15 +325,29 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         fn renderTable(self: *Self, table: zd.Container) !void {
-            self.write("<table>\n");
-            // TODO
-            self.write("<tr>");
-            for (table.children.items) |item| {
-                self.write("<td>");
-                try self.renderBlock(item);
-                self.write("</td>");
+            const ncol = table.content.Table.ncol;
+            const nrow: usize = @divFloor(table.children.items.len, ncol);
+            std.debug.assert(table.children.items.len == ncol * nrow);
+
+            self.write("<div class=\"md_table\"><table><tbody>\n");
+            for (0..nrow) |i| {
+                self.write("<tr>");
+                for (0..ncol) |j| {
+                    const idx: usize = i * ncol + j;
+                    const item = table.children.items[idx];
+                    if (i == 0) {
+                        self.write("<th>");
+                        try self.renderBlock(item);
+                        self.write("</th>");
+                    } else {
+                        self.write("<td>");
+                        try self.renderBlock(item);
+                        self.write("</td>");
+                    }
+                }
+                self.write("</tr>\n");
             }
-            self.write("</table>\n");
+            self.write("</tbody></table></div>\n");
         }
 
         fn renderLink(self: *Self, link: zd.Link) !void {

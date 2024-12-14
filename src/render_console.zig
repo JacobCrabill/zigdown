@@ -612,7 +612,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             // Demultiplex the rendered text for every cell into
             // individual lines of text for all cells in each row
-            // var cell_idx: usize = 0;
             const nrow: usize = @divFloor(cells.items.len, ncol);
             std.debug.assert(cells.items.len == ncol * nrow);
 
