@@ -1,5 +1,10 @@
 # Heading 1
 
+- [Goto H2](#heading-2)
+- [Goto H3](#heading-3)
+- [Goto H4](#heading-4)
+- [Goto Images](#images)
+
 ## Heading 2
 
 ### Heading 3
@@ -34,12 +39,20 @@ italic_**~.
 A C code block with syntax highlighting.
 
 ```c
-#include <stdio.h>
+#include "stdio.h"
 
 // Comment
 int main() {
   printf("Hello, world!\n");
 }
+```
+
+```yaml
+root:
+  node:
+  - key1: value
+  - key2: "string"
+  - key3: 1.234
 ```
 
 # Images
@@ -52,3 +65,34 @@ Rendered to the console using the
 Note: hologram.nvim somehow renders this properly(ish) within the NeoVim buffer, but mdcat and
 image_cat don't (even though they work in plain terminal). What's the difference between how
 Hologram does it vs. sending the raw graphics protocol data?
+
+# Here's a big code block!
+
+```zig
+const std = @import("std");
+const ArrayList = std.ArrayList;
+
+pub const Range = struct {
+    color: utils.Color,
+    content: []const u8,
+    newline: bool = false,
+};
+
+// Capture Name: number
+const highlights_map = std.StaticStringMap(utils.Color).initComptime(.{
+    .{ "number", .Yellow },
+});
+
+/// Get the highlight color for a specific capture group
+pub fn getHighlightFor(label: []const u8) ?utils.Color {
+    return highlights_map.get(label);
+}
+
+for (ranges) |range| {
+    if (range.content.len > 0) {
+        self.print("<span style=\"color:{s}\">{s}</span>", .{ utils.colorToCss(range.color), range.content });
+    }
+}
+```
+
+[Back to top](#heading-1)

@@ -330,7 +330,27 @@ pub fn isCodeBlock(line: []const Token) bool {
     return false;
 }
 
-/// Append a list of words to the given TextBlock as Text Inline objects
+/// Concatenate a list of raw token text into a single string
+pub fn concatRawText(alloc: Allocator, tok_words: ArrayList(Token)) Allocator.Error![]const u8 {
+    if (tok_words.items.len > 0) {
+        // Extract *just* the text of each token into a new array
+        var words = ArrayList([]const u8).init(alloc);
+        defer words.deinit();
+        for (tok_words.items) |word| {
+            try words.append(word.text);
+        }
+
+        // Merge all words into a single string, merging consecutive whitespace
+        const new_text: []u8 = try std.mem.concat(alloc, u8, words.items);
+        defer alloc.free(new_text);
+        const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
+        std.mem.replaceScalar(u8, new_text_ws, ' ', '-');
+        return try alloc.dupe(u8, new_text_ws);
+    }
+    return try alloc.dupe(u8, "null");
+}
+
+/// Append a list of words to the given TextBlock as Text objects
 pub fn appendText(alloc: Allocator, text_parts: *ArrayList(zd.Text), words: *ArrayList([]const u8), style: zd.TextStyle) Allocator.Error!void {
     if (words.items.len > 0) {
         // Merge all words into a single string, merging consecutive whitespace
@@ -349,7 +369,7 @@ pub fn appendText(alloc: Allocator, text_parts: *ArrayList(zd.Text), words: *Arr
     }
 }
 
-/// Append a list of words to the given TextBlock as Text Inline objects
+/// Append a list of words to the given TextBlock as Inline Text objects
 pub fn appendWords(alloc: Allocator, inlines: *ArrayList(zd.Inline), words: *ArrayList([]const u8), style: zd.TextStyle) Allocator.Error!void {
     if (words.items.len > 0) {
         // Merge all words into a single string

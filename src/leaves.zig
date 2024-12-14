@@ -65,8 +65,7 @@ pub const Heading = struct {
     }
 
     pub fn deinit(h: *Heading) void {
-        _ = h;
-        // h.alloc.free(h.text);
+        h.alloc.free(h.text);
     }
 
     pub fn print(h: Heading, depth: u8) void {

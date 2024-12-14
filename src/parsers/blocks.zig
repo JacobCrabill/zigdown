@@ -193,46 +193,6 @@ fn trimContinuationMarkersTable(line: []const Token) []const Token {
     @panic("Can't be here!");
 }
 
-/// Append a list of words to the given TextBlock as Text Inline objects
-fn appendWords(alloc: Allocator, inlines: *ArrayList(zd.Inline), words: *ArrayList([]const u8), style: zd.TextStyle) Allocator.Error!void {
-    if (words.items.len > 0) {
-        // Merge all words into a single string
-        // Merge duplicate ' ' characters
-        const new_text: []u8 = try std.mem.concat(alloc, u8, words.items);
-        defer alloc.free(new_text);
-        const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
-
-        // End the current Text object with the current style
-        const text = zd.Text{
-            .alloc = alloc,
-            .style = style,
-            .text = try alloc.dupe(u8, new_text_ws),
-        };
-        try inlines.append(zd.Inline.initWithContent(alloc, zd.InlineData{ .text = text }));
-        words.clearRetainingCapacity();
-    }
-}
-
-/// Append a list of words to the given TextBlock as Text Inline objects
-fn appendText(alloc: Allocator, text_parts: *ArrayList(zd.Text), words: *ArrayList([]const u8), style: zd.TextStyle) Allocator.Error!void {
-    if (words.items.len > 0) {
-        // Merge all words into a single string
-        // Merge duplicate ' ' characters
-        const new_text: []u8 = try std.mem.join(alloc, " ", words.items);
-        defer alloc.free(new_text);
-        const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
-
-        // End the current Text object with the current style
-        const text = zd.Text{
-            .alloc = alloc,
-            .style = style,
-            .text = try alloc.dupe(u8, new_text_ws),
-        };
-        try text_parts.append(text);
-        words.clearRetainingCapacity();
-    }
-}
-
 fn parseOneInline(alloc: Allocator, tokens: []const Token) ?zd.Inline {
     if (tokens.len < 1) return null;
 
@@ -772,6 +732,9 @@ pub const Parser = struct {
         const end: usize = utils.findFirstOf(trimmed_line, 0, &.{.BREAK}) orelse trimmed_line.len;
         block.Leaf.raw_contents.appendSlice(trimmed_line[0..end]) catch unreachable;
         self.closeBlock(block);
+
+        // Also get the raw contents as a single string
+        head.text = utils.concatRawText(self.alloc, block.Leaf.raw_contents) catch unreachable;
 
         return true;
     }

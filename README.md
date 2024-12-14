@@ -31,6 +31,7 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 - [ ] Tables
 - [ ] Web-based images (fetch & display in-terminal)
 - [ ] Autolinks, references
+- [ ] Automatic Table of Contents creation
 
 ## Caveats
 

@@ -1,3 +1,9 @@
+## Code Parsing Test
+
+`inline` code
+
+# CPP Code Block
+
 ```cpp
 #include <stdio.h> /* Comment */
 int main() {
@@ -13,6 +19,16 @@ int main() {
     std::cout << "Hello, World!" << std::endl;
 }
 ```
+
+```c
+#include <stdio.h>
+int main() {
+    printf("Hello, World!\n");
+    return 0;
+}
+```
+
+## JSON `ugh`
 
 ```json
 {

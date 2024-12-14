@@ -50,7 +50,9 @@ pub fn build(b: *std.Build) !void {
 
     // const wasm_optimize = b.option(std.builtin.OptimizeMode, "wasm-optimize", "Optimization mode for WASM targets") orelse .ReleaseSmall;
 
-    const build_lua = b.option(bool, "lua", "Build Zigdown as a Lua module");
+    const build_lua = b.option(bool, "lua", "Build Zigdown as a Lua module") orelse false;
+    const build_query_fetcher = b.option(bool, "build-query-fetcher", "Build the TreeSitter query fetcher") orelse false;
+    const build_test_exes = b.option(bool, "build-test-exes", "Build the custom test executables") orelse false;
 
     // Add an option to list the set of TreeSitter parsers to statically link into the build
     // This should match the list of parsers defined below and added to the 'queries' module
@@ -99,7 +101,7 @@ pub fn build(b: *std.Build) !void {
     };
     addExecutable(b, exe_config, exe_opts);
 
-    if (build_lua) |_| {
+    if (build_lua) {
         // TODO
         // const luajit = b.dependency("luajit", .{ .optimize = optimize, .target = target });
         // const luajit_dep = Dependency{ .name = "luajit", .module = luajit.module("luajit") };
@@ -136,17 +138,19 @@ pub fn build(b: *std.Build) !void {
         step.dependOn(&copy_step.step);
     }
 
-    // Compile the TreeSitter query-fetcher executable
-    const query_fetcher = ExeConfig{
-        .version = .{ .major = 0, .minor = 1, .patch = 0 },
-        .name = "fetch_ts_queries",
-        .build_cmd = "query-fetcher",
-        .build_description = "TODO",
-        .run_cmd = "fetch-queries",
-        .run_description = "Fetch a list of TreeSitter highlights queries",
-        .root_path = "tools/fetch_queries.zig",
-    };
-    addExecutable(b, query_fetcher, exe_opts);
+    if (build_query_fetcher) {
+        // Compile the TreeSitter query-fetcher executable
+        const query_fetcher = ExeConfig{
+            .version = .{ .major = 0, .minor = 1, .patch = 0 },
+            .name = "fetch_ts_queries",
+            .build_cmd = "query-fetcher",
+            .build_description = "TODO",
+            .run_cmd = "fetch-queries",
+            .run_description = "Fetch a list of TreeSitter highlights queries",
+            .root_path = "tools/fetch_queries.zig",
+        };
+        addExecutable(b, query_fetcher, exe_opts);
+    }
 
     // Build HTML library documentation
     // TODO: how to enable docs??
@@ -160,6 +164,15 @@ pub fn build(b: *std.Build) !void {
     const lib_step = b.step("lib", "Build Zigdown as a shared library (and also build HTML docs)");
     lib_step.dependOn(&lib.step);
     b.getInstallStep().dependOn(lib_step);
+
+    // Generate and install documentation
+    const install_docs = b.addInstallDirectory(.{
+        .source_dir = lib.getEmittedDocs(),
+        .install_dir = .prefix,
+        .install_subdir = "docs",
+    });
+    const docs_step = b.step("docs", "Copy documentation artifacts to prefix path");
+    docs_step.dependOn(&install_docs.step);
 
     ////////////////////////////////////////////////////////////////////////////
     // Add WASM Target
@@ -237,25 +250,27 @@ pub fn build(b: *std.Build) !void {
     addTest(b, "test-all", "Run all unit tests", "src/test.zig", test_opts);
 
     // Add custom test executables
-    const parser_test_config = ExeConfig{
-        .name = "parser_test",
-        .build_cmd = "build-parser-test",
-        .build_description = "Build (don't run) the parser test executable",
-        .run_cmd = "parser-test",
-        .run_description = "Run the standalone parser test",
-        .root_path = "src/test_parser.zig",
-    };
-    addExecutable(b, parser_test_config, exe_opts);
+    if (build_test_exes) {
+        const parser_test_config = ExeConfig{
+            .name = "parser_test",
+            .build_cmd = "build-parser-test",
+            .build_description = "Build (don't run) the parser test executable",
+            .run_cmd = "parser-test",
+            .run_description = "Run the standalone parser test",
+            .root_path = "src/test_parser.zig",
+        };
+        addExecutable(b, parser_test_config, exe_opts);
 
-    const image_test_config = ExeConfig{
-        .name = "image_test",
-        .build_cmd = "build-image-test",
-        .build_description = "Build (don't run) the image test executable",
-        .run_cmd = "image-test",
-        .run_description = "Run the standalone image test",
-        .root_path = "src/image.zig",
-    };
-    addExecutable(b, image_test_config, exe_opts);
+        const image_test_config = ExeConfig{
+            .name = "image_test",
+            .build_cmd = "build-image-test",
+            .build_description = "Build (don't run) the image test executable",
+            .run_cmd = "image-test",
+            .run_description = "Run the standalone image test",
+            .root_path = "src/image.zig",
+        };
+        addExecutable(b, image_test_config, exe_opts);
+    }
 }
 
 /// Add an executable (build & run) step using the given file

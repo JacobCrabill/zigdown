@@ -167,10 +167,16 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         /// Render an ATX Heading
         fn renderHeading(self: *Self, leaf: zd.Leaf) !void {
             const h: zd.Heading = leaf.content.Heading;
+
+            // Generate the link name for the heading
+            const id_s = std.ascii.allocLowerString(self.alloc, h.text) catch unreachable;
+            defer self.alloc.free(id_s);
+            std.mem.replaceScalar(u8, id_s, ' ', '-');
+
             if (h.level == 1) {
                 self.print("<div class=\"header\">", .{});
             }
-            self.print("<h{d}>", .{h.level});
+            self.print("<h{d} id=\"{s}\">", .{ h.level, id_s });
             for (leaf.inlines.items) |item| {
                 try self.renderInline(item);
             }
