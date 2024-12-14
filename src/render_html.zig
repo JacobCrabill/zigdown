@@ -216,7 +216,18 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             } else |err| {
                 // TODO: Still need to implement the rest of libc for WASM
                 self.print("<!-- Error using TreeSitter: {any} -->", .{err});
-                self.write(source);
+
+                var lino: usize = 1;
+                self.write("<table><tbody>\n");
+                var lines = std.mem.tokenize(u8, source, "\n");
+                while (lines.next()) |line| {
+                    // Alternative: Have a CSS class for each color ( 'var(--color-x)' )
+                    // Split by line into a table with line numbers
+                    self.print("<tr><td><span style=\"color:var(--color-peach)\">{d}</span></td>", .{lino});
+                    self.print("<td><pre><span style=\"color:{s}\">{s}</span></pre></td></tr>\n", .{ utils.colorToCss(.Default), line });
+                    lino += 1;
+                }
+                self.write("</pre></td></tr></tbody></table>\n");
             }
 
             self.print("</div>\n", .{});
