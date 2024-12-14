@@ -205,8 +205,13 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
 
                 var lino: usize = 1;
                 self.write("<table><tbody>\n");
-                self.print("<tr><td><span style=\"color:var(--color-peach)\">{d}</span></td><td><pre>", .{lino});
+                var need_newline: bool = true;
                 for (ranges) |range| {
+                    if (need_newline) {
+                        self.print("<tr><td><span style=\"color:var(--color-peach)\">{d}</span></td><td><pre>", .{lino});
+                        need_newline = false;
+                    }
+
                     // Alternative: Have a CSS class for each color ( 'var(--color-x)' )
                     // Split by line into a table with line numbers
                     if (range.content.len > 0) {
@@ -215,10 +220,13 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
                     if (range.newline) {
                         self.write("</pre></td></tr>\n");
                         lino += 1;
-                        self.print("<tr><td><span style=\"color:var(--color-peach)\">{d}</span></td><td><pre>", .{lino});
+                        need_newline = true;
                     }
                 }
-                self.write("</pre></td></tr></tbody></table>\n");
+                if (need_newline) {
+                    self.write("</pre></td></tr>\n");
+                }
+                self.write("</tbody></table>\n");
             } else |err| {
                 // TODO: Still need to implement the rest of libc for WASM
                 self.print("<!-- Error using TreeSitter: {any} -->", .{err});
