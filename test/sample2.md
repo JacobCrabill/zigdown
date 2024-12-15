@@ -1,6 +1,7 @@
 # Zigdown: Markdown parser in Zig
 
-![Zig is Awesome!](test/zig-zero.png)
+```{toc}
+```
 
 ```{warning}
 This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
@@ -8,9 +9,10 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 
 ## Features
 
+- Console and HTML rendering
 - Headers, **Basic** _text_ ~formatting~ (Clickable) [Links](google.com)
 - Quote blocks, Unordered lists, Ordered lists
-- Code blocks, Including syntax highlighting using TreeSitter
+- Code blocks - Including syntax highlighting using TreeSitter
 - Images (rendered to the console using the
   [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)
 - Neovim integration
@@ -18,7 +20,7 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 ## Usage
 
 The current version of Zig this code compiles with is
-[0.12.1](https://ziglang.org/builds/zig-linux-x86_64-0.12.1.tar.xz).
+[0.13.0](https://ziglang.org/builds/zig-linux-x86_64-0.13.0.tar.xz).
 
 ```bash
 #!/usr/bin/env bash
@@ -34,4 +36,4 @@ enable optimizations while keeping safety checks and backtraces upon errors. The
 
 ## Sample Render
 
-![Sample Render](../sample-render-3.png)
+![Sample Render](../sample-render.png)

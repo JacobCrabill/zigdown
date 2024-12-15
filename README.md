@@ -1,5 +1,9 @@
 # Zigdown: Markdown parser in Zig
 
+```{toctree}
+While Github does not render this, Zigdown will turn this into a Table of Contents!
+```
+
 ![Zig is Awesome!](test/zig-zero.png)
 
 Zigdown, inspired by [Glow](https://github.com/charmbracelet/glow) and
@@ -27,11 +31,11 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 - [x] Neovim integration
   - Optional: If you have Lua 5.1 system libraries, can build as a Lua plugin module
 - [x] Task lists
+- [x] Tables
+- [x] Automatic Table of Contents creation
 - [ ] Complete NeoVim integration (w/ image rendering)
-- [ ] Tables
 - [ ] Web-based images (fetch & display in-terminal)
 - [ ] Autolinks, references
-- [ ] Automatic Table of Contents creation
 
 ## Caveats
 
