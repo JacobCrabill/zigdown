@@ -1,5 +1,6 @@
 const std = @import("std");
 const treez = @import("treez");
+const builtin = @import("builtin");
 
 const cons = @import("console.zig");
 const debug = @import("debug.zig");
@@ -130,7 +131,7 @@ fn getLanguage(_: Allocator, language: []const u8) ?*const treez.Language {
         return pair.language;
     }
 
-    if (wasm.is_wasm) return null;
+    if (wasm.is_wasm or builtin.os.tag == .windows) return null;
 
     return treez.Language.loadFromDynLib(language) catch {
         // std.debug.print("Error loading {s} language: {any}\n", .{ language, err });
