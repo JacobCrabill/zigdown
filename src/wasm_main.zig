@@ -31,13 +31,15 @@ export fn renderToHtml(md_ptr: [*:0]u8) void {
     var parser = zd.Parser.init(alloc, opts);
     defer parser.deinit();
     parser.parseMarkdown(md_text) catch |err| {
-        Console.log("Caught Zig error: {any}\n", .{err});
+        Console.log("[parse] Caught Zig error: {any}\n", .{err});
     };
 
     Console.log("Rendering...\n", .{});
     var h_renderer = htmlRenderer(Renderer.writer, alloc);
     defer h_renderer.deinit();
-    try h_renderer.renderBlock(parser.document);
+    h_renderer.renderBlock(parser.document) catch |err| {
+        Console.log("[render] Caught Zig error: {any}\n", .{err});
+    };
     Renderer.log("", .{});
     Console.log("Rendered!\n", .{});
 }

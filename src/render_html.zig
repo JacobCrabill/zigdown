@@ -29,9 +29,9 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         root: ?zd.Block = null,
 
         pub fn init(stream: OutStream, alloc: Allocator) Self {
-            //if (!wasm.is_wasm) {
-            ts_queries.init(alloc);
-            //}
+            if (!wasm.is_wasm) {
+                ts_queries.init(alloc);
+            }
             return Self{
                 .stream = stream,
                 .alloc = alloc,
@@ -39,9 +39,9 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         pub fn deinit(_: *Self) void {
-            //if (!wasm.is_wasm) {
-            ts_queries.deinit();
-            //}
+            if (!wasm.is_wasm) {
+                ts_queries.deinit();
+            }
         }
 
         // Write an array of bytes to the underlying writer

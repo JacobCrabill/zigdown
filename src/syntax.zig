@@ -141,6 +141,8 @@ fn getLanguage(_: Allocator, language: []const u8) ?*const treez.Language {
 /// Use TreeSitter to parse the code block and apply colors
 /// Returns a slice of Ranges assigning colors to ranges of text within the given code
 pub fn getHighlights(alloc: Allocator, code: []const u8, lang_name: []const u8) ![]Range {
+    if (wasm.is_wasm) return error.WasmNotSupported;
+
     // De-alias the language if needed
     const language = ts_queries.alias(lang_name) orelse lang_name;
 
