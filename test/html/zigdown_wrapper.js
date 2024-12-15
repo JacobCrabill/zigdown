@@ -3,12 +3,38 @@ const text_encoder = new TextEncoder();
 let console_log_buffer = "";
 let html_render_buffer = "";
 
-const placeholder_markdown = `
-# Live WASM Markdown Previewer
+const placeholder_markdown =
+  ['# Live WASM Markdown Previewer',
+  '',
+  '```{toc}',
+  '```',
 
-Enter Markdown above; it will be rendered here in real-time in the browser
-using the WebAssembly version of [Zigdown](https://github.com/JacobCrabill/zigdown).
-`;
+  'Enter Markdown above; it will be rendered here in real-time in the browser',
+  'using the WebAssembly version of [Zigdown](https://github.com/JacobCrabill/zigdown).',
+  '',
+  '## Demo',
+  '',
+  '### Table of Contents',
+  '',
+  'See the Table of Contents rendered above; this can be auto-generated with:',
+  '',
+  '````markdown',
+  '```{toc}',
+  '```',
+  '````',
+
+  'Code blocks are supported, but compiling TreeSitter for WASM is still a WIP,',
+  'so no syntax highlighting is possible (yet).',
+  '',
+  '### Links',
+  '',
+  'Links like [this](jcrabill.dev) can be added like `[text](url)`',
+  '',
+  '### Images',
+  '',
+  'Images can be added like `![alt-text](src-uri)`:',
+  '',
+  '![sample](zig-zero.png)'].join('\n');
 
 let wasm = {
     instance: undefined,
