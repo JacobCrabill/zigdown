@@ -74,7 +74,7 @@ pub const Logger = struct {
     fn doIndent(self: Self) void {
         var i: usize = 0;
         while (i < self.depth) : (i += 1) {
-            self.raw("  ", .{});
+            self.raw("│ ", .{});
         }
     }
 };

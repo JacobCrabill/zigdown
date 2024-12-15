@@ -1,11 +1,11 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const utils = @import("utils.zig");
 const zd = struct {
     usingnamespace @import("blocks.zig");
     usingnamespace @import("inlines.zig");
     usingnamespace @import("leaves.zig");
     usingnamespace @import("containers.zig");
+    usingnamespace @import("utils.zig");
 };
 const syntax = @import("syntax.zig");
 const ts_queries = @import("ts_queries.zig");
@@ -23,9 +23,10 @@ const google_fonts =
 pub fn HtmlRenderer(comptime OutStream: type) type {
     return struct {
         const Self = @This();
-        const WriteError = OutStream.Error;
+        const WriteError = OutStream.Error || Allocator.Error || zd.Block.Error;
         stream: OutStream,
         alloc: Allocator,
+        root: ?zd.Block = null,
 
         pub fn init(stream: OutStream, alloc: Allocator) Self {
             //if (!wasm.is_wasm) {
@@ -62,6 +63,9 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
 
         /// Render a generic Block (may be a Container or a Leaf)
         pub fn renderBlock(self: *Self, block: zd.Block) WriteError!void {
+            if (self.root == null) {
+                self.root = block;
+            }
             switch (block) {
                 .Container => |c| try self.renderContainer(c),
                 .Leaf => |l| try self.renderLeaf(l),
@@ -215,7 +219,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
                     // Alternative: Have a CSS class for each color ( 'var(--color-x)' )
                     // Split by line into a table with line numbers
                     if (range.content.len > 0) {
-                        self.print("<span style=\"color:{s}\">{s}</span>", .{ utils.colorToCss(range.color), range.content });
+                        self.print("<span style=\"color:{s}\">{s}</span>", .{ zd.colorToCss(range.color), range.content });
                     }
                     if (range.newline) {
                         self.write("</pre></td></tr>\n");
@@ -238,7 +242,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
                     // Alternative: Have a CSS class for each color ( 'var(--color-x)' )
                     // Split by line into a table with line numbers
                     self.print("<tr><td><span style=\"color:var(--color-peach)\">{d}</span></td>", .{lino});
-                    self.print("<td><pre><span style=\"color:{s}\">{s}</span></pre></td></tr>\n", .{ utils.colorToCss(.Default), line });
+                    self.print("<td><pre><span style=\"color:{s}\">{s}</span></pre></td></tr>\n", .{ zd.colorToCss(.Default), line });
                     lino += 1;
                 }
                 self.write("</pre></td></tr></tbody></table>\n");
@@ -248,14 +252,19 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         fn renderDirective(self: *Self, d: zd.Code) !void {
-            // TODO: Set of builtin directive types w/ aliases mapped to them
-            // const directive = d.directive orelse "note";
+            // TODO: Enum for builtin directive types w/ string aliases mapped to them
+            const directive = d.directive orelse "note";
+            if (zd.isDirectiveToC(directive)) {
+                // Generate and render a Table of Contents for the whole document
+                var toc: zd.Block = try zd.generateTableOfContents(self.alloc, &self.root.?);
+                defer toc.deinit();
+                try self.renderBlock(toc);
+                return;
+            }
             self.write("\n<div class=\"directive\">\n");
-
             if (d.text) |text| {
                 self.print("{s}", .{text});
             }
-
             self.print("\n</div>\n", .{});
         }
 

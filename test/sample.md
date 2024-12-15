@@ -1,9 +1,7 @@
 # Heading 1
 
-- [Goto H2](#heading-2)
-- [Goto H3](#heading-3)
-- [Goto H4](#heading-4)
-- [Goto Images](#images)
+```{toc}
+```
 
 ## Heading 2
 

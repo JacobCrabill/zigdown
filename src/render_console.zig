@@ -21,7 +21,7 @@ const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
 const quote_indent = zd.Text{ .style = .{ .fg_color = .White }, .text = "┃ " };
-const list_indent = zd.Text{ .style = .{}, .text = "   " };
+const list_indent = zd.Text{ .style = .{}, .text = "  " };
 const numlist_indent_0 = zd.Text{ .style = .{}, .text = "    " };
 const numlist_indent_10 = zd.Text{ .style = .{}, .text = "     " };
 const numlist_indent_100 = zd.Text{ .style = .{}, .text = "      " };
@@ -33,7 +33,19 @@ const code_text_style = zd.TextStyle{ .bg_color = .DarkGrey, .fg_color = .Purple
 const code_indent = zd.Text{ .style = code_fence_style, .text = "│ " };
 const warn_indent = zd.Text{ .style = warn_box_style, .text = "│ " };
 
-pub const RenderError = error{
+const TreezError = error{
+    Unknown,
+    VersionMismatch,
+    NoLanguage,
+    InvalidSyntax,
+    InvalidNodeType,
+    InvalidField,
+    InvalidCapture,
+    InvalidStructure,
+    InvalidLanguage,
+};
+
+const SystemError = error{
     OutOfMemory,
     DiskQuota,
     FileTooBig,
@@ -51,17 +63,9 @@ pub const RenderError = error{
     ConnectionResetByPeer,
     Unexpected,
     SystemError,
-    // treez errors
-    Unknown,
-    VersionMismatch,
-    NoLanguage,
-    InvalidSyntax,
-    InvalidNodeType,
-    InvalidField,
-    InvalidCapture,
-    InvalidStructure,
-    InvalidLanguage,
 };
+
+const ErrorSet = SystemError || TreezError || zd.Block.Error;
 
 pub const RenderOpts = struct {
     width: usize = 90, // Column at which to wrap all text
@@ -78,7 +82,7 @@ pub const RenderOpts = struct {
 pub fn ConsoleRenderer(comptime OutStream: type) type {
     return struct {
         const Self = @This();
-        const WriteError = OutStream.Error;
+        const RenderError = OutStream.Error || ErrorSet;
         stream: OutStream,
         column: usize = 0,
         alloc: std.mem.Allocator,
@@ -87,6 +91,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         opts: RenderOpts = undefined,
         style_override: ?zd.TextStyle = null,
         cur_style: zd.TextStyle = .{},
+        root: ?zd.Block = null,
 
         pub fn init(stream: OutStream, alloc: Allocator, opts: RenderOpts) Self {
             // Initialize the TreeSitter query functionality in case we need it
@@ -400,6 +405,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Render a generic Block (may be a Container or a Leaf)
         pub fn renderBlock(self: *Self, block: zd.Block) RenderError!void {
+            if (self.root == null) {
+                self.root = block;
+            }
             switch (block) {
                 .Container => |c| try self.renderContainer(c),
                 .Leaf => |l| try self.renderLeaf(l),
@@ -487,7 +495,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 // print out list bullet
                 self.writeLeaders();
                 self.startStyle(.{ .fg_color = .Blue, .bold = true });
-                self.write(" ‣ ");
+                self.write("‣ ");
                 self.resetStyle();
 
                 // Print out the contents; note the first line doesn't
@@ -512,7 +520,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 self.needs_leaders = false;
 
                 const num: usize = start + i;
-                const marker = try std.fmt.bufPrint(&buffer, " {d}. ", .{num});
+                const marker = try std.fmt.bufPrint(&buffer, "{d}. ", .{num});
                 self.startStyle(.{ .fg_color = .Blue, .bold = true });
                 self.write(marker);
                 self.resetStyle();
@@ -905,7 +913,17 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         fn renderDirective(self: *Self, d: zd.Code) !void {
+            // TODO: Enum for builtin directive types w/ string aliases mapped to them
             const directive = d.directive orelse "note";
+
+            if (zd.isDirectiveToC(directive)) {
+                // Generate and render a Table of Contents for the whole document
+                var toc: zd.Block = try zd.generateTableOfContents(self.alloc, &self.root.?);
+                defer toc.deinit();
+                self.writeLeaders();
+                try self.renderBlock(toc);
+                return;
+            }
 
             self.writeLeaders();
             self.startStyle(warn_box_style);

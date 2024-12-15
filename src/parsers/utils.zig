@@ -13,6 +13,8 @@ const zd = struct {
     usingnamespace @import("../utils.zig");
     usingnamespace @import("../tokens.zig");
     usingnamespace @import("../blocks.zig");
+    usingnamespace @import("../containers.zig");
+    usingnamespace @import("../leaves.zig");
     usingnamespace @import("../inlines.zig");
 };
 
@@ -344,7 +346,6 @@ pub fn concatRawText(alloc: Allocator, tok_words: ArrayList(Token)) Allocator.Er
         const new_text: []u8 = try std.mem.concat(alloc, u8, words.items);
         defer alloc.free(new_text);
         const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
-        std.mem.replaceScalar(u8, new_text_ws, ' ', '-');
         return try alloc.dupe(u8, new_text_ws);
     }
     return try alloc.dupe(u8, "null");

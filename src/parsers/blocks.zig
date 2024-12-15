@@ -748,6 +748,9 @@ pub const Parser = struct {
         self.logger.log("Handling Paragraph: ", .{});
         self.logger.printText(line, false);
 
+        self.logger.depth += 1;
+        defer self.logger.depth -= 1;
+
         // Note that we allow some wiggle room in leading whitespace
         // If the line (minus up to 2 spaces) is another block type, it's not Paragraph content
         // Example:
@@ -767,6 +770,8 @@ pub const Parser = struct {
     /// Parse a single line of Markdown into the start of a new Block
     fn parseNewBlock(self: *Self, in_line: []const Token) !Block {
         const line = utils.trimLeadingWhitespace(in_line);
+        self.logger.depth += 1;
+        defer self.logger.depth -= 1;
 
         var b: Block = undefined;
         self.logger.log("ParseNewBlock: ", .{});
