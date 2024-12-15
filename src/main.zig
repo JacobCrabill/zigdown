@@ -196,19 +196,18 @@ fn render(stream: anytype, md: zd.Block, opts: RenderOpts) !void {
         // Some tools like `fzf --preview` cause the getTerminalSize() to fail, so work around that
         // Kinda hacky, but :shrug:
         var columns: usize = 90;
+        const tsize = zd.gfx.getTerminalSize() catch zd.gfx.TermSize{};
         if (opts.console_width) |width| {
             columns = width;
         } else {
-            const tsize = zd.gfx.getTerminalSize() catch blk: {
-                break :blk zd.gfx.TermSize{ .cols = columns, .rows = 150 };
-            };
-            columns = @min(90, tsize.cols);
+            columns = @min(tsize.cols, 90);
         }
 
         const render_opts = zd.render.render_console.RenderOpts{
             .root_dir = opts.root_dir,
             .indent = 2,
             .width = columns,
+            .termsize = tsize,
         };
         var c_renderer = consoleRenderer(stream, arena.allocator(), render_opts);
         defer c_renderer.deinit();

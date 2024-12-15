@@ -1,6 +1,12 @@
 /// utils.zig
 /// Common utilities.
 const std = @import("std");
+const zd = struct {
+    usingnamespace @import("blocks.zig");
+    usingnamespace @import("containers.zig");
+    usingnamespace @import("leaves.zig");
+    usingnamespace @import("inlines.zig");
+};
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
@@ -173,13 +179,6 @@ pub const Timer = struct {
         const t: f64 = @floatFromInt(timer.timer_.read());
         return t / 1_000_000_000.0;
     }
-};
-
-const zd = struct {
-    usingnamespace @import("blocks.zig");
-    usingnamespace @import("containers.zig");
-    usingnamespace @import("leaves.zig");
-    usingnamespace @import("inlines.zig");
 };
 
 /// Traverse the tree until a Leaf is found, and return it

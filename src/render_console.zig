@@ -70,11 +70,12 @@ const ErrorSet = SystemError || TreezError || zd.Block.Error;
 pub const RenderOpts = struct {
     width: usize = 90, // Column at which to wrap all text
     indent: usize = 2, // Left indent for the entire document
-    max_image_rows: usize = 15,
-    max_image_cols: usize = 45,
+    max_image_rows: usize = 30,
+    max_image_cols: usize = 50,
     box_style: cons.Box = cons.BoldBox,
     root_dir: ?[]const u8 = null,
     rendering_to_buffer: bool = false, // Whether we're rendering to a buffer or to the final output
+    termsize: gfx.TermSize = .{},
 };
 
 /// Render a Markdown document to the console using ANSI escape characters
@@ -780,6 +781,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             self.write(text);
             // Content TODO
+            //   Have to render to a temporary buffer to get the size first, then
+            //   dump the pre-rendered buffer to the terminal with the correct amount
+            //   of padding on either side
             // for (leaf.inlines.items) |item| {
             //     try self.renderInline(item);
             // }
@@ -799,17 +803,10 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Render an ATX Heading
         fn renderHeading(self: *Self, leaf: zd.Leaf) !void {
             const h: zd.Heading = leaf.content.Heading;
-            // TODO: determine length of rendered inlines
-            // Render to buffer, tracking displayed length of text, then
-            // dump buffer out to stream
-
             var style = zd.TextStyle{};
             var pad_char: []const u8 = " ";
 
             switch (h.level) {
-                // TODO: consolidate this struct w/ console.zig
-                // 1 => cons.printBox(self.stream, text, self.opts.width, 3, cons.DoubleBox, cons.text_bold ++ cons.fg_blue),
-                // 2 => cons.printBox(self.stream, text, self.opts.width, 3, cons.BoldBox, cons.text_bold ++ cons.fg_green),
                 1 => {
                     style = zd.TextStyle{ .fg_color = .Blue, .bold = true };
                     pad_char = "═";
@@ -1037,20 +1034,33 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 self.renderBreak();
                 self.renderBreak();
 
-                // Scale the image to something reasonable
-                const org_width: usize = @intCast(img.width);
-                var width = org_width;
-                var height: usize = @intCast(img.height);
-                width = @min(width, self.opts.width - 2 * self.opts.indent);
-                const ratio: f32 = @as(f32, @floatFromInt(img.height)) / @as(f32, @floatFromInt(img.width));
-                height = @as(usize, @intFromFloat(ratio * @as(f32, @floatFromInt(width))));
-                height /= 2; // NOTE: Terminal cells are twice as tall as they are wide!
+                const twidth_px: f32 = @floatFromInt(self.opts.termsize.width);
+                const theight_px: f32 = @floatFromInt(self.opts.termsize.height);
+                const tcols: f32 = @floatFromInt(self.opts.termsize.cols);
+                const trows: f32 = @floatFromInt(self.opts.termsize.rows);
+                const max_cols: f32 = @floatFromInt(self.opts.max_image_cols);
 
-                if (height > self.opts.max_image_rows) {
-                    const scale: f32 = @as(f32, @floatFromInt(self.opts.max_image_rows)) / @as(f32, @floatFromInt(height));
-                    height = @as(usize, @intFromFloat(scale * @as(f32, @floatFromInt(height))));
-                    width = @as(usize, @intFromFloat(scale * @as(f32, @floatFromInt(width))));
+                // Get the size of a single cell of the terminal in pixels
+                const x_px: f32 = twidth_px / tcols;
+                const y_px: f32 = theight_px / trows;
+
+                const org_width: f32 = @floatFromInt(img.width);
+                const org_height: f32 = @floatFromInt(img.height);
+
+                // Cap the image width at the given max # of cells
+                // We'll just ignore the max height, since terminals can scroll :D
+                var fwidth: f32 = org_width;
+                var fheight: f32 = org_height;
+                const aspect_ratio: f32 = fheight / fwidth;
+                const max_width_pixels: f32 = max_cols * x_px;
+                if (org_width > (x_px * max_cols)) {
+                    fwidth = max_width_pixels;
+                    fheight = aspect_ratio * fwidth;
                 }
+
+                // The final width and height to render at (in terms of columns and rows of the terminal)
+                const width: usize = @intFromFloat(fwidth / x_px);
+                const height: usize = @intFromFloat(fheight / y_px);
 
                 // Center the image by setting the cursor appropriately
                 self.writeNTimes(" ", (self.opts.width - width) / 2);

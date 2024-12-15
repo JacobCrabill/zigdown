@@ -42,6 +42,7 @@ pub fn isPNG(data: []const u8) bool {
 }
 
 /// Send a PNG image file to the terminal using the Kitty terminal graphics protocol
+/// 'width' and 'height' are in terms of terminal cells, not pixels!
 pub fn sendImagePNG(stream: anytype, alloc: Allocator, file: []const u8, width: ?usize, height: ?usize) !void {
     // Read the image into memory
     var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
@@ -217,8 +218,10 @@ fn sendImageChunkRGB(
 }
 
 pub const TermSize = struct {
-    rows: usize,
-    cols: usize,
+    rows: usize = 150, // Number of rows in window
+    cols: usize = 90, // Number of columns in window
+    width: usize = 900, // Width of window in pixels
+    height: usize = 3300, // Height of window in pixels
 };
 
 pub fn getTerminalSize() !TermSize {
@@ -228,7 +231,12 @@ pub fn getTerminalSize() !TermSize {
         const stdout_fd: linux.fd_t = 0;
 
         if (linux.ioctl(stdout_fd, TIOCGWINSZ, @intFromPtr(&wsz)) == 0) {
-            return TermSize{ .rows = wsz.ws_row, .cols = wsz.ws_col };
+            return TermSize{
+                .rows = wsz.ws_row,
+                .cols = wsz.ws_col,
+                .width = wsz.ws_xpixel,
+                .height = wsz.ws_ypixel,
+            };
         }
 
         return error.SystemCallFailed;
