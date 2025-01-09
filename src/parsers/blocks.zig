@@ -661,6 +661,9 @@ pub const Parser = struct {
         defer self.logger.depth -= 1;
         var code: *zd.Code = &block.Leaf.content.Code;
 
+        if (!block.isOpen())
+            return false;
+
         if (code.opener == null) {
             // Brand new code block; parse the directive line
             const trimmed_line = utils.trimLeadingWhitespace(line);
@@ -695,6 +698,7 @@ pub const Parser = struct {
         for (self.cur_line) |tok| {
             if (tok.kind == .DIRECTIVE and std.mem.eql(u8, tok.text, code.opener.?)) {
                 have_closer = true;
+                self.logger.log("Closing current code block\n", .{});
                 break;
             }
 

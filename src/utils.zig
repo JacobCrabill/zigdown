@@ -67,7 +67,7 @@ pub fn colorHex(color: Color) usize {
         .Magenta => 0xff00ff,
         .DarkYellow => 0xaeac30,
         .PurpleGrey => 0xaa82fa,
-        .DarkGrey => 0x404040,
+        .DarkGrey => 0x707070,
         .DarkRed => 0x802020,
         .Orange => 0xff9700,
         .Coral => 0xd7649b,

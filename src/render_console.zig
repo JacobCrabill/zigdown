@@ -906,7 +906,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.startStyle(code_fence_style);
             self.write("╰────────────────────");
             self.resetStyle();
-            self.renderBreak();
         }
 
         fn renderDirective(self: *Self, d: zd.Code) !void {
@@ -1005,7 +1004,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.writeno(cons.hyperlink);
             self.writeno(cons.link_end);
             self.resetStyle();
-            self.write(" ");
         }
 
         fn renderImage(self: *Self, image: zd.Image) !void {

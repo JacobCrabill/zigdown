@@ -75,7 +75,7 @@ pub const fg_default = ansi ++ "[39m";
 // Extended Foreground Colors
 pub const fg_dark_yellow = ansi ++ "[38;5;178m";
 pub const fg_purple_grey = ansi ++ "[38;2;170;130;250m"; // #aa82fa
-pub const fg_dark_grey = ansi ++ "[38;2;70;70;70m"; // #464646
+pub const fg_dark_grey = ansi ++ "[38;2;112;112;112m"; // #707070
 pub const fg_dark_red = ansi ++ "[38;2;128;32;32m"; // #802020
 pub const fg_rgb_blue = ansi ++ "[38;2;120;141;216m"; // #788dd8
 pub const fg_rgb_orange = ansi ++ "[38;2;255;151;0m"; // #ff9700
