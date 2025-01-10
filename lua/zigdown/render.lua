@@ -162,4 +162,10 @@ function M.render_buffer(bufnr)
   M.display_content(vim.split(output, "\n"))
 end
 
+-- Clear the Zigdown autocommand group
+-- This cancels the automatic render-on-save
+function M.clear_autogroup()
+  vim.api.nvim_create_augroup("ZigdownGrp", { clear = true })
+end
+
 return M

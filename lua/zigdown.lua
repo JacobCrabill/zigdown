@@ -52,6 +52,11 @@ function M.render_current_buffer()
   end
 end
 
+-- Clear the Vim autocommand group to cancel the render-on-save
+function M.cancel_auto_render()
+  render.clear_autogroup()
+end
+
 -- Rebuild the zig code
 function M.install()
   build.install(zig_ver, M.root, M.use_lua_module)

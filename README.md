@@ -35,7 +35,7 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 - [x] Tables
 - [x] Automatic Table of Contents creation
 - [x] Autolinks
-- [ ] Complete NeoVim integration (w/ image rendering)
+- [ ] Complete NeoVim integration (w/ image rendering and auto-scrolling)
 - [ ] Web-based images (fetch & display in-terminal)
 - [ ] References
 
@@ -70,10 +70,26 @@ parsers and highlight queries for the languages you'd like to highlight. This ca
 building and installing each language into a location in your `$LD_LIBRARY_PATH` environment
 variable.
 
-### Using Zigdown
+### Built-In Parsers
 
-The Zigdown cli tool can do this for you; for example, to download, build, and install the C and C++
-parsers and their highlight queries:
+Zigdown comes with a number of TreeSitter parsers and highlight queries built-in:
+
+- bash
+- C
+- C++
+- JSON
+- Python
+- Rust
+- Zig
+
+The parsers are downloaded from Github and the relevant source files are added to the build, and the
+queries are stored at `data/queries/`, which contain some fixes and improvements to the original
+highlighting queries.
+
+### Installing Parsers Using Zigdown
+
+The Zigdown cli tool can also download and install parsers for you. For example, to download, build,
+and install the C and C++ parsers and their highlight queries:
 
 ```bash
 zigdown -p c,cpp # Assumes both exist at github.com/tree-sitter on the 'master' branch
@@ -84,7 +100,7 @@ zigdown -p tree-sitter:master:rust # Specify Github user, branch, and language
 **TODO:** Load a color scheme and a capture name -> color mapping at runtime (from file) instead of
 a short hard-coded mapping.
 
-### Installing Manually
+### Installing Parsers Manually
 
 You can also install manually if Zigdown doesn't properly fetch the repo for you (or if the repo is
 not setup in a standard manner and requires custom setup). For example, to install the C++ parser
