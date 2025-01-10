@@ -25,6 +25,7 @@ const Zigdown = struct {
     pub const descriptions = .{
         .console = "Render to the console [default]",
         .html = "Render to HTML",
+        .stdin = "Read document from stdin",
         .width = "Console width to render within (default: 90 chars)",
         .output = "Output to a file, instead of to stdout",
         .timeit = "Time the parsing & rendering and display the results",
@@ -39,6 +40,7 @@ const Zigdown = struct {
 
     console: bool = false,
     html: bool = false,
+    stdin: bool = false,
     width: ?usize = null,
     timeit: bool = false,
     verbose: bool = false,
@@ -56,6 +58,7 @@ const Zigdown = struct {
     pub const switches = .{
         .console = 'c',
         .html = 'x', // note: '-h' is reserved by Flags for 'help'
+        .stdin = 'i',
         .width = 'w',
         .timeit = 't',
         .verbose = 'v',
@@ -117,21 +120,28 @@ pub fn main() !void {
         std.process.exit(0);
     }
 
-    if (filename == null) {
+    if (filename == null and !result.stdin) {
         cons.printColor(stdout, .Red, "Error: ", .{});
         cons.printColor(stdout, .White, "No filename provided\n\n", .{});
         print_usage();
         std.process.exit(2);
     }
 
-    // Read file into memory
-    var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
-    const realpath = try std.fs.realpath(filename.?, &path_buf);
-    var md_file: File = try std.fs.openFileAbsolute(realpath, .{});
-    const md_text = try md_file.readToEndAlloc(alloc, 1e9);
+    var md_text: []const u8 = undefined;
+    var md_dir: ?[]const u8 = null;
+    if (result.stdin) {
+        // Read document from stdin
+        const stdin = std.io.getStdIn().reader();
+        md_text = try stdin.readAllAlloc(alloc, 1e9);
+    } else {
+        // Read file into memory; Set root directory
+        var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+        const realpath = try std.fs.realpath(filename.?, &path_buf);
+        var md_file: File = try std.fs.openFileAbsolute(realpath, .{});
+        md_text = try md_file.readToEndAlloc(alloc, 1e9);
+        md_dir = std.fs.path.dirname(realpath);
+    }
     defer alloc.free(md_text);
-
-    const md_dir: ?[]const u8 = std.fs.path.dirname(realpath);
 
     // Parse the input text
     const opts = zd.parser.ParserOpts{
