@@ -159,7 +159,7 @@ pub const DirectiveTokenizer = struct {
             }
         }
 
-        // We only match 2 or more '`' characters
+        // We only match 3 or more '`' characters
         if (end > 2) {
             return Token{
                 .kind = TokenType.DIRECTIVE,

@@ -1,7 +1,7 @@
 # Zigdown: Markdown parser in Zig
 
 ```{toctree}
-While Github does not render this, Zigdown will turn this into a Table of Contents!
+<This block will be rendered as a Table of Contents>
 ```
 
 ![Zig is Awesome!](test/zig-zero.png)
@@ -19,6 +19,7 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 
 ## Features & Future Work
 
+- [x] Console and HTML rendering
 - [x] Headers
 - [x] Basic text formatting (**Bold**, _italic_, ~underline~)
 - [x] (Clickable) Links
@@ -27,15 +28,16 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 - [x] Ordered lists
 - [x] Code blocks, including syntax highlighting using TreeSitter
 - [x] Images (rendered to the console using the
-- [x] [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)
+  [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)
 - [x] Neovim integration
   - Optional: If you have Lua 5.1 system libraries, can build as a Lua plugin module
 - [x] Task lists
 - [x] Tables
 - [x] Automatic Table of Contents creation
+- [x] Autolinks
 - [ ] Complete NeoVim integration (w/ image rendering)
 - [ ] Web-based images (fetch & display in-terminal)
-- [ ] Autolinks, references
+- [ ] References
 
 ## Caveats
 
@@ -109,6 +111,12 @@ In addition to having the parser libraries available for `dlopen`, you will also
 queries. For this, use the provided bash script `./tools/fetch_queries.sh`. This will install the
 queries to `$TS_CONFIG_DIR/queries`, which defaults to `$HOME/.config/tree-sitter/queries`.
 
-## Sample Render
+## Sample Renders
 
-![Sample Render](sample-render.png)
+### Console
+
+![Sample Console Render](sample-render.png)
+
+### HTML
+
+![Sample HTML Render](sample-render-html.png)

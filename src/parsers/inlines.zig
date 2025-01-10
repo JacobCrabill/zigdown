@@ -212,6 +212,36 @@ pub const InlineParser = struct {
                         i = end;
                     }
                 },
+                .LT => {
+                    // Autolink
+                    if (utils.findFirstOf(tokens, i + 1, &.{.GT})) |end| {
+                        try utils.appendWords(self.alloc, &inlines, &words, style);
+                        for (tokens[i + 1 .. end]) |ctok| {
+                            try words.append(ctok.text);
+                        }
+
+                        if (words.items.len > 0) {
+                            // Merge all words into a single string
+                            const new_text: []u8 = try std.mem.concat(self.alloc, u8, words.items);
+                            defer self.alloc.free(new_text);
+
+                            const autolink = zd.Autolink{
+                                .alloc = self.alloc,
+                                .url = try self.alloc.dupe(u8, new_text),
+                                .heap_url = true,
+                            };
+                            try inlines.append(Inline.initWithContent(
+                                self.alloc,
+                                zd.InlineData{ .autolink = autolink },
+                            ));
+                            words.clearRetainingCapacity();
+                        }
+
+                        i = end;
+                    } else {
+                        try words.append(tok.text);
+                    }
+                },
                 .BREAK => {
                     // Treat line breaks as spaces; Don't clear the style (The renderer deals with wrapping)
                     try words.append(" ");

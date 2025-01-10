@@ -945,7 +945,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.writeNTimes("─", self.opts.width - 2 * self.opts.indent - 2);
             self.write("╯");
             self.resetStyle();
-            self.renderBreak();
         }
 
         /// Render a standard paragraph of text
@@ -969,8 +968,17 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         fn renderAutolink(self: *Self, link: zd.Autolink) !void {
-            // TODO
-            try self.stream.print("<a href=\"{s}\"/>", .{link.url});
+            self.startStyle(.{ .fg_color = .Cyan });
+
+            // \e]8;; + URL + \e\\ + Text + \e]8;; + \e\\
+            // Write the URL inside the special hyperlink escape sequence
+            self.writeno(cons.hyperlink);
+            self.writeno(link.url); // The true address part of the link
+            self.writeno(cons.link_end);
+            self.write(link.url); // The visible text of the link
+            self.writeno(cons.hyperlink);
+            self.writeno(cons.link_end);
+            self.resetStyle();
         }
 
         fn renderInlineCode(self: *Self, code: zd.Codespan) !void {

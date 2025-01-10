@@ -49,6 +49,7 @@ pub const InlineData = union(InlineType) {
             .image => |*i| i.deinit(),
             .text => |*t| t.deinit(),
             .codespan => |*c| c.deinit(),
+            .autolink => |*a| a.deinit(),
             else => {},
         }
     }
@@ -175,7 +176,7 @@ pub const Image = struct {
     alloc: Allocator,
     src: []const u8,
     alt: ArrayList(Text),
-    heap_src: bool = false, // Whether the src string has been Heap-allocated
+    heap_src: bool = false, // Whether the src string has been heap-allocated
 
     pub fn init(alloc: Allocator) Image {
         return .{
@@ -203,10 +204,18 @@ pub const Image = struct {
 
 /// Auto-link
 pub const Autolink = struct {
+    alloc: Allocator,
     url: []const u8,
+    heap_url: bool = false, // Whether the url string has been heap-allocated
 
     pub fn print(self: Autolink, depth: u8) void {
         printIndent(depth);
         std.debug.print("Autolink: {s}\n", .{self.url});
+    }
+
+    pub fn deinit(self: *Autolink) void {
+        if (self.heap_url and self.url.len > 0) {
+            self.alloc.free(self.url);
+        }
     }
 };

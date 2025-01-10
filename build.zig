@@ -153,7 +153,6 @@ pub fn build(b: *std.Build) !void {
     }
 
     // Build HTML library documentation
-    // TODO: how to enable docs??
     const lib = b.addSharedLibrary(.{
         .name = "libzigdown",
         .root_source_file = b.path("src/zigdown.zig"),
