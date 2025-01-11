@@ -210,13 +210,14 @@ fn render(stream: anytype, md: zd.Block, opts: RenderOpts) !void {
         if (opts.console_width) |width| {
             columns = width;
         } else {
-            columns = @min(tsize.cols, 90);
+            columns = if (tsize.cols > 0) @min(tsize.cols, 90) else 90;
         }
 
         const render_opts = zd.render.render_console.RenderOpts{
             .root_dir = opts.root_dir,
             .indent = 2,
             .width = columns,
+            .max_image_cols = columns - 4,
             .termsize = tsize,
         };
         var c_renderer = consoleRenderer(stream, arena.allocator(), render_opts);

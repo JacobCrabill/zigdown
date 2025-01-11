@@ -231,6 +231,10 @@ pub fn getTerminalSize() !TermSize {
         const stdout_fd: linux.fd_t = 0;
 
         if (linux.ioctl(stdout_fd, TIOCGWINSZ, @intFromPtr(&wsz)) == 0) {
+            // Some terminals may report invalid sizes (0)
+            if (wsz.ws_col == 0 or wsz.ws_row == 0 or wsz.ws_xpixel == 0 or wsz.ws_ypixel == 0) {
+                return error.InvalidTerminalSize;
+            }
             return TermSize{
                 .rows = wsz.ws_row,
                 .cols = wsz.ws_col,
