@@ -10,6 +10,7 @@ const cons = zd.cons;
 const TextStyle = zd.utils.TextStyle;
 const htmlRenderer = zd.htmlRenderer;
 const consoleRenderer = zd.consoleRenderer;
+const formatRenderer = zd.formatRenderer;
 const Parser = zd.Parser;
 const TokenList = zd.TokenList;
 
@@ -20,11 +21,13 @@ fn print_usage() void {
 
 /// Command-line arguments definition for the Flags module
 const Zigdown = struct {
-    pub const description = "Markdown parser supporting console and HTML rendering";
+    pub const description = "Markdown parser supporting console and HTML rendering, and auto-formatting";
 
     pub const descriptions = .{
+        // TODO: Replace console/html/format with command(s) or enum
         .console = "Render to the console [default]",
         .html = "Render to HTML",
+        .format = "Format the document (to stdout, or to given output file)",
         .stdin = "Read document from stdin",
         .width = "Console width to render within (default: 90 chars)",
         .output = "Output to a file, instead of to stdout",
@@ -40,6 +43,7 @@ const Zigdown = struct {
 
     console: bool = false,
     html: bool = false,
+    format: bool = false,
     stdin: bool = false,
     width: ?usize = null,
     timeit: bool = false,
@@ -58,6 +62,7 @@ const Zigdown = struct {
     pub const switches = .{
         .console = 'c',
         .html = 'x', // note: '-h' is reserved by Flags for 'help'
+        .format = 'f',
         .stdin = 'i',
         .width = 'w',
         .timeit = 't',
@@ -82,6 +87,7 @@ pub fn main() !void {
     // Process the command-line arguments
     const do_console: bool = result.console;
     const do_html: bool = result.html;
+    const do_format: bool = result.format;
     const timeit: bool = result.timeit;
     const verbose_parsing: bool = result.verbose;
     const filename: ?[]const u8 = result.positional.file;
@@ -162,9 +168,18 @@ pub fn main() !void {
         md.print(0);
     }
 
+    const render_type: RenderType = if (do_console) blk0: {
+        break :blk0 .console;
+    } else if (do_html) blk1: {
+        break :blk1 .html;
+    } else if (do_format) blk2: {
+        break :blk2 .format;
+    } else blk3: {
+        break :blk3 .console;
+    };
+
     const render_opts = RenderOpts{
-        .do_console = do_console,
-        .do_html = do_html,
+        .kind = render_type,
         .root_dir = md_dir,
         .console_width = result.width,
     };
@@ -184,9 +199,14 @@ pub fn main() !void {
     }
 }
 
+const RenderType = enum(u8) {
+    console,
+    html,
+    format,
+};
+
 const RenderOpts = struct {
-    do_console: bool = true,
-    do_html: bool = false,
+    kind: RenderType = .console,
     root_dir: ?[]const u8 = null,
     console_width: ?usize = null,
 };
@@ -195,33 +215,56 @@ fn render(stream: anytype, md: zd.Block, opts: RenderOpts) !void {
     var arena = std.heap.ArenaAllocator.init(md.allocator());
     defer arena.deinit(); // Could do this, but no reason to do so
 
-    if (opts.do_html) {
-        var h_renderer = htmlRenderer(stream, arena.allocator());
-        defer h_renderer.deinit();
-        try h_renderer.renderBlock(md);
-    }
+    switch (opts.kind) {
+        .html => {
+            var h_renderer = htmlRenderer(stream, arena.allocator());
+            defer h_renderer.deinit();
+            try h_renderer.renderBlock(md);
+        },
+        .console => {
+            // Get the terminal size; limit our width to that
+            // Some tools like `fzf --preview` cause the getTerminalSize() to fail, so work around that
+            // Kinda hacky, but :shrug:
+            var columns: usize = 90;
+            const tsize = zd.gfx.getTerminalSize() catch zd.gfx.TermSize{};
+            if (opts.console_width) |width| {
+                columns = width;
+            } else {
+                columns = if (tsize.cols > 0) @min(tsize.cols, 90) else 90;
+            }
 
-    if (opts.do_console or !opts.do_html) {
-        // Get the terminal size; limit our width to that
-        // Some tools like `fzf --preview` cause the getTerminalSize() to fail, so work around that
-        // Kinda hacky, but :shrug:
-        var columns: usize = 90;
-        const tsize = zd.gfx.getTerminalSize() catch zd.gfx.TermSize{};
-        if (opts.console_width) |width| {
-            columns = width;
-        } else {
-            columns = if (tsize.cols > 0) @min(tsize.cols, 90) else 90;
-        }
+            const render_opts = zd.render.render_console.RenderOpts{
+                .root_dir = opts.root_dir,
+                .indent = 2,
+                .width = columns,
+                .max_image_cols = columns - 4,
+                .termsize = tsize,
+            };
+            var c_renderer = consoleRenderer(stream, arena.allocator(), render_opts);
+            defer c_renderer.deinit();
+            try c_renderer.renderBlock(md);
+        },
+        .format => {
+            // Get the terminal size; limit our width to that
+            // Some tools like `fzf --preview` cause the getTerminalSize() to fail, so work around that
+            // Kinda hacky, but :shrug:
+            var columns: usize = 90;
+            const tsize = zd.gfx.getTerminalSize() catch zd.gfx.TermSize{};
+            if (opts.console_width) |width| {
+                columns = width;
+            } else {
+                columns = if (tsize.cols > 0) @min(tsize.cols, 90) else 90;
+            }
 
-        const render_opts = zd.render.render_console.RenderOpts{
-            .root_dir = opts.root_dir,
-            .indent = 2,
-            .width = columns,
-            .max_image_cols = columns - 4,
-            .termsize = tsize,
-        };
-        var c_renderer = consoleRenderer(stream, arena.allocator(), render_opts);
-        defer c_renderer.deinit();
-        try c_renderer.renderBlock(md);
+            const render_opts = zd.render.render_format.RenderOpts{
+                .root_dir = opts.root_dir,
+                .indent = 0,
+                .width = columns,
+                .termsize = tsize,
+            };
+            var formatter = formatRenderer(stream, arena.allocator(), render_opts);
+            defer formatter.deinit();
+            try formatter.renderBlock(md);
+        },
     }
 }

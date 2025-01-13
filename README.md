@@ -35,6 +35,7 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 - [x] Tables
 - [x] Automatic Table of Contents creation
 - [x] Autolinks
+- [ ] Markdown formatter (Almost complete!)
 - [ ] Complete NeoVim integration (w/ image rendering and auto-scrolling)
 - [ ] Web-based images (fetch & display in-terminal)
 - [ ] References

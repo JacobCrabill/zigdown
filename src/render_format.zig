@@ -20,31 +20,13 @@ const errorMsg = debug.errorMsg;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
-const quote_indent = zd.Text{ .style = .{ .fg_color = .White }, .text = "┃ " };
+const quote_indent = zd.Text{ .text = "> " };
 const list_indent = zd.Text{ .style = .{}, .text = "  " };
 const numlist_indent_0 = zd.Text{ .style = .{}, .text = "   " };
 const numlist_indent_10 = zd.Text{ .style = .{}, .text = "    " };
 const numlist_indent_100 = zd.Text{ .style = .{}, .text = "     " };
 const numlist_indent_1000 = zd.Text{ .style = .{}, .text = "      " };
-const task_list_indent = zd.Text{ .style = .{}, .text = "  " };
-
-const code_fence_style = zd.TextStyle{ .fg_color = .PurpleGrey, .bold = true };
-const warn_box_style = zd.TextStyle{ .fg_color = .Red, .bold = true };
-const code_text_style = zd.TextStyle{ .bg_color = .DarkGrey, .fg_color = .PurpleGrey };
-const code_indent = zd.Text{ .style = code_fence_style, .text = "│ " };
-const warn_indent = zd.Text{ .style = warn_box_style, .text = "│ " };
-
-const TreezError = error{
-    Unknown,
-    VersionMismatch,
-    NoLanguage,
-    InvalidSyntax,
-    InvalidNodeType,
-    InvalidField,
-    InvalidCapture,
-    InvalidStructure,
-    InvalidLanguage,
-};
+const task_list_indent = zd.Text{ .style = .{}, .text = "      " };
 
 const SystemError = error{
     OutOfMemory,
@@ -66,22 +48,19 @@ const SystemError = error{
     SystemError,
 };
 
-const ErrorSet = SystemError || TreezError || zd.Block.Error;
+const ErrorSet = SystemError || zd.Block.Error;
 
 pub const RenderOpts = struct {
     width: usize = 90, // Column at which to wrap all text
-    indent: usize = 2, // Left indent for the entire document
-    max_image_rows: usize = 30,
-    max_image_cols: usize = 50,
-    box_style: cons.Box = cons.BoldBox,
+    indent: usize = 0, // Left indent for the entire document
     root_dir: ?[]const u8 = null,
     rendering_to_buffer: bool = false, // Whether we're rendering to a buffer or to the final output
     termsize: gfx.TermSize = .{},
 };
 
-/// Render a Markdown document to the console using ANSI escape characters
-/// The return type is specific go the given OutStream (writer) type
-pub fn ConsoleRenderer(comptime OutStream: type) type {
+/// Auto-Format a Markdown document to the writer
+/// Keeps all the same content, but normalizes whitespace, symbols, etc.
+pub fn FormatRenderer(comptime OutStream: type) type {
     return struct {
         const Self = @This();
         const RenderError = OutStream.Error || ErrorSet;
@@ -111,49 +90,18 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             ts_queries.deinit();
         }
 
-        pub fn startFgColor(self: *Self, fg_color: zd.Color) void {
-            self.writeno(cons.getFgColor(fg_color));
-        }
-
-        pub fn startBgColor(self: *Self, bg_color: zd.Color) void {
-            self.writeno(cons.getBgColor(bg_color));
-        }
-
         /// Configure the terminal to start printing with the given (single) style
         /// Attempts to be 'minimally invasive' by monitoring current style and
         /// changing only what is necessary
         pub fn startStyleImpl(self: *Self, style: zd.TextStyle) void {
             if (style.bold != self.cur_style.bold) {
-                if (style.bold) self.writeno(cons.text_bold) else self.writeno(cons.end_bold);
+                self.write("**");
             }
             if (style.italic != self.cur_style.italic) {
-                if (style.italic) self.writeno(cons.text_italic) else self.writeno(cons.end_italic);
+                self.write("_");
             }
             if (style.underline != self.cur_style.underline) {
-                if (style.underline) self.writeno(cons.text_underline) else self.writeno(cons.end_underline);
-            }
-            if (style.blink != self.cur_style.blink) {
-                if (style.blink) self.writeno(cons.text_blink) else self.writeno(cons.end_blink);
-            }
-            if (style.fastblink != self.cur_style.fastblink) {
-                if (style.fastblink) self.writeno(cons.text_underline) else self.writeno(cons.end_blink);
-            }
-            if (style.reverse != self.cur_style.reverse) {
-                if (style.reverse) self.writeno(cons.text_reverse) else self.writeno(cons.end_reverse);
-            }
-            if (style.hide != self.cur_style.hide) {
-                if (style.hide) self.writeno(cons.text_hide) else self.writeno(cons.end_hide);
-            }
-            if (style.strike != self.cur_style.strike) {
-                if (style.strike) self.writeno(cons.text_strike) else self.writeno(cons.end_strike);
-            }
-
-            if (style.fg_color) |fg_color| {
-                self.startFgColor(fg_color);
-            }
-
-            if (style.bg_color) |bg_color| {
-                self.startBgColor(bg_color);
+                self.write("~");
             }
 
             self.cur_style = style;
@@ -161,38 +109,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Reset all active style flags
         pub fn endStyle(self: *Self, style: zd.TextStyle) void {
-            if (style.bold) self.writeno(cons.end_bold);
-            if (style.italic) self.writeno(cons.end_italic);
-            if (style.underline) self.writeno(cons.end_underline);
-            if (style.blink) self.writeno(cons.end_blink);
-            if (style.fastblink) self.writeno(cons.end_blink);
-            if (style.reverse) self.writeno(cons.end_reverse);
-            if (style.hide) self.writeno(cons.end_hide);
-            if (style.strike) self.writeno(cons.end_strike);
-
-            if (style.fg_color) |_| {
-                if (self.style_override) |so| {
-                    if (so.fg_color) |fg_color| {
-                        self.startFgColor(fg_color);
-                    } else {
-                        self.startFgColor(.Default);
-                    }
-                } else {
-                    self.startFgColor(.Default);
-                }
-            }
-
-            if (style.bg_color) |_| {
-                if (self.style_override) |so| {
-                    if (so.bg_color) |bg_color| {
-                        self.startBgColor(bg_color);
-                    } else {
-                        self.startBgColor(.Default);
-                    }
-                } else {
-                    self.startBgColor(.Default);
-                }
-            }
+            if (style.bold) self.write("**");
+            if (style.italic) self.write("_");
+            if (style.underline) self.write("~");
         }
 
         /// Configure the terminal to start printing with the given style,
@@ -245,9 +164,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         ////////////////////////////////////////////////////////////////////////
 
         /// Begin the rendering
-        fn renderBegin(self: *Self) void {
-            self.renderBreak();
-        }
+        fn renderBegin(_: *Self) void {}
 
         /// Complete the rendering
         fn renderEnd(self: *Self) void {
@@ -287,60 +204,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                         continue;
                     }
                     if (c == '\n') {
-                        self.renderBreak();
-                        self.writeLeaders();
-                        continue;
-                    }
-                    self.write(&.{c});
-                }
-                self.write(" ");
-            }
-
-            // TODO: This still feels fishy
-            // backup over the trailing " " we added if the given text didn't have one
-            if (!std.mem.endsWith(u8, text, " ") and self.column > self.opts.indent) {
-                self.printno(cons.move_left, .{1});
-                self.writeno(cons.clear_line_end);
-                self.column -= 1;
-            }
-        }
-
-        /// Write the text, wrapping (with the current indentation) at 'width' characters
-        /// TODO: Probably should simply make this "wrapTextBox" and bake in the knowledge
-        /// that we're using a 2-char unicode leader/trailer that's actually 5 bytes (UTF-8)
-        fn wrapTextWithTrailer(self: *Self, text: []const u8, trailer: zd.Text) void {
-            const len = text.len;
-            if (len == 0) return;
-
-            if (std.mem.startsWith(u8, text, " ")) {
-                self.write(" ");
-            }
-
-            const trailer_len = std.unicode.utf8CountCodepoints(trailer.text) catch trailer.text.len;
-
-            var words = std.mem.tokenizeAny(u8, text, " ");
-            while (words.next()) |word| {
-                const word_len = std.unicode.utf8CountCodepoints(word) catch word.len;
-                // idk if there's a cleaner way to do this...
-                const should_wrap: bool = (self.column + word_len + trailer_len + self.opts.indent) >= self.opts.width;
-                if (self.column > self.opts.indent and should_wrap) {
-                    self.writeNTimes(" ", self.opts.width - (self.column + trailer_len + self.opts.indent));
-                    self.startStyle(trailer.style);
-                    self.write(trailer.text);
-                    self.resetStyle();
-                    self.renderBreak();
-                    self.writeLeaders();
-                }
-                for (word) |c| {
-                    if (c == '\r') {
-                        continue;
-                    }
-                    if (c == '\n') {
-                        const count: usize = self.opts.width - (self.column + trailer_len + self.opts.indent);
-                        self.writeNTimes(" ", count);
-                        self.startStyle(trailer.style);
-                        self.write(trailer.text);
-                        self.resetStyle();
                         self.renderBreak();
                         self.writeLeaders();
                         continue;
@@ -457,13 +320,13 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Render a Quote block
         pub fn renderQuote(self: *Self, block: zd.Container) !void {
             try self.leader_stack.append(quote_indent);
-            // if (!self.needs_leaders) {
-            //     self.startStyle(quote_indent.style);
-            //     self.write(quote_indent.text);
-            //     self.resetStyle();
-            // } else {
-            self.writeLeaders();
-            // }
+            if (!self.needs_leaders) {
+                self.startStyle(quote_indent.style);
+                self.write(quote_indent.text);
+                self.resetStyle();
+            } else {
+                self.writeLeaders();
+            }
 
             for (block.children.items, 0..) |child, i| {
                 try self.renderBlock(child);
@@ -496,9 +359,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
                 // print out list bullet
                 self.writeLeaders();
-                self.startStyle(.{ .fg_color = .Blue, .bold = true });
-                self.write("‣ ");
-                self.resetStyle();
+                self.write("- ");
 
                 // Print out the contents; note the first line doesn't
                 // need the leaders (we did that already)
@@ -523,9 +384,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
                 const num: usize = start + i;
                 const marker = try std.fmt.bufPrint(&buffer, "{d}. ", .{num});
-                self.startStyle(.{ .fg_color = .Blue, .bold = true });
                 self.write(marker);
-                self.resetStyle();
 
                 // Hacky, but makes life easier, and what are you doing with
                 // a 10,000-line-long numbered Markdown list anyways?
@@ -553,11 +412,9 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
                 self.writeLeaders();
                 if (item.Container.content.ListItem.checked) {
-                    self.startStyle(.{ .fg_color = .Green, .bold = true });
-                    self.write("󰄵 ");
+                    self.write("- [x] ");
                 } else {
-                    self.startStyle(.{ .fg_color = .Red, .bold = true });
-                    self.write("󰄱 ");
+                    self.write("- [ ] ");
                 }
                 self.resetStyle();
 
@@ -607,14 +464,11 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 const sub_opts = RenderOpts{
                     .width = col_w,
                     .indent = 1,
-                    .max_image_rows = self.opts.max_image_rows,
-                    .max_image_cols = col_w - 2 * self.opts.indent,
-                    .box_style = self.opts.box_style,
                     .root_dir = self.opts.root_dir,
                     .rendering_to_buffer = true,
                 };
 
-                var sub_renderer = ConsoleRenderer(@TypeOf(stream)).init(stream, alloc, sub_opts);
+                var sub_renderer = FormatRenderer(@TypeOf(stream)).init(stream, alloc, sub_opts);
                 try sub_renderer.renderBlock(item);
 
                 try cells.append(.{ .text = buf_writer.items });
@@ -624,8 +478,6 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             // individual lines of text for all cells in each row
             const nrow: usize = @divFloor(cells.items.len, ncol);
             std.debug.assert(cells.items.len == ncol * nrow);
-
-            self.writeTableBorderTop(ncol, col_w);
 
             for (0..nrow) |i| {
                 // Get the max number of rows of text for any cell in the table row
@@ -650,8 +502,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                         const cell: *Cell = &cells.items[cell_idx];
 
                         // For each cell in the row...
-                        self.write(self.opts.box_style.vb);
-                        self.write(" ");
+                        self.write("| ");
 
                         if (cell.idx < cell.text.len) {
                             // Write the next line of text from that cell,
@@ -669,7 +520,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                             self.writeNTimes(" ", col_w - 1);
                         }
                     }
-                    self.write(self.opts.box_style.vb);
+                    self.write("|");
                     self.renderBreak();
                 }
 
@@ -677,7 +528,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 self.writeLeaders();
 
                 if (i == nrow - 1) {
-                    self.writeTableBorderBottom(ncol, col_w);
+                    // self.writeTableBorderBottom(ncol, col_w);
                 } else {
                     self.writeTableBorderMiddle(ncol, col_w);
                 }
@@ -685,48 +536,36 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         fn writeTableBorderTop(self: *Self, ncol: usize, col_w: usize) void {
-            self.write(self.opts.box_style.tl);
-            for (0..ncol) |i| {
+            self.write("|");
+            for (0..ncol) |_| {
                 for (0..col_w) |_| {
-                    self.write(self.opts.box_style.hb);
+                    self.write("-");
                 }
-                if (i < ncol - 1) {
-                    self.write(self.opts.box_style.tj);
-                } else {
-                    self.write(self.opts.box_style.tr);
-                }
+                self.write("|");
             }
             self.renderBreak();
             self.writeLeaders();
         }
 
         fn writeTableBorderMiddle(self: *Self, ncol: usize, col_w: usize) void {
-            self.write(self.opts.box_style.lj);
-            for (0..ncol) |i| {
-                for (0..col_w) |_| {
-                    self.write(self.opts.box_style.hb);
+            self.write("| ");
+            for (0..ncol) |_| {
+                for (1..col_w - 1) |_| {
+                    self.write("-");
                 }
-                if (i < ncol - 1) {
-                    self.write(self.opts.box_style.cj);
-                } else {
-                    self.write(self.opts.box_style.rj);
-                }
+                self.write(" |");
             }
             self.renderBreak();
             self.writeLeaders();
         }
 
         fn writeTableBorderBottom(self: *Self, ncol: usize, col_w: usize) void {
-            self.write(self.opts.box_style.bl);
-            for (0..ncol) |i| {
+            self.write("-");
+            for (0..ncol) |_| {
                 for (0..col_w) |_| {
-                    self.write(self.opts.box_style.hb);
+                    self.write("-");
                 }
-                if (i < ncol - 1) {
-                    self.write(self.opts.box_style.bj);
-                } else {
-                    self.write(self.opts.box_style.br);
-                }
+                self.write("-");
             }
             self.renderBreak();
             self.writeLeaders();
@@ -764,75 +603,12 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.startStyle(cur_style);
         }
 
-        fn renderCentered(self: *Self, text: []const u8, style: zd.TextStyle, pad_char: []const u8) !void {
-            const lpad: usize = (self.opts.width - text.len) / 2;
-            const rpad: usize = self.opts.width - text.len - lpad;
-            var overridden: bool = false;
-            if (self.style_override == null) {
-                self.style_override = style;
-                overridden = true;
-            }
-            self.startStyle(style);
-
-            // Left pad
-            if (lpad > 0) {
-                self.writeNTimes(pad_char, lpad - 1);
-                self.write(" ");
-            }
-
-            self.write(text);
-            // Content TODO
-            //   Have to render to a temporary buffer to get the size first, then
-            //   dump the pre-rendered buffer to the terminal with the correct amount
-            //   of padding on either side
-            // for (leaf.inlines.items) |item| {
-            //     try self.renderInline(item);
-            // }
-
-            // Right pad
-            self.startStyleImpl(style);
-            if (rpad > 0) {
-                self.write(" ");
-                self.writeNTimes("═", rpad - 1);
-            }
-
-            self.resetStyle();
-            if (overridden)
-                self.style_override = null;
-        }
-
         /// Render an ATX Heading
         fn renderHeading(self: *Self, leaf: zd.Leaf) !void {
             const h: zd.Heading = leaf.content.Heading;
-            var style = zd.TextStyle{};
-            var pad_char: []const u8 = " ";
-
-            switch (h.level) {
-                1 => {
-                    style = zd.TextStyle{ .fg_color = .Blue, .bold = true };
-                    pad_char = "═";
-                },
-                2 => {
-                    style = zd.TextStyle{ .fg_color = .Green, .bold = true };
-                    pad_char = "─";
-                },
-                3 => {
-                    style = zd.TextStyle{ .fg_color = .White, .bold = true, .italic = true, .underline = true };
-                },
-                else => {
-                    style = zd.TextStyle{ .fg_color = .White, .underline = true };
-                },
-            }
-
-            var overridden: bool = false;
-            if (self.style_override == null) {
-                self.style_override = style;
-                overridden = true;
-            }
-            self.startStyle(style);
 
             // Indent
-            self.writeNTimes(pad_char, 4);
+            self.writeNTimes("#", h.level);
             self.write(" ");
 
             // Content
@@ -840,112 +616,32 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 try self.renderInline(item);
             }
 
-            // Right Pad
-            if (self.column < self.opts.width - 1) {
-                self.write(" ");
-                while (self.column < self.opts.width - self.opts.indent) {
-                    self.write(pad_char);
-                }
-            }
-
             // Reset
             self.resetStyle();
             if (!self.opts.rendering_to_buffer) {
                 self.writeno(cons.clear_line_end);
             }
-            if (overridden)
-                self.style_override = null;
 
             self.renderBreak();
         }
 
         /// Render a raw block of code
         fn renderCode(self: *Self, c: zd.Code) !void {
-            if (c.directive) |_| {
-                try self.renderDirective(c);
-                return;
-            }
-            self.writeLeaders();
-            self.startStyle(code_fence_style);
-            self.print("╭──────────────────── <{s}>", .{c.tag orelse "none"});
-            self.renderBreak();
-            self.resetStyle();
-
-            try self.leader_stack.append(code_indent);
-
-            const language = c.tag orelse "none";
+            const dir: []const u8 = c.directive orelse "";
+            const tag = c.tag orelse dir;
             const source = c.text orelse "";
-
-            // Use TreeSitter to parse the code block and apply colors
-            if (syntax.getHighlights(self.alloc, source, language)) |ranges| {
-                defer self.alloc.free(ranges);
-
-                self.writeLeaders();
-                for (ranges) |range| {
-                    const style = zd.TextStyle{ .fg_color = range.color, .bg_color = .Default };
-                    self.startStyle(style);
-                    self.wrapTextRaw(range.content);
-                    self.endStyle(style);
-                    if (range.newline) {
-                        self.renderBreak();
-                        self.writeLeaders();
-                    }
-                }
-            } else |_| {
-                // Useful for debugging TreeSitter queries
-                // Note: Can do ':TSPlaygroundToggle' then hit 'o' in the tree to enter the live query editor
-                // std.debug.print("TreeSitter error: {any}\n", .{err});
-                self.writeLeaders();
-                self.startStyle(code_fence_style);
-                self.wrapTextRaw(source);
-                self.endStyle(code_fence_style);
-            }
-
-            _ = self.leader_stack.pop();
-            self.resetLine();
-            self.writeLeaders();
-            self.startStyle(code_fence_style);
-            self.write("╰────────────────────");
-            self.resetStyle();
-        }
-
-        fn renderDirective(self: *Self, d: zd.Code) !void {
-            // TODO: Enum for builtin directive types w/ string aliases mapped to them
-            const directive = d.directive orelse "note";
-
-            if (zd.isDirectiveToC(directive)) {
-                // Generate and render a Table of Contents for the whole document
-                var toc: zd.Block = try zd.generateTableOfContents(self.alloc, &self.root.?);
-                defer toc.deinit();
-                self.writeLeaders();
-                try self.renderBlock(toc);
-                return;
-            }
+            const fence = c.opener orelse "```";
 
             self.writeLeaders();
-            self.startStyle(warn_box_style);
-            self.print("╭─── {s} ", .{directive});
-            self.writeNTimes("─", self.opts.width - 7 - 2 * self.opts.indent - directive.len);
-            self.write("╮");
+            self.print("{s}{s}", .{ fence, tag });
             self.renderBreak();
-            self.resetStyle();
 
-            try self.leader_stack.append(warn_indent);
             self.writeLeaders();
+            self.wrapTextRaw(source);
 
-            const source = d.text orelse "";
-
-            const trailer: zd.Text = .{ .text = " │", .style = warn_box_style };
-            self.wrapTextWithTrailer(source, trailer);
-
-            _ = self.leader_stack.pop();
             self.resetLine();
             self.writeLeaders();
-            self.startStyle(warn_box_style);
-            self.write("╰");
-            self.writeNTimes("─", self.opts.width - 2 * self.opts.indent - 2);
-            self.write("╯");
-            self.resetStyle();
+            self.print("{s}", .{fence});
         }
 
         /// Render a standard paragraph of text
@@ -964,130 +660,43 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 .image => |i| try self.renderImage(i),
                 .linebreak => {},
                 .link => |l| try self.renderLink(l),
-                .text => |t| try self.renderText(t),
+                .text => |t| self.renderText(t),
             }
         }
 
         fn renderAutolink(self: *Self, link: zd.Autolink) !void {
-            self.startStyle(.{ .fg_color = .Cyan });
-
-            // \e]8;; + URL + \e\\ + Text + \e]8;; + \e\\
-            // Write the URL inside the special hyperlink escape sequence
-            self.writeno(cons.hyperlink);
-            self.writeno(link.url); // The true address part of the link
-            self.writeno(cons.link_end);
-            self.write(link.url); // The visible text of the link
-            self.writeno(cons.hyperlink);
-            self.writeno(cons.link_end);
-            self.resetStyle();
+            self.print("<{s}>", .{link.url});
         }
 
         fn renderInlineCode(self: *Self, code: zd.Codespan) !void {
-            const cur_style = self.cur_style;
-            self.resetStyle();
-            const style = code_text_style;
-            self.startStyle(style);
+            // TODO: Should create a scratch buffer for pre-formatting text
+            self.wrapText("`");
             self.wrapText(code.text);
-            self.resetStyle();
-            self.startStyle(cur_style);
+            self.wrapText("`");
         }
 
-        fn renderText(self: *Self, text: zd.Text) !void {
+        fn renderText(self: *Self, text: zd.Text) void {
             self.startStyle(text.style);
             self.wrapText(text.text);
         }
 
         fn renderLink(self: *Self, link: zd.Link) !void {
-            self.startStyle(.{ .fg_color = .Cyan });
-
-            // \e]8;; + URL + \e\\ + Text + \e]8;; + \e\\
-            // Write the URL inside the special hyperlink escape sequence
-            self.writeno(cons.hyperlink);
-            self.writeno(link.url);
-            self.writeno(cons.link_end);
-
-            // Render the visible text of the link, followed by the end of the escape sequence
+            // TODO: Should create a scratch buffer for pre-formatting text
+            self.wrapText("[");
             for (link.text.items) |text| {
-                try self.renderText(text);
+                self.renderText(text);
             }
-            self.writeno(cons.hyperlink);
-            self.writeno(cons.link_end);
-            self.resetStyle();
+            self.wrapText("](");
+            self.wrapText(link.url);
+            self.wrapText(")");
         }
 
         fn renderImage(self: *Self, image: zd.Image) !void {
-            const cur_style = self.cur_style;
-            self.startStyle(.{ .fg_color = .Blue, .bold = true });
+            self.write("![{");
             for (image.alt.items) |text| {
-                try self.renderText(text);
+                self.renderText(text);
             }
-            self.write(" -> ");
-            self.startStyle(.{ .fg_color = .Green, .bold = true, .underline = true });
-            self.write(image.src);
-            self.startStyle(cur_style);
-
-            // Assume the image path is relative to the Markdown file path
-            const root_dir = if (self.opts.root_dir) |rd| rd else "./";
-            const path = try std.fs.path.joinZ(self.alloc, &.{ root_dir, image.src });
-            defer self.alloc.free(path);
-
-            var img_file: ?stb.Image = stb.load_image(path, 3) catch |err| blk: {
-                std.debug.print("Error loading image: {any}\n", .{err});
-                break :blk null;
-            };
-            defer if (img_file) |*img| img.deinit();
-
-            if (img_file) |img| {
-                self.renderBreak();
-                self.renderBreak();
-
-                const twidth_px: f32 = @floatFromInt(self.opts.termsize.width);
-                const theight_px: f32 = @floatFromInt(self.opts.termsize.height);
-                const tcols: f32 = @floatFromInt(self.opts.termsize.cols);
-                const trows: f32 = @floatFromInt(self.opts.termsize.rows);
-                const max_cols: f32 = @floatFromInt(self.opts.max_image_cols);
-
-                // Get the size of a single cell of the terminal in pixels
-                const x_px: f32 = twidth_px / tcols;
-                const y_px: f32 = theight_px / trows;
-
-                const org_width: f32 = @floatFromInt(img.width);
-                const org_height: f32 = @floatFromInt(img.height);
-
-                // Cap the image width at the given max # of cells
-                // We'll just ignore the max height, since terminals can scroll :D
-                var fwidth: f32 = org_width;
-                var fheight: f32 = org_height;
-                const aspect_ratio: f32 = fheight / fwidth;
-                const max_width_pixels: f32 = max_cols * x_px;
-                if (org_width > (x_px * max_cols)) {
-                    fwidth = max_width_pixels;
-                    fheight = aspect_ratio * fwidth;
-                }
-
-                // The final width and height to render at (in terms of columns and rows of the terminal)
-                const width: usize = @intFromFloat(fwidth / x_px);
-                const height: usize = @intFromFloat(fheight / y_px);
-
-                // Center the image by setting the cursor appropriately
-                self.writeNTimes(" ", (self.opts.width - width) / 2);
-
-                // const raw_data: []const u8 = img.data[0..@intCast(img.width * img.height * img.nchan)];
-                gfx.sendImagePNG(self.stream, self.alloc, path, width, height) catch |err| {
-                    if (err == error.FileIsNotPNG) {
-                        if (img.nchan == 3) {
-                            gfx.sendImageRGB2(self.stream, self.alloc, &img, width, height) catch |err2| {
-                                std.debug.print("Error rendering RGB image: {any}\n", .{err2});
-                            };
-                        } else {
-                            std.debug.print("Invalid # of channels for non-PNG image: {d}\n", .{img.nchan});
-                        }
-                    } else {
-                        std.debug.print("Error rendering image: {any}\n", .{err});
-                    }
-                };
-                self.renderBreak();
-            }
+            self.print("]({s})", .{image.src});
         }
     };
 }

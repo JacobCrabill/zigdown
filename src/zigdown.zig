@@ -28,4 +28,5 @@ pub const Lexer = lexer.Lexer;
 pub const ConsoleRenderer = render.ConsoleRenderer;
 pub const HtmlRenderer = render.HtmlRenderer;
 pub const consoleRenderer = render.consoleRenderer;
+pub const formatRenderer = render.formatRenderer;
 pub const htmlRenderer = render.htmlRenderer;
