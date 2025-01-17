@@ -64,30 +64,39 @@ pub fn FormatRenderer(comptime OutStream: type) type {
     return struct {
         const Self = @This();
         const RenderError = OutStream.Error || ErrorSet;
+        const RenderMode = enum(u8) {
+            normal,
+            scratch,
+        };
         stream: OutStream,
+        opts: RenderOpts = undefined,
         column: usize = 0,
         alloc: std.mem.Allocator,
         leader_stack: ArrayList(zd.Text),
         needs_leaders: bool = true,
-        opts: RenderOpts = undefined,
         style_override: ?zd.TextStyle = null,
         cur_style: zd.TextStyle = .{},
         root: ?zd.Block = null,
+        scratch: ArrayList(u8), // Scratch buffer for pre-rendering (to find length)
+        scratch_stream: ArrayList(u8).Writer = undefined,
+        mode: RenderMode = .normal,
 
         pub fn init(stream: OutStream, alloc: Allocator, opts: RenderOpts) Self {
             // Initialize the TreeSitter query functionality in case we need it
             ts_queries.init(alloc);
             return Self{
+                .opts = opts,
                 .stream = stream,
                 .alloc = alloc,
                 .leader_stack = ArrayList(zd.Text).init(alloc),
-                .opts = opts,
+                .scratch = ArrayList(u8).init(alloc),
             };
         }
 
         pub fn deinit(self: *Self) void {
             self.leader_stack.deinit();
             ts_queries.deinit();
+            self.scratch.deinit();
         }
 
         /// Configure the terminal to start printing with the given (single) style
@@ -123,23 +132,40 @@ pub fn FormatRenderer(comptime OutStream: type) type {
 
         /// Reset all style in the terminal
         pub fn resetStyle(self: *Self) void {
-            self.writeno(cons.ansi_end);
             self.cur_style = zd.TextStyle{};
         }
 
         /// Write an array of bytes to the underlying writer, and update the current column
         pub fn write(self: *Self, bytes: []const u8) void {
-            self.stream.writeAll(bytes) catch |err| {
-                errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
-            };
-            self.column += std.unicode.utf8CountCodepoints(bytes) catch bytes.len;
+            switch (self.mode) {
+                .normal => {
+                    self.stream.writeAll(bytes) catch |err| {
+                        errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
+                    };
+                    self.column += std.unicode.utf8CountCodepoints(bytes) catch bytes.len;
+                },
+                .scratch => {
+                    self.scratch_stream.writeAll(bytes) catch |err| {
+                        errorMsg(@src(), "Unable to write to scratch! {s}\n", .{@errorName(err)});
+                    };
+                },
+            }
         }
 
         /// Write an array of bytes to the underlying writer, without updating the current column
         pub fn writeno(self: Self, bytes: []const u8) void {
-            self.stream.writeAll(bytes) catch |err| {
-                errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
-            };
+            switch (self.mode) {
+                .normal => {
+                    self.stream.writeAll(bytes) catch |err| {
+                        errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
+                    };
+                },
+                .scratch => {
+                    self.scratch_stream.writeAll(bytes) catch |err| {
+                        errorMsg(@src(), "Unable to write to scratch! {s}\n", .{@errorName(err)});
+                    };
+                },
+            }
         }
 
         /// Print the format and args to the output stream, updating the current column
@@ -154,9 +180,18 @@ pub fn FormatRenderer(comptime OutStream: type) type {
 
         /// Print the format and args to the output stream, without updating the current column
         pub fn printno(self: *Self, comptime fmt: []const u8, args: anytype) void {
-            self.stream.print(fmt, args) catch |err| {
-                errorMsg(@src(), "Unable to print! {s}\n", .{@errorName(err)});
-            };
+            switch (self.mode) {
+                .normal => {
+                    self.stream.print(fmt, args) catch |err| {
+                        errorMsg(@src(), "Unable to print! {s}\n", .{@errorName(err)});
+                    };
+                },
+                .scratch => {
+                    self.scratch_stream.print(fmt, args) catch |err| {
+                        errorMsg(@src(), "Unable to print to scratch! {s}\n", .{@errorName(err)});
+                    };
+                },
+            }
         }
 
         ////////////////////////////////////////////////////////////////////////
@@ -168,10 +203,6 @@ pub fn FormatRenderer(comptime OutStream: type) type {
 
         /// Complete the rendering
         fn renderEnd(self: *Self) void {
-            if (!self.opts.rendering_to_buffer) {
-                self.printno(cons.move_left, .{1000});
-                self.writeno(cons.clear_line);
-            }
             self.column = 0;
         }
 
@@ -193,12 +224,15 @@ pub fn FormatRenderer(comptime OutStream: type) type {
             }
 
             var words = std.mem.tokenizeAny(u8, text, " ");
+            var need_space: usize = 0;
             while (words.next()) |word| {
-                // idk if there's a cleaner way to do this...
-                if (self.column > self.opts.indent and self.column + word.len + self.opts.indent > self.opts.width) {
+                if (self.column > self.opts.indent and self.column + word.len + self.opts.indent + need_space > self.opts.width) {
                     self.renderBreak();
                     self.writeLeaders();
+                } else if (need_space > 0) {
+                    self.write(" ");
                 }
+
                 for (word) |c| {
                     if (c == '\r') {
                         continue;
@@ -210,15 +244,8 @@ pub fn FormatRenderer(comptime OutStream: type) type {
                     }
                     self.write(&.{c});
                 }
-                self.write(" ");
-            }
 
-            // TODO: This still feels fishy
-            // backup over the trailing " " we added if the given text didn't have one
-            if (!std.mem.endsWith(u8, text, " ") and self.column > self.opts.indent) {
-                self.printno(cons.move_left, .{1});
-                self.writeno(cons.clear_line_end);
-                self.column -= 1;
+                if (need_space == 0) need_space = 1;
             }
         }
 
@@ -246,9 +273,6 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         pub fn writeLeaders(self: *Self) void {
             const style = self.cur_style;
             self.resetStyle();
-            if (!self.opts.rendering_to_buffer) {
-                self.writeno(cons.clear_line);
-            }
             for (self.leader_stack.items) |text| {
                 self.startStyle(text.style);
                 self.write(text.text);
@@ -299,8 +323,8 @@ pub fn FormatRenderer(comptime OutStream: type) type {
             switch (block.content) {
                 .Break => {},
                 .Code => |c| try self.renderCode(c),
-                .Heading => try self.renderHeading(block),
-                .Paragraph => try self.renderParagraph(block),
+                .Heading => self.renderHeading(block),
+                .Paragraph => self.renderParagraph(block),
             }
         }
 
@@ -309,10 +333,13 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         /// Render a Document block (contains only other blocks)
         pub fn renderDocument(self: *Self, doc: zd.Container) !void {
             self.renderBegin();
-            for (doc.children.items) |block| {
+            for (doc.children.items, 0..) |block, i| {
                 try self.renderBlock(block);
-                if (self.column > self.opts.indent) self.renderBreak(); // Begin new line
-                if (!zd.isBreak(block)) self.renderBreak(); // Add blank line
+
+                if (i < doc.children.items.len - 1) {
+                    if (self.column > self.opts.indent) self.renderBreak(); // Begin new line
+                    if (!zd.isBreak(block)) self.renderBreak(); // Add blank line
+                }
             }
             self.renderEnd();
         }
@@ -515,6 +542,8 @@ pub fn FormatRenderer(comptime OutStream: type) type {
                             cell.idx += text.len + 1;
 
                             // Move the cursor to the start of the next cell
+                            // TODO: Need to render to a raw buffer to avoid control codes
+                            // Out output is the plain text, not ANSI terminal output
                             self.printno(cons.set_col, .{self.opts.indent + (j + 2) + (j + 1) * col_w});
                         } else {
                             self.writeNTimes(" ", col_w - 1);
@@ -527,45 +556,21 @@ pub fn FormatRenderer(comptime OutStream: type) type {
                 // End the current row
                 self.writeLeaders();
 
-                if (i == nrow - 1) {
-                    // self.writeTableBorderBottom(ncol, col_w);
-                } else {
-                    self.writeTableBorderMiddle(ncol, col_w);
-                }
+                self.writeTableBorderMiddle(ncol, col_w);
             }
-        }
-
-        fn writeTableBorderTop(self: *Self, ncol: usize, col_w: usize) void {
-            self.write("|");
-            for (0..ncol) |_| {
-                for (0..col_w) |_| {
-                    self.write("-");
-                }
-                self.write("|");
-            }
-            self.renderBreak();
-            self.writeLeaders();
         }
 
         fn writeTableBorderMiddle(self: *Self, ncol: usize, col_w: usize) void {
             self.write("| ");
-            for (0..ncol) |_| {
+            for (0..ncol) |i| {
                 for (1..col_w - 1) |_| {
                     self.write("-");
                 }
-                self.write(" |");
-            }
-            self.renderBreak();
-            self.writeLeaders();
-        }
-
-        fn writeTableBorderBottom(self: *Self, ncol: usize, col_w: usize) void {
-            self.write("-");
-            for (0..ncol) |_| {
-                for (0..col_w) |_| {
-                    self.write("-");
+                if (i == ncol - 1) {
+                    self.write(" |");
+                } else {
+                    self.write(" | ");
                 }
-                self.write("-");
             }
             self.renderBreak();
             self.writeLeaders();
@@ -579,9 +584,6 @@ pub fn FormatRenderer(comptime OutStream: type) type {
             // Reset all styles before wrting the newline and indent
             const cur_style = self.cur_style;
             self.resetStyle();
-            if (!self.opts.rendering_to_buffer) {
-                self.writeno(cons.clear_line_end);
-            }
             self.writeno("\n");
             self.column = 0;
             self.writeNTimes(" ", self.opts.indent);
@@ -594,17 +596,13 @@ pub fn FormatRenderer(comptime OutStream: type) type {
             // Reset all styles before wrting the newline and indent
             const cur_style = self.cur_style;
             self.resetStyle();
-            if (!self.opts.rendering_to_buffer) {
-                self.writeno(cons.clear_line_end);
-                self.writeno(cons.move_home);
-            }
             self.column = 0;
             self.writeNTimes(" ", self.opts.indent);
             self.startStyle(cur_style);
         }
 
         /// Render an ATX Heading
-        fn renderHeading(self: *Self, leaf: zd.Leaf) !void {
+        fn renderHeading(self: *Self, leaf: zd.Leaf) void {
             const h: zd.Heading = leaf.content.Heading;
 
             // Indent
@@ -613,14 +611,11 @@ pub fn FormatRenderer(comptime OutStream: type) type {
 
             // Content
             for (leaf.inlines.items) |item| {
-                try self.renderInline(item);
+                self.renderInline(item);
             }
 
             // Reset
             self.resetStyle();
-            if (!self.opts.rendering_to_buffer) {
-                self.writeno(cons.clear_line_end);
-            }
 
             self.renderBreak();
         }
@@ -645,58 +640,79 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         }
 
         /// Render a standard paragraph of text
-        fn renderParagraph(self: *Self, leaf: zd.Leaf) !void {
+        fn renderParagraph(self: *Self, leaf: zd.Leaf) void {
+            self.mode = .scratch;
+            self.scratch_stream = self.scratch.writer();
             for (leaf.inlines.items) |item| {
-                try self.renderInline(item);
+                self.renderInline(item);
             }
+            self.mode = .normal;
+            self.wrapText(self.scratch.items);
+            self.scratch.clearRetainingCapacity();
         }
 
         // Inline rendering functions -----------------------------------------
 
-        fn renderInline(self: *Self, item: zd.Inline) !void {
+        fn renderInline(self: *Self, item: zd.Inline) void {
             switch (item.content) {
-                .autolink => |l| try self.renderAutolink(l),
-                .codespan => |c| try self.renderInlineCode(c),
-                .image => |i| try self.renderImage(i),
+                .autolink => |l| self.renderAutolink(l),
+                .codespan => |c| self.renderInlineCode(c),
+                .image => |i| self.renderImage(i),
                 .linebreak => {},
-                .link => |l| try self.renderLink(l),
+                .link => |l| self.renderLink(l),
                 .text => |t| self.renderText(t),
             }
         }
 
-        fn renderAutolink(self: *Self, link: zd.Autolink) !void {
+        fn renderAutolink(self: *Self, link: zd.Autolink) void {
             self.print("<{s}>", .{link.url});
         }
 
-        fn renderInlineCode(self: *Self, code: zd.Codespan) !void {
-            // TODO: Should create a scratch buffer for pre-formatting text
-            self.wrapText("`");
-            self.wrapText(code.text);
-            self.wrapText("`");
+        fn renderInlineCode(self: *Self, code: zd.Codespan) void {
+            self.write("`");
+            self.write(code.text);
+            self.write("`");
         }
 
         fn renderText(self: *Self, text: zd.Text) void {
             self.startStyle(text.style);
-            self.wrapText(text.text);
+            self.write(text.text);
         }
 
-        fn renderLink(self: *Self, link: zd.Link) !void {
-            // TODO: Should create a scratch buffer for pre-formatting text
-            self.wrapText("[");
+        fn renderLink(self: *Self, link: zd.Link) void {
+            if (self.mode == .scratch) {
+                self.dumpScratchBuffer();
+            }
+
+            self.write("[");
             for (link.text.items) |text| {
                 self.renderText(text);
             }
-            self.wrapText("](");
-            self.wrapText(link.url);
-            self.wrapText(")");
+            self.write("](");
+            self.write(link.url);
+            self.write(")");
         }
 
-        fn renderImage(self: *Self, image: zd.Image) !void {
-            self.write("![{");
+        fn renderImage(self: *Self, image: zd.Image) void {
+            if (self.mode == .scratch) {
+                self.dumpScratchBuffer();
+            }
+
+            self.write("![");
             for (image.alt.items) |text| {
                 self.renderText(text);
             }
             self.print("]({s})", .{image.src});
+        }
+
+        fn dumpScratchBuffer(self: *Self) void {
+            if (self.scratch.items.len == 0) return;
+            self.mode = .normal;
+            if (self.column > 0) self.write(" ");
+            self.wrapText(self.scratch.items);
+            self.scratch.clearRetainingCapacity();
+            self.mode = .scratch;
+            if (self.column > 0) self.write(" ");
         }
     };
 }

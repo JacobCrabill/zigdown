@@ -22,6 +22,7 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 - [x] Console and HTML rendering
 - [x] Headers
 - [x] Basic text formatting (**Bold**, _italic_, ~underline~)
+  - I may change ~this~ back to strikethrough and add another syntax for underline
 - [x] (Clickable) Links
 - [x] Quote blocks
 - [x] Unordered lists

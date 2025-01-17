@@ -276,12 +276,15 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
 
             var words = std.mem.tokenizeAny(u8, text, " ");
+            var need_space: usize = 0;
             while (words.next()) |word| {
-                // idk if there's a cleaner way to do this...
-                if (self.column > self.opts.indent and self.column + word.len + self.opts.indent > self.opts.width) {
+                if (self.column > self.opts.indent and self.column + word.len + self.opts.indent + need_space > self.opts.width) {
                     self.renderBreak();
                     self.writeLeaders();
+                } else if (need_space > 0) {
+                    self.write(" ");
                 }
+
                 for (word) |c| {
                     if (c == '\r') {
                         continue;
@@ -293,7 +296,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                     }
                     self.write(&.{c});
                 }
-                self.write(" ");
+
+                if (need_space == 0) need_space = 1;
             }
 
             // TODO: This still feels fishy
