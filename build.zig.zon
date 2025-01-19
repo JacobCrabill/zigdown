@@ -16,14 +16,13 @@
             .hash = "1220be50d5bf071aed75e8bc0119661d520ed20f2c47b140e5871f3839a00f9f79a3",
         },
         .flags = .{
-            // Forked from n0s4/flags
-            .url = "https://github.com/JacobCrabill/zig-flags/archive/95bfcf22ffd2f28b98f132d195bd6b8f6c25baa4.tar.gz",
-            .hash = "12209e876a24e3b03e712b91aaaa88c124ac1a831343a0120642d3aa8fb1eefc1142",
-            // .path = "../zig-tools/flags",
+            // .url = "https://github.com/n0s4/flags/archive/b86a170e604d689a9d50cf9f83acb437d3a49caf.tar.gz",
+            .url = "https://github.com/n0s4/flags/archive/be9ab7f0f960ecf15aa9b8dd021aff511ba3cfd4.tar.gz",
+            .hash = "1220ae181067a549c7a99cc0868193a7889b151381410419191ab1a79304f914336e",
         },
         .treez = .{
-            .url = "https://github.com/JacobCrabill/treez/archive/3b9ec06205b5d0fc56b51613262ef3658051d97c.tar.gz",
-            .hash = "1220cfa4f0bd3772e603acda6527ecf0e915280da307b4353c40636e8e93b26e0f32",
+            .url = "https://github.com/JacobCrabill/treez/archive/087d9bd9d1d53c0364401e2d1a8d2990853113e7.tar.gz",
+            .hash = "1220674934bd39d0c181044065368d6d11532b7ee7201092aa37e82373080a885baf",
         },
 
         // Individual TreeSitter language parsers

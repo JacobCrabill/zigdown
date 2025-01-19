@@ -637,7 +637,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 for (0..ncol) |j| {
                     const cell_idx: usize = i * ncol + j;
                     const cell = cells.items[cell_idx];
-                    var iter = std.mem.tokenize(u8, cell.text, "\n");
+                    var iter = std.mem.tokenizeScalar(u8, cell.text, '\n');
                     var n_lines: usize = 0;
                     while (iter.next()) |_| {
                         n_lines += 1;

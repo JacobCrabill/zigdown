@@ -31,7 +31,7 @@ var aliases: std.StringHashMap([]const u8) = undefined;
 const mylanglist = blk: {
     var result: []const []const u8 = &.{};
 
-    var iter = std.mem.tokenize(u8, config.builtin_ts_parsers, ",");
+    var iter = std.mem.tokenizeScalar(u8, config.builtin_ts_parsers, ',');
     while (iter.next()) |name| {
         result = result ++ [1][]const u8{name};
     }
@@ -147,7 +147,7 @@ pub fn getTsConfigDir() ![]const u8 {
     defer allocator.free(ts_config_dir);
 
     // Ensure the path is an absolute path
-    var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const config_path = try std.fs.realpath(ts_config_dir, &path_buf);
     return try allocator.dupe(u8, config_path);
 }

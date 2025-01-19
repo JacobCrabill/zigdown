@@ -40,7 +40,7 @@ pub fn main() !u8 {
 }
 
 fn readFile(alloc: std.mem.Allocator, filename: []const u8) ?[]const u8 {
-    var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const realpath = std.fs.realpath(filename, &path_buf) catch {
         std.debug.print("File not found: {s}\n", .{filename});
         return null;

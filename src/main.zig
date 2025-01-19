@@ -14,13 +14,14 @@ const formatRenderer = zd.formatRenderer;
 const Parser = zd.Parser;
 const TokenList = zd.TokenList;
 
-fn print_usage() void {
-    const stdout = std.io.getStdOut().writer();
-    flags.help.printUsage(Zigdown, null, 85, stdout) catch unreachable;
+fn print_usage(diags: flags.Diagnostics) void {
+    const help = diags.help.generated;
+    const stdout = std.io.getStdOut();
+    help.usage.render(stdout, flags.ColorScheme.default) catch @panic("Failed to render help text");
 }
 
 /// Command-line arguments definition for the Flags module
-const Zigdown = struct {
+const Flags = struct {
     pub const description = "Markdown parser supporting console and HTML rendering, and auto-formatting";
 
     pub const descriptions = .{
@@ -82,7 +83,35 @@ pub fn main() !void {
 
     var args = try std.process.argsWithAllocator(alloc);
     defer args.deinit();
-    const result = flags.parse(&args, Zigdown, .{ .max_line_len = 85 }) catch std.process.exit(1);
+
+    // Diagnostics store the name and help info about the command being parsed.
+    // You can use this to display help / usage if there is a parsing error.
+    var diags: flags.Diagnostics = undefined;
+
+    const result = flags.parse(&args, "zigdown", Flags, .{
+        .diagnostics = &diags,
+        .colors = .{
+            .error_label = &.{ .red, .bold },
+            .header = &.{ .bright_green, .bold },
+            .command_name = &.{.bright_blue},
+            .option_name = &.{.bright_magenta},
+        },
+    }) catch |err| {
+        // This error is returned when "--help" is passed, not when an actual error occured.
+        if (err == error.PrintedHelp) {
+            std.posix.exit(0);
+        }
+
+        std.debug.print(
+            "\nEncountered error while parsing for command '{s}': {s}\n\n",
+            .{ diags.command, @errorName(err) },
+        );
+
+        // Print command usage.
+        print_usage(diags);
+
+        std.posix.exit(1);
+    };
 
     // Process the command-line arguments
     const do_console: bool = result.console;
@@ -95,7 +124,7 @@ pub fn main() !void {
 
     if (filename) |f| {
         if (std.mem.eql(u8, f, "help")) {
-            print_usage();
+            print_usage(diags);
             std.process.exit(0);
         }
     }
@@ -104,7 +133,7 @@ pub fn main() !void {
         zd.ts_queries.init(alloc);
         defer zd.ts_queries.deinit();
 
-        var langs = std.mem.tokenize(u8, s, ",");
+        var langs = std.mem.tokenizeScalar(u8, s, ',');
         while (langs.next()) |lang| {
             var user: []const u8 = "tree-sitter";
             var git_ref: []const u8 = "master";
@@ -129,7 +158,7 @@ pub fn main() !void {
     if (filename == null and !result.stdin) {
         cons.printColor(stdout, .Red, "Error: ", .{});
         cons.printColor(stdout, .White, "No filename provided\n\n", .{});
-        print_usage();
+        print_usage(diags);
         std.process.exit(2);
     }
 
@@ -141,7 +170,7 @@ pub fn main() !void {
         md_text = try stdin.readAllAlloc(alloc, 1e9);
     } else {
         // Read file into memory; Set root directory
-        var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+        var path_buf: [std.fs.max_path_bytes]u8 = undefined;
         const realpath = try std.fs.realpath(filename.?, &path_buf);
         var md_file: File = try std.fs.openFileAbsolute(realpath, .{});
         md_text = try md_file.readToEndAlloc(alloc, 1e9);

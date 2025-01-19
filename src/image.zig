@@ -9,6 +9,7 @@ const Base64Encoder = std.base64.standard.Encoder;
 
 const os = std.os;
 const linux = std.os.linux;
+const posix = std.posix;
 const windows = std.os.windows;
 
 const esc: [1]u8 = [1]u8{0x1b}; // ANSI escape code
@@ -45,7 +46,7 @@ pub fn isPNG(data: []const u8) bool {
 /// 'width' and 'height' are in terms of terminal cells, not pixels!
 pub fn sendImagePNG(stream: anytype, alloc: Allocator, file: []const u8, width: ?usize, height: ?usize) !void {
     // Read the image into memory
-    var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const realpath = try std.fs.realpath(file, &path_buf);
     var img: File = try std.fs.openFileAbsolute(realpath, .{});
     const buffer = try img.readToEndAlloc(alloc, 1e9);
@@ -79,7 +80,7 @@ pub fn sendImagePNG(stream: anytype, alloc: Allocator, file: []const u8, width: 
 /// Send an image file to the terminal as raw RGB pixel data using the Kitty terminal graphics protocol
 pub fn sendImageRGB(stream: anytype, alloc: Allocator, file: []const u8, width: ?usize, height: ?usize) !void {
     // Read the image into memory
-    var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const realpath = try std.fs.realpath(file, &path_buf);
     var img_file: File = try std.fs.openFileAbsolute(realpath, .{});
     const buffer = try img_file.readToEndAlloc(alloc, 1e9);
@@ -226,20 +227,20 @@ pub const TermSize = struct {
 
 pub fn getTerminalSize() !TermSize {
     if (builtin.os.tag == .linux) {
-        var wsz: linux.winsize = undefined;
+        var wsz: posix.winsize = undefined;
         const TIOCGWINSZ: usize = 21523;
-        const stdout_fd: linux.fd_t = 0;
+        const stdout_fd: posix.fd_t = 0;
 
         if (linux.ioctl(stdout_fd, TIOCGWINSZ, @intFromPtr(&wsz)) == 0) {
             // Some terminals may report invalid sizes (0)
-            if (wsz.ws_col == 0 or wsz.ws_row == 0 or wsz.ws_xpixel == 0 or wsz.ws_ypixel == 0) {
+            if (wsz.col == 0 or wsz.row == 0 or wsz.xpixel == 0 or wsz.ypixel == 0) {
                 return error.InvalidTerminalSize;
             }
             return TermSize{
-                .rows = wsz.ws_row,
-                .cols = wsz.ws_col,
-                .width = wsz.ws_xpixel,
-                .height = wsz.ws_ypixel,
+                .rows = wsz.row,
+                .cols = wsz.col,
+                .width = wsz.xpixel,
+                .height = wsz.ypixel,
             };
         }
 

@@ -73,7 +73,7 @@ pub fn main() !void {
     defer qd.close();
 
     // Download and save each language's highlights query to disk
-    var iter = std.mem.tokenize(u8, params.positional.language_list, " ");
+    var iter = std.mem.tokenizeScalar(u8, params.positional.language_list, ' ');
     while (iter.next()) |lang| {
         var user: []const u8 = "tree-sitter";
         var git_ref: []const u8 = "master";

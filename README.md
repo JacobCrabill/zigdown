@@ -52,7 +52,10 @@ new features like special warnings, note boxes, and other custom directives.
 ## Usage
 
 The current version of Zig this code compiles with is
-[0.13.0](https://ziglang.org/builds/zig-linux-x86_64-0.13.0.tar.xz).
+[master: 0.14.0-dev.2837](https://ziglang.org/builds/zig-linux-x86_64-0.14.0-dev.2837+f38d7a92c.tar.xz).
+Note that Zig 0.14 will be the official latest released version in February 2025! I highly recommend
+using the [Zig version manager](https://github.com/tristanisham/zvm) to install and manage various
+Zig versions.
 
 ```bash
 zig build run -- -c test/sample.md

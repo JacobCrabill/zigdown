@@ -283,7 +283,7 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
         .root_source_file = b.path(config.root_path),
         .version = config.version,
         .optimize = opts.optimize,
-        .target = opts.target orelse b.host,
+        .target = opts.target orelse b.graph.host,
     });
 
     // Add the executable to the default 'zig build' command

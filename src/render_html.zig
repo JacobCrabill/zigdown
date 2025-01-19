@@ -237,7 +237,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
 
                 var lino: usize = 1;
                 self.write("<table><tbody>\n");
-                var lines = std.mem.tokenize(u8, source, "\n");
+                var lines = std.mem.tokenizeScalar(u8, source, '\n');
                 while (lines.next()) |line| {
                     // Alternative: Have a CSS class for each color ( 'var(--color-x)' )
                     // Split by line into a table with line numbers
