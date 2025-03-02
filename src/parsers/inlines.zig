@@ -128,10 +128,10 @@ pub const InlineParser = struct {
     pub fn parseInlines(self: *Self, tokens: []const Token) !ArrayList(Inline) {
         var inlines = ArrayList(Inline).init(self.alloc);
         var style = TextStyle{};
-        // TODO: make this 'scratch workspace' part of the Parser struct
-        // to avoid constant re-init (use clearRetainingCapacity() instead of deinit())
-        var words = ArrayList([]const u8).init(self.alloc);
-        defer words.deinit();
+        // // TODO: make this 'scratch workspace' part of the Parser struct
+        // // to avoid constant re-init (use clearRetainingCapacity() instead of deinit())
+        // var words = ArrayList([]const u8).init(self.alloc);
+        // defer words.deinit();
 
         var prev_type: TokenType = .BREAK;
         var next_type: TokenType = .BREAK;
@@ -147,50 +147,56 @@ pub const InlineParser = struct {
 
             switch (tok.kind) {
                 .EMBOLD => {
-                    try appendWords(self.alloc, &inlines, &words, style);
+                    //try appendWords(self.alloc, &inlines, &words, style);
                     style.bold = !style.bold;
                     style.italic = !style.italic;
                 },
                 .STAR, .BOLD => {
                     // TODO: Properly handle emphasis between *, **, ***, * word ** word***, etc.
-                    try appendWords(self.alloc, &inlines, &words, style);
+                    //try appendWords(self.alloc, &inlines, &words, style);
                     style.bold = !style.bold;
                 },
                 .USCORE => {
                     // If it's an underscore in the middle of a word, don't toggle style with it
                     if (prev_type == .WORD and next_type == .WORD) {
-                        try words.append(tok.text);
+                        try utils.appendSingleToken(self.alloc, &inlines, tok, style);
                     } else {
-                        try appendWords(self.alloc, &inlines, &words, style);
+                        //try appendWords(self.alloc, &inlines, &words, style);
                         style.italic = !style.italic;
                     }
                 },
                 .TILDE => {
-                    try appendWords(self.alloc, &inlines, &words, style);
+                    //try appendWords(self.alloc, &inlines, &words, style);
                     style.underline = !style.underline;
                 },
                 .BANG, .LBRACK => {
                     const bang: bool = tok.kind == .BANG;
                     const start: usize = if (bang) i + 1 else i;
                     if (utils.validateLink(tokens[start..])) {
-                        try appendWords(self.alloc, &inlines, &words, style);
+                        //try appendWords(self.alloc, &inlines, &words, style);
                         const n: usize = try self.parseLinkOrImage(&inlines, tokens[i..], bang);
                         i += n - 1;
                     } else {
-                        try words.append(tok.text);
+                        try utils.appendSingleToken(self.alloc, &inlines, tok, style);
                     }
                 },
                 .CODE_INLINE => {
-                    try appendWords(self.alloc, &inlines, &words, style);
+                    //try appendWords(self.alloc, &inlines, &words, style);
                     if (utils.findFirstOf(tokens, i + 1, &.{.CODE_INLINE})) |end| {
-                        for (tokens[i + 1 .. end]) |ctok| {
-                            try words.append(ctok.text);
-                        }
+                        // Create a codespan with position information
+                        const code_start = i + 1;
+                        const code_end = end;
 
-                        if (words.items.len > 0) {
+                        if (code_start < code_end) {
+                            var code_words = ArrayList([]const u8).init(self.alloc);
+                            defer code_words.deinit();
+
+                            for (tokens[code_start..code_end]) |ctok| {
+                                try code_words.append(ctok.text);
+                            }
+
                             // Merge all words into a single string
-                            // Merge duplicate ' ' characters
-                            const new_text: []u8 = try std.mem.concat(self.alloc, u8, words.items);
+                            const new_text: []u8 = try std.mem.concat(self.alloc, u8, code_words.items);
                             defer self.alloc.free(new_text);
                             const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
 
@@ -202,23 +208,33 @@ pub const InlineParser = struct {
                                 self.alloc,
                                 inls.InlineData{ .codespan = codespan },
                             ));
-                            words.clearRetainingCapacity();
                         }
 
                         i = end;
+                    } else {
+                        try utils.appendSingleToken(self.alloc, &inlines, tok, style);
                     }
                 },
                 .LT => {
                     // Autolink
                     if (utils.findFirstOf(tokens, i + 1, &.{.GT})) |end| {
-                        try appendWords(self.alloc, &inlines, &words, style);
-                        for (tokens[i + 1 .. end]) |ctok| {
-                            try words.append(ctok.text);
-                        }
+                        // try appendWords(self.alloc, &inlines, &words, style);
+                        // for (tokens[i + 1 .. end]) |ctok| {
+                        //     try words.append(ctok.text);
+                        // }
+                        const link_start = i + 1;
+                        const link_end = end;
 
-                        if (words.items.len > 0) {
+                        if (link_start < link_end) {
+                            var link_words = ArrayList([]const u8).init(self.alloc);
+                            defer link_words.deinit();
+
+                            for (tokens[link_start..link_end]) |ctok| {
+                                try link_words.append(ctok.text);
+                            }
+
                             // Merge all words into a single string
-                            const new_text: []u8 = try std.mem.concat(self.alloc, u8, words.items);
+                            const new_text: []u8 = try std.mem.concat(self.alloc, u8, link_words.items);
                             defer self.alloc.free(new_text);
 
                             const autolink = inls.Autolink{
@@ -230,26 +246,27 @@ pub const InlineParser = struct {
                                 self.alloc,
                                 inls.InlineData{ .autolink = autolink },
                             ));
-                            words.clearRetainingCapacity();
                         }
 
                         i = end;
                     } else {
-                        try words.append(tok.text);
+                        try utils.appendSingleToken(self.alloc, &inlines, tok, style);
                     }
                 },
                 .BREAK => {
                     // Treat line breaks as spaces; Don't clear the style (The renderer deals with wrapping)
-                    try words.append(" ");
+                    var space_token = tok;
+                    space_token.text = " ";
+                    try utils.appendSingleToken(self.alloc, &inlines, space_token, style);
                 },
                 else => {
-                    try words.append(tok.text);
+                    try utils.appendSingleToken(self.alloc, &inlines, tok, style);
                 },
             }
 
             prev_type = tok.kind;
         }
-        try appendWords(self.alloc, &inlines, &words, style);
+        //try appendWords(self.alloc, &inlines, &words, style);
 
         return inlines;
     }
@@ -337,26 +354,90 @@ pub const InlineParser = struct {
         const alt_text: []const Token = line[alt_start..rb_idx];
         const uri_text: []const Token = line[lp_idx..rp_idx];
 
-        // TODO: Parse line of Text
-        const link_text_block = try self.parseInlineText(alt_text);
+        // Create a text block with position information
+        var link_text_block = ArrayList(inls.Text).init(self.alloc);
 
-        var words = ArrayList([]const u8).init(self.alloc);
-        defer words.deinit();
+        // Process each token in the link text individually to preserve position information
+        var style = TextStyle{};
+
+        var i: usize = 0;
+        while (i < alt_text.len) {
+            const tok = alt_text[i];
+
+            // Handle formatting tokens
+            switch (tok.kind) {
+                .EMBOLD => {
+                    style.bold = !style.bold;
+                    style.italic = !style.italic;
+                },
+                .STAR, .BOLD => {
+                    style.bold = !style.bold;
+                },
+                .USCORE => {
+                    // If it's an underscore in the middle of a word, don't toggle style with it
+                    if ((i > 0 and alt_text[i - 1].kind == .WORD) and
+                        (i + 1 < alt_text.len and alt_text[i + 1].kind == .WORD))
+                    {
+                        // Add the underscore as a regular character
+                        const text = inls.Text{
+                            .alloc = self.alloc,
+                            .style = style,
+                            .text = try self.alloc.dupe(u8, tok.text),
+                            .line = tok.src.row,
+                            .col = tok.src.col,
+                        };
+                        try link_text_block.append(text);
+                    } else {
+                        style.italic = !style.italic;
+                    }
+                },
+                .TILDE => {
+                    style.underline = !style.underline;
+                },
+                .BREAK => {
+                    // Treat line breaks as spaces; Don't clear the style
+                    const text = inls.Text{
+                        .alloc = self.alloc,
+                        .style = style,
+                        .text = try self.alloc.dupe(u8, " "),
+                        .line = tok.src.row,
+                        .col = tok.src.col,
+                    };
+                    try link_text_block.append(text);
+                },
+                else => {
+                    // Add each token as its own Text object
+                    const text = inls.Text{
+                        .alloc = self.alloc,
+                        .style = style,
+                        .text = try self.alloc.dupe(u8, tok.text),
+                        .line = tok.src.row,
+                        .col = tok.src.col,
+                    };
+                    try link_text_block.append(text);
+                },
+            }
+            i += 1;
+        }
+
+        // Process URI text
+        var uri_words = ArrayList([]const u8).init(self.alloc);
+        defer uri_words.deinit();
         for (uri_text) |tok| {
-            try words.append(tok.text);
+            try uri_words.append(tok.text);
         }
 
         var inl: Inline = undefined;
         if (bang) {
             var img = inls.Image.init(self.alloc);
             img.heap_src = true;
-            img.src = try std.mem.concat(self.alloc, u8, words.items); // TODO
+            img.src = try std.mem.concat(self.alloc, u8, uri_words.items);
             img.alt = link_text_block;
             inl = Inline.initWithContent(self.alloc, .{ .image = img });
         } else {
             var link = inls.Link.init(self.alloc);
             link.heap_url = true;
-            link.url = try std.mem.concat(self.alloc, u8, words.items);
+            link.url = try std.mem.concat(self.alloc, u8, uri_words.items);
             link.text = link_text_block;
             inl = Inline.initWithContent(self.alloc, .{ .link = link });
         }

@@ -387,17 +387,36 @@ test "Table Of Contents" {
         \\│ Container: open: false, type: List with 2 children
         \\│ │ Container: open: false, type: ListItem with 2 children
         \\│ │ │ Leaf: open: false, type: Paragraph
+        \\│ │ │ │ Inline content:
+        \\│ │ │ │ │ Link:
+        \\│ │ │ │ │ │ Text: 'Heading 1' [line: 0, col: 0]
+        \\│ │ │ │ │ │ Style: bold
         \\│ │ │ Container: open: false, type: List with 2 children
         \\│ │ │ │ Container: open: false, type: ListItem with 2 children
         \\│ │ │ │ │ Leaf: open: false, type: Paragraph
+        \\│ │ │ │ │ │ Inline content:
+        \\│ │ │ │ │ │ │ Link:
+        \\│ │ │ │ │ │ │ │ Text: 'Heading 2' [line: 0, col: 0]
+        \\│ │ │ │ │ │ │ │ Style: bold
         \\│ │ │ │ │ Container: open: false, type: List with 1 children
         \\│ │ │ │ │ │ Container: open: false, type: ListItem with 1 children
         \\│ │ │ │ │ │ │ Leaf: open: false, type: Paragraph
+        \\│ │ │ │ │ │ │ │ Inline content:
+        \\│ │ │ │ │ │ │ │ │ Link:
+        \\│ │ │ │ │ │ │ │ │ │ Text: 'Heading 3' [line: 0, col: 0]
+        \\│ │ │ │ │ │ │ │ │ │ Style: bold
         \\│ │ │ │ Container: open: false, type: ListItem with 1 children
         \\│ │ │ │ │ Leaf: open: false, type: Paragraph
+        \\│ │ │ │ │ │ Inline content:
+        \\│ │ │ │ │ │ │ Link:
+        \\│ │ │ │ │ │ │ │ Text: 'Heading 2-2' [line: 0, col: 0]
+        \\│ │ │ │ │ │ │ │ Style: bold
         \\│ │ Container: open: false, type: ListItem with 1 children
         \\│ │ │ Leaf: open: false, type: Paragraph
-        \\
+        \\│ │ │ │ Inline content:
+        \\│ │ │ │ │ Link:
+        \\│ │ │ │ │ │ Text: 'Heading 1-2' [line: 0, col: 0]
+        \\│ │ │ │ │ │ Style: bold
     ;
     try std.testing.expectEqualStrings(expected, buf.items);
 }

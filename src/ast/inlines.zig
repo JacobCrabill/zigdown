@@ -57,7 +57,16 @@ pub const InlineData = union(InlineType) {
                 printIndent(depth);
                 debug.print("Inline {s}\n", .{@tagName(self)});
             },
-            inline else => |item| item.print(depth),
+            .link => |link| {
+                printIndent(depth);
+                debug.print("Link:\n", .{});
+                for (link.text.items) |text| {
+                    text.print(depth + 1);
+                }
+            },
+            inline else => |item| {
+                item.print(depth);
+            },
         }
     }
 };
@@ -97,12 +106,21 @@ pub const Text = struct {
     alloc: ?Allocator = null,
     style: TextStyle = TextStyle{},
     text: []const u8 = undefined, // The Text is assumed to own the string if 'alloc' is not null
+    line: usize = 0, // Line number where this text appears
+    col: usize = 0, // Column number where this text starts
 
     pub fn print(self: Text, depth: u8) void {
         printIndent(depth);
-        debug.print("Text: '{s}' [Style: ", .{self.text});
-        debug.print("fg: {s}, bg: {s} ", .{ @tagName(self.style.fg_color), @tagName(self.style.bg_color) });
-        inline for (@typeInfo(TextStyle).Struct.fields) |field| {
+        debug.print("Text: '{s}' [line: {d}, col: {d}]\n", .{ self.text, self.line, self.col });
+        printIndent(depth);
+        debug.print("Style: ", .{});
+        if (self.style.fg_color) |fg| {
+            debug.print("fg: {s}", .{@tagName(fg)});
+        }
+        if (self.style.bg_color) |bg| {
+            debug.print("bg: {s},", .{@tagName(bg)});
+        }
+        inline for (@typeInfo(TextStyle).@"struct".fields) |field| {
             const T: type = @TypeOf(@field(self.style, field.name));
             if (T == bool) {
                 if (@field(self.style, field.name)) {
@@ -110,7 +128,7 @@ pub const Text = struct {
                 }
             }
         }
-        debug.print("]\n", .{});
+        debug.print("\n", .{});
     }
 
     pub fn deinit(self: *Text) void {
@@ -147,7 +165,8 @@ pub const Link = struct {
 
     pub fn print(self: Link, depth: u8) void {
         printIndent(depth);
-        debug.print("Link to {s}\n", .{self.url});
+        //debug.print("Link to {s}\n", .{self.url});
+        debug.print("Link:\n", .{});
         for (self.text.items) |text| {
             text.print(depth + 1);
         }
@@ -195,7 +214,11 @@ pub const Image = struct {
 
     pub fn print(self: Image, depth: u8) void {
         printIndent(depth);
-        debug.print("Image: {s}\n", .{self.src});
+        //debug.print("Image: {s}\n", .{self.src});
+        debug.print("Image:\n", .{});
+        for (self.alt.items) |text| {
+            text.print(depth + 1);
+        }
     }
 };
 

@@ -68,6 +68,7 @@ pub const Heading = struct {
     }
 
     pub fn print(h: Heading, depth: u8) void {
+        debug.print("<h>", .{});
         printIndent(depth);
         // debug.print("[H{d}] '{s}'\n", .{ h.level, h.text });
         debug.print("[H{d}]\n", .{h.level});

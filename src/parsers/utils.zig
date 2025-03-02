@@ -372,6 +372,33 @@ pub fn appendText(alloc: Allocator, text_parts: *ArrayList(Text), words: *ArrayL
     }
 }
 
+/// Append a list of words to the given TextBlock as Text objects, preserving position information
+pub fn appendTextWithPos(alloc: Allocator, text_parts: *ArrayList(Text), tokens: []const Token, start: usize, end: usize, style: TextStyle) Allocator.Error!void {
+    if (start < end and start < tokens.len) {
+        var words = ArrayList([]const u8).init(alloc);
+        defer words.deinit();
+
+        for (tokens[start..end]) |tok| {
+            try words.append(tok.text);
+        }
+
+        // Merge all words into a single string, merging consecutive whitespace
+        const new_text: []u8 = try std.mem.concat(alloc, u8, words.items);
+        defer alloc.free(new_text);
+        const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
+
+        // End the current Text object with the current style and position info
+        const text = Text{
+            .alloc = alloc,
+            .style = style,
+            .text = try alloc.dupe(u8, new_text_ws),
+            .line = tokens[start].src.row,
+            .col = tokens[start].src.col,
+        };
+        try text_parts.append(text);
+    }
+}
+
 /// Append a list of words to the given TextBlock as Inline Text objects
 pub fn appendWords(alloc: Allocator, inlines: *ArrayList(Inline), words: *ArrayList([]const u8), style: TextStyle) Allocator.Error!void {
     if (words.items.len > 0) {
@@ -390,6 +417,46 @@ pub fn appendWords(alloc: Allocator, inlines: *ArrayList(Inline), words: *ArrayL
         try inlines.append(Inline.initWithContent(alloc, InlineData{ .text = text }));
         words.clearRetainingCapacity();
     }
+}
+
+/// Append a list of tokens to the given inlines list as Inline Text objects, preserving position information
+pub fn appendWordsWithPos(alloc: Allocator, inlines: *ArrayList(Inline), tokens: []const Token, start: usize, end: usize, style: TextStyle) Allocator.Error!void {
+    if (start < end and start < tokens.len) {
+        var words = ArrayList([]const u8).init(alloc);
+        defer words.deinit();
+
+        for (tokens[start..end]) |tok| {
+            try words.append(tok.text);
+        }
+
+        // Merge all words into a single string
+        // Merge duplicate ' ' characters
+        const new_text: []u8 = try std.mem.concat(alloc, u8, words.items);
+        defer alloc.free(new_text);
+        const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
+
+        // End the current Text object with the current style and position info
+        const text = Text{
+            .alloc = alloc,
+            .style = style,
+            .text = try alloc.dupe(u8, new_text_ws),
+            .line = tokens[start].src.row,
+            .col = tokens[start].src.col,
+        };
+        try inlines.append(Inline.initWithContent(alloc, InlineData{ .text = text }));
+    }
+}
+
+/// Append a single token as an Inline Text object, preserving position information
+pub fn appendSingleToken(alloc: Allocator, inlines: *ArrayList(Inline), token: Token, style: TextStyle) Allocator.Error!void {
+    const text = Text{
+        .alloc = alloc,
+        .style = style,
+        .text = try alloc.dupe(u8, token.text),
+        .line = token.src.row,
+        .col = token.src.col,
+    };
+    try inlines.append(Inline.initWithContent(alloc, InlineData{ .text = text }));
 }
 
 /// Check if the token slice contains a valid link of the form: [text](url)
