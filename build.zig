@@ -154,7 +154,7 @@ pub fn build(b: *std.Build) !void {
 
     // Build HTML library documentation
     const lib = b.addSharedLibrary(.{
-        .name = "libzigdown",
+        .name = "zigdown",
         .root_source_file = b.path("src/zigdown.zig"),
         .optimize = optimize,
         .target = target,
@@ -279,6 +279,7 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
         .version = config.version,
         .optimize = opts.optimize,
         .target = opts.target orelse b.graph.host,
+        .use_llvm = opts.optimize != .Debug,
     });
 
     // Add the executable to the default 'zig build' command
