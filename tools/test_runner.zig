@@ -287,8 +287,8 @@ pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_
         std.debug.print("\x1b[31m{s}\npanic running \"{s}\"\n{s}\x1b[0m\n", .{ BORDER, ct, BORDER });
     }
     // implemented in bleeding-edge zig (0.14-dev)
-    // std.debug.defaultPanic(msg, error_return_trace, ret_addr);
-    std.debug.panicImpl(error_return_trace, ret_addr, msg);
+    _ = error_return_trace;
+    std.debug.defaultPanic(msg, ret_addr);
 }
 
 fn isUnnamed(t: std.builtin.TestFn) bool {

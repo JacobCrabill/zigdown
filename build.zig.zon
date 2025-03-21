@@ -1,5 +1,6 @@
 .{
-    .name = "zigdown",
+    .name = .zigdown,
+    .fingerprint = 0xec26eaf34f894e33,
     .version = "0.1.0",
     .paths = .{
         "data",
@@ -12,47 +13,46 @@
     },
     .dependencies = .{
         .stbi = .{
-            .url = "https://github.com/JacobCrabill/zig-stb-image/archive/88cf7d7b42a279183abf3ac8bc1e7bec3c7e5906.tar.gz",
-            .hash = "1220be50d5bf071aed75e8bc0119661d520ed20f2c47b140e5871f3839a00f9f79a3",
+            .url = "https://github.com/JacobCrabill/zig-stb-image/archive/5a650f9439b2b2d8ca5e498b349e25bb7308f7bb.tar.gz",
+            .hash = "zig_stb_image-2.28.0-9dD1dTgdBQBDRqd8_8qNHlT62Ox8Gfh3qbbBtvbufjom",
         },
         .flags = .{
-            // .url = "https://github.com/n0s4/flags/archive/b86a170e604d689a9d50cf9f83acb437d3a49caf.tar.gz",
-            .url = "https://github.com/n0s4/flags/archive/be9ab7f0f960ecf15aa9b8dd021aff511ba3cfd4.tar.gz",
+            .url = "https://github.com/n0s4/flags/archive/0e2491d8e6d2be38dc0c2ce8e103469886e468bb.tar.gz",
             .hash = "1220ae181067a549c7a99cc0868193a7889b151381410419191ab1a79304f914336e",
         },
         .treez = .{
-            .url = "https://github.com/JacobCrabill/treez/archive/087d9bd9d1d53c0364401e2d1a8d2990853113e7.tar.gz",
-            .hash = "1220674934bd39d0c181044065368d6d11532b7ee7201092aa37e82373080a885baf",
+            .url = "https://github.com/JacobCrabill/treez/archive/b12635dcab8b3514c8dcc25d294fff4b451848a7.tar.gz",
+            .hash = "treez-0.1.0-4JX9hQWlAAC9BSiW6G8YmQze0pgwxpHkxBcArPthH3Qd",
         },
 
         // Individual TreeSitter language parsers
         .tree_sitter_bash = .{
             .url = "https://github.com/tree-sitter/tree-sitter-bash/archive/49c31006d8307dcb12bc5770f35b6d5b9e2be68e.tar.gz",
-            .hash = "1220e5f57de3c4b08647a76c073923957f13621b5d082be89ce52bb3a83fb7841043",
+            .hash = "N-V-__8AAG_cogDl9X3jxLCGR6dsBzkjlX8TYhtdCCvonOUr",
         },
         .tree_sitter_c = .{
             .url = "https://github.com/tree-sitter/tree-sitter-c/archive/e8841a6a9431b7365ac9055688429e1deb8db90f.tar.gz",
-            .hash = "1220f617a55dd4b4aa6b48ecf9eea46b07da9e95cc52732141eabae131e1be848094",
+            .hash = "N-V-__8AALWcSAD2F6Vd1LSqa0js-e6kawfanpXMUnMhQeq6",
         },
         .tree_sitter_cpp = .{
             .url = "https://github.com/tree-sitter/tree-sitter-cpp/archive/f41b4f66a42100be405f96bdc4ebc4a61095d3e8.tar.gz",
-            .hash = "1220784ed9f43050822cec5d5142940b4ed22fec2a61afb6c92bacedeabea9afd0a2",
+            .hash = "N-V-__8AABV0FwF4Ttn0MFCCLOxdUUKUC07SL-wqYa-2ySus",
         },
         .tree_sitter_json = .{
             .url = "https://github.com/tree-sitter/tree-sitter-json/archive/4d770d31f732d50d3ec373865822fbe659e47c75.tar.gz",
-            .hash = "12208497efb3a9caa85e5bd7a44324e414d2ef8f1bb0b56c94445cca386eb94eefeb",
+            .hash = "N-V-__8AACVXAgCEl--zqcqoXlvXpEMk5BTS748bsLVslERc",
         },
         .tree_sitter_python = .{
             .url = "https://github.com/tree-sitter/tree-sitter-python/archive/de0c01e7102e755f6c2e1b3055ae6ca85f261a10.tar.gz",
-            .hash = "1220bec8103d97cebb1a878c9fde65d18fd0f42033722cc0eea953f6fabf89ff9a3c",
+            .hash = "N-V-__8AANVLPgC-yBA9l867GoeMn95l0Y_Q9CAzcizA7qlT",
         },
         .tree_sitter_rust = .{
             .url = "https://github.com/tree-sitter/tree-sitter-rust/archive/c447dcce961ac438aaeaf117347749fe7d1e8365.tar.gz",
-            .hash = "122069aea87586a13ac6cb46ac0256738c4bdeed477c9e8f963e84935b1e0027ac84",
+            .hash = "N-V-__8AAJ3uaABprqh1hqE6xstGrAJWc4xL3u1HfJ6Plj6E",
         },
         .tree_sitter_zig = .{
             .url = "https://github.com/maxxnino/tree-sitter-zig/archive/a80a6e9be81b33b182ce6305ae4ea28e29211bd5.tar.gz",
-            .hash = "12206ccd464fbf96131b23b964dcb135cbae47c301de620c26b65fc66526ed56b2c8",
+            .hash = "N-V-__8AADLAWgBszUZPv5YTGyO5ZNyxNcuuR8MB3mIMJrZf",
         },
 
         // // We do not use the lua.org version of Lua 5.1.5 because there is a known security issue

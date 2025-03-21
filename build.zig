@@ -241,11 +241,6 @@ pub fn build(b: *std.Build) !void {
     ////////////////////////////////////////////////////////////////////////////
 
     const test_opts = BuildOpts{ .optimize = optimize, .dependencies = deps.items, .options = options };
-
-    addTest(b, "test-lexer", "Run Lexer unit tests", "src/lexer.zig", test_opts);
-    addTest(b, "test-parser", "Run the new paresr tests", "src/parser.zig", test_opts);
-    addTest(b, "test-render", "Run renderer unit tests", "src/render.zig", test_opts);
-    addTest(b, "test-image", "Run the image rendering tests", "src/image.zig", test_opts);
     addTest(b, "test-all", "Run all unit tests", "src/test.zig", test_opts);
 
     // Add custom test executables
@@ -327,7 +322,7 @@ fn addTest(b: *std.Build, cmd: []const u8, description: []const u8, path: []cons
         .root_source_file = b.path(path),
         .optimize = opts.optimize,
         .target = opts.target,
-        .test_runner = b.path("tools/test_runner.zig"),
+        .test_runner = .{ .path = b.path("tools/test_runner.zig"), .mode = .simple },
     });
 
     if (opts.dependencies) |deps| {
