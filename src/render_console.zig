@@ -1,11 +1,10 @@
 const std = @import("std");
-const zd = struct {
-    usingnamespace @import("blocks.zig");
-    usingnamespace @import("containers.zig");
-    usingnamespace @import("leaves.zig");
-    usingnamespace @import("inlines.zig");
-    usingnamespace @import("utils.zig");
-};
+
+const blocks = @import("blocks.zig");
+const containers = @import("containers.zig");
+const leaves = @import("leaves.zig");
+const inls = @import("inlines.zig");
+const utils = @import("utils.zig");
 
 const cons = @import("console.zig");
 const debug = @import("debug.zig");
@@ -20,19 +19,26 @@ const errorMsg = debug.errorMsg;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
-const quote_indent = zd.Text{ .style = .{ .fg_color = .White }, .text = "┃ " };
-const list_indent = zd.Text{ .style = .{}, .text = "  " };
-const numlist_indent_0 = zd.Text{ .style = .{}, .text = "   " };
-const numlist_indent_10 = zd.Text{ .style = .{}, .text = "    " };
-const numlist_indent_100 = zd.Text{ .style = .{}, .text = "     " };
-const numlist_indent_1000 = zd.Text{ .style = .{}, .text = "      " };
-const task_list_indent = zd.Text{ .style = .{}, .text = "  " };
+const Block = blocks.Block;
+const Container = blocks.Container;
+const Leaf = blocks.Leaf;
+const Inline = inls.Inline;
+const Text = inls.Text;
+const TextStyle = utils.TextStyle;
 
-const code_fence_style = zd.TextStyle{ .fg_color = .PurpleGrey, .bold = true };
-const warn_box_style = zd.TextStyle{ .fg_color = .Red, .bold = true };
-const code_text_style = zd.TextStyle{ .bg_color = .DarkGrey, .fg_color = .PurpleGrey };
-const code_indent = zd.Text{ .style = code_fence_style, .text = "│ " };
-const warn_indent = zd.Text{ .style = warn_box_style, .text = "│ " };
+const quote_indent = Text{ .style = .{ .fg_color = .White }, .text = "┃ " };
+const list_indent = Text{ .style = .{}, .text = "  " };
+const numlist_indent_0 = Text{ .style = .{}, .text = "   " };
+const numlist_indent_10 = Text{ .style = .{}, .text = "    " };
+const numlist_indent_100 = Text{ .style = .{}, .text = "     " };
+const numlist_indent_1000 = Text{ .style = .{}, .text = "      " };
+const task_list_indent = Text{ .style = .{}, .text = "  " };
+
+const code_fence_style = TextStyle{ .fg_color = .PurpleGrey, .bold = true };
+const warn_box_style = TextStyle{ .fg_color = .Red, .bold = true };
+const code_text_style = TextStyle{ .bg_color = .DarkGrey, .fg_color = .PurpleGrey };
+const code_indent = Text{ .style = code_fence_style, .text = "│ " };
+const warn_indent = Text{ .style = warn_box_style, .text = "│ " };
 
 const TreezError = error{
     Unknown,
@@ -66,7 +72,7 @@ const SystemError = error{
     SystemError,
 };
 
-const ErrorSet = SystemError || TreezError || zd.Block.Error;
+const ErrorSet = SystemError || TreezError || Block.Error;
 
 pub const RenderOpts = struct {
     width: usize = 90, // Column at which to wrap all text
@@ -88,12 +94,12 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         stream: OutStream,
         column: usize = 0,
         alloc: std.mem.Allocator,
-        leader_stack: ArrayList(zd.Text),
+        leader_stack: ArrayList(Text),
         needs_leaders: bool = true,
         opts: RenderOpts = undefined,
-        style_override: ?zd.TextStyle = null,
-        cur_style: zd.TextStyle = .{},
-        root: ?zd.Block = null,
+        style_override: ?TextStyle = null,
+        cur_style: TextStyle = .{},
+        root: ?Block = null,
 
         pub fn init(stream: OutStream, alloc: Allocator, opts: RenderOpts) Self {
             // Initialize the TreeSitter query functionality in case we need it
@@ -101,7 +107,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             return Self{
                 .stream = stream,
                 .alloc = alloc,
-                .leader_stack = ArrayList(zd.Text).init(alloc),
+                .leader_stack = ArrayList(Text).init(alloc),
                 .opts = opts,
             };
         }
@@ -111,18 +117,18 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             ts_queries.deinit();
         }
 
-        pub fn startFgColor(self: *Self, fg_color: zd.Color) void {
+        pub fn startFgColor(self: *Self, fg_color: utils.Color) void {
             self.writeno(cons.getFgColor(fg_color));
         }
 
-        pub fn startBgColor(self: *Self, bg_color: zd.Color) void {
+        pub fn startBgColor(self: *Self, bg_color: utils.Color) void {
             self.writeno(cons.getBgColor(bg_color));
         }
 
         /// Configure the terminal to start printing with the given (single) style
         /// Attempts to be 'minimally invasive' by monitoring current style and
         /// changing only what is necessary
-        pub fn startStyleImpl(self: *Self, style: zd.TextStyle) void {
+        pub fn startStyleImpl(self: *Self, style: TextStyle) void {
             if (style.bold != self.cur_style.bold) {
                 if (style.bold) self.writeno(cons.text_bold) else self.writeno(cons.end_bold);
             }
@@ -160,7 +166,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Reset all active style flags
-        pub fn endStyle(self: *Self, style: zd.TextStyle) void {
+        pub fn endStyle(self: *Self, style: TextStyle) void {
             if (style.bold) self.writeno(cons.end_bold);
             if (style.italic) self.writeno(cons.end_italic);
             if (style.underline) self.writeno(cons.end_underline);
@@ -197,7 +203,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         /// Configure the terminal to start printing with the given style,
         /// applying the global style overrides afterwards
-        pub fn startStyle(self: *Self, style: zd.TextStyle) void {
+        pub fn startStyle(self: *Self, style: TextStyle) void {
             self.startStyleImpl(style);
             if (self.style_override) |override| self.startStyleImpl(override);
         }
@@ -205,7 +211,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Reset all style in the terminal
         pub fn resetStyle(self: *Self) void {
             self.writeno(cons.ansi_end);
-            self.cur_style = zd.TextStyle{};
+            self.cur_style = TextStyle{};
         }
 
         /// Write an array of bytes to the underlying writer, and update the current column
@@ -312,7 +318,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         /// Write the text, wrapping (with the current indentation) at 'width' characters
         /// TODO: Probably should simply make this "wrapTextBox" and bake in the knowledge
         /// that we're using a 2-char unicode leader/trailer that's actually 5 bytes (UTF-8)
-        fn wrapTextWithTrailer(self: *Self, text: []const u8, trailer: zd.Text) void {
+        fn wrapTextWithTrailer(self: *Self, text: []const u8, trailer: Text) void {
             const len = text.len;
             if (len == 0) return;
 
@@ -410,7 +416,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         // Top-Level Block Rendering Functions --------------------------------
 
         /// Render a generic Block (may be a Container or a Leaf)
-        pub fn renderBlock(self: *Self, block: zd.Block) RenderError!void {
+        pub fn renderBlock(self: *Self, block: Block) RenderError!void {
             if (self.root == null) {
                 self.root = block;
             }
@@ -421,7 +427,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Render a Container block
-        pub fn renderContainer(self: *Self, block: zd.Container) !void {
+        pub fn renderContainer(self: *Self, block: blocks.Container) !void {
             switch (block.content) {
                 .Document => try self.renderDocument(block),
                 .Quote => try self.renderQuote(block),
@@ -432,7 +438,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Render a Leaf block
-        pub fn renderLeaf(self: *Self, block: zd.Leaf) !void {
+        pub fn renderLeaf(self: *Self, block: blocks.Leaf) !void {
             if (self.needs_leaders) {
                 self.writeLeaders(); // HACK - TESTING
                 self.needs_leaders = false;
@@ -448,18 +454,18 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         // Container Rendering Functions --------------------------------------
 
         /// Render a Document block (contains only other blocks)
-        pub fn renderDocument(self: *Self, doc: zd.Container) !void {
+        pub fn renderDocument(self: *Self, doc: blocks.Container) !void {
             self.renderBegin();
             for (doc.children.items) |block| {
                 try self.renderBlock(block);
                 if (self.column > self.opts.indent) self.renderBreak(); // Begin new line
-                if (!zd.isBreak(block)) self.renderBreak(); // Add blank line
+                if (!blocks.isBreak(block)) self.renderBreak(); // Add blank line
             }
             self.renderEnd();
         }
 
         /// Render a Quote block
-        pub fn renderQuote(self: *Self, block: zd.Container) !void {
+        pub fn renderQuote(self: *Self, block: blocks.Container) !void {
             try self.leader_stack.append(quote_indent);
             // if (!self.needs_leaders) {
             //     self.startStyle(quote_indent.style);
@@ -483,7 +489,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Render a List of Items (may be ordered or unordered)
-        fn renderList(self: *Self, list: zd.Container) !void {
+        fn renderList(self: *Self, list: blocks.Container) !void {
             switch (list.content.List.kind) {
                 .ordered => try self.renderNumberedList(list),
                 .unordered => try self.renderUnorderedList(list),
@@ -492,7 +498,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Render an unordered list of items
-        fn renderUnorderedList(self: *Self, list: zd.Container) !void {
+        fn renderUnorderedList(self: *Self, list: blocks.Container) !void {
             for (list.children.items) |item| {
                 // Ensure we start each list item on a new line
                 if (self.column > self.opts.indent)
@@ -514,7 +520,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Render an ordered (numbered) list of items
-        fn renderNumberedList(self: *Self, list: zd.Container) !void {
+        fn renderNumberedList(self: *Self, list: blocks.Container) !void {
             const start: usize = list.content.List.start;
             var buffer: [16]u8 = undefined;
             for (list.children.items, 0..) |item, i| {
@@ -549,7 +555,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Render a list of task items
-        fn renderTaskList(self: *Self, list: zd.Container) !void {
+        fn renderTaskList(self: *Self, list: blocks.Container) !void {
             for (list.children.items) |item| {
                 // Ensure we start each list item on a new line
                 if (self.column > self.opts.indent)
@@ -575,7 +581,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Render a single ListItem
-        fn renderListItem(self: *Self, list: zd.Container) !void {
+        fn renderListItem(self: *Self, list: blocks.Container) !void {
             for (list.children.items, 0..) |item, i| {
                 if (i > 0) {
                     self.renderBreak();
@@ -585,7 +591,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Render a table
-        fn renderTable(self: *Self, table: zd.Container) !void {
+        fn renderTable(self: *Self, table: blocks.Container) !void {
             if (self.column > self.opts.indent)
                 self.renderBreak();
 
@@ -768,7 +774,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.startStyle(cur_style);
         }
 
-        fn renderCentered(self: *Self, text: []const u8, style: zd.TextStyle, pad_char: []const u8) !void {
+        fn renderCentered(self: *Self, text: []const u8, style: TextStyle, pad_char: []const u8) !void {
             const lpad: usize = (self.opts.width - text.len) / 2;
             const rpad: usize = self.opts.width - text.len - lpad;
             var overridden: bool = false;
@@ -806,25 +812,25 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Render an ATX Heading
-        fn renderHeading(self: *Self, leaf: zd.Leaf) !void {
-            const h: zd.Heading = leaf.content.Heading;
-            var style = zd.TextStyle{};
+        fn renderHeading(self: *Self, leaf: blocks.Leaf) !void {
+            const h: leaves.Heading = leaf.content.Heading;
+            var style = TextStyle{};
             var pad_char: []const u8 = " ";
 
             switch (h.level) {
                 1 => {
-                    style = zd.TextStyle{ .fg_color = .Blue, .bold = true };
+                    style = TextStyle{ .fg_color = .Blue, .bold = true };
                     pad_char = "═";
                 },
                 2 => {
-                    style = zd.TextStyle{ .fg_color = .Green, .bold = true };
+                    style = TextStyle{ .fg_color = .Green, .bold = true };
                     pad_char = "─";
                 },
                 3 => {
-                    style = zd.TextStyle{ .fg_color = .White, .bold = true, .italic = true, .underline = true };
+                    style = TextStyle{ .fg_color = .White, .bold = true, .italic = true, .underline = true };
                 },
                 else => {
-                    style = zd.TextStyle{ .fg_color = .White, .underline = true };
+                    style = TextStyle{ .fg_color = .White, .underline = true };
                 },
             }
 
@@ -864,7 +870,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Render a raw block of code
-        fn renderCode(self: *Self, c: zd.Code) !void {
+        fn renderCode(self: *Self, c: leaves.Code) !void {
             if (c.directive) |_| {
                 try self.renderDirective(c);
                 return;
@@ -886,7 +892,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
                 self.writeLeaders();
                 for (ranges) |range| {
-                    const style = zd.TextStyle{ .fg_color = range.color, .bg_color = .Default };
+                    const style = TextStyle{ .fg_color = range.color, .bg_color = .Default };
                     self.startStyle(style);
                     self.wrapTextRaw(range.content);
                     self.endStyle(style);
@@ -913,13 +919,13 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.resetStyle();
         }
 
-        fn renderDirective(self: *Self, d: zd.Code) !void {
+        fn renderDirective(self: *Self, d: leaves.Code) !void {
             // TODO: Enum for builtin directive types w/ string aliases mapped to them
             const directive = d.directive orelse "note";
 
-            if (zd.isDirectiveToC(directive)) {
+            if (utils.isDirectiveToC(directive)) {
                 // Generate and render a Table of Contents for the whole document
-                var toc: zd.Block = try zd.generateTableOfContents(self.alloc, &self.root.?);
+                var toc: Block = try utils.generateTableOfContents(self.alloc, &self.root.?);
                 defer toc.deinit();
                 self.writeLeaders();
                 try self.renderBlock(toc);
@@ -939,7 +945,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
             const source = d.text orelse "";
 
-            const trailer: zd.Text = .{ .text = " │", .style = warn_box_style };
+            const trailer: Text = .{ .text = " │", .style = warn_box_style };
             self.wrapTextWithTrailer(source, trailer);
 
             _ = self.leader_stack.pop();
@@ -953,7 +959,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
         }
 
         /// Render a standard paragraph of text
-        fn renderParagraph(self: *Self, leaf: zd.Leaf) !void {
+        fn renderParagraph(self: *Self, leaf: blocks.Leaf) !void {
             for (leaf.inlines.items) |item| {
                 try self.renderInline(item);
             }
@@ -961,7 +967,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
 
         // Inline rendering functions -----------------------------------------
 
-        fn renderInline(self: *Self, item: zd.Inline) !void {
+        fn renderInline(self: *Self, item: inls.Inline) !void {
             switch (item.content) {
                 .autolink => |l| try self.renderAutolink(l),
                 .codespan => |c| try self.renderInlineCode(c),
@@ -972,7 +978,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             }
         }
 
-        fn renderAutolink(self: *Self, link: zd.Autolink) !void {
+        fn renderAutolink(self: *Self, link: inls.Autolink) !void {
             self.startStyle(.{ .fg_color = .Cyan });
 
             // \e]8;; + URL + \e\\ + Text + \e]8;; + \e\\
@@ -986,7 +992,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.resetStyle();
         }
 
-        fn renderInlineCode(self: *Self, code: zd.Codespan) !void {
+        fn renderInlineCode(self: *Self, code: inls.Codespan) !void {
             const cur_style = self.cur_style;
             self.resetStyle();
             const style = code_text_style;
@@ -996,12 +1002,12 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.startStyle(cur_style);
         }
 
-        fn renderText(self: *Self, text: zd.Text) !void {
+        fn renderText(self: *Self, text: Text) !void {
             self.startStyle(text.style);
             self.wrapText(text.text);
         }
 
-        fn renderLink(self: *Self, link: zd.Link) !void {
+        fn renderLink(self: *Self, link: inls.Link) !void {
             self.startStyle(.{ .fg_color = .Cyan });
 
             // \e]8;; + URL + \e\\ + Text + \e]8;; + \e\\
@@ -1019,7 +1025,7 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
             self.resetStyle();
         }
 
-        fn renderImage(self: *Self, image: zd.Image) !void {
+        fn renderImage(self: *Self, image: inls.Image) !void {
             const cur_style = self.cur_style;
             self.startStyle(.{ .fg_color = .Blue, .bold = true });
             for (image.alt.items) |text| {

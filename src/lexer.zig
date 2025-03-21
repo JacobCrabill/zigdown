@@ -5,24 +5,22 @@ const std = @import("std");
 const con = @import("console.zig");
 
 /// Import all Zigdown tyeps
-const zd = struct {
-    usingnamespace @import("tokens.zig");
-    usingnamespace @import("utils.zig");
-};
+const toks = @import("tokens.zig");
+const utils = @import("utils.zig");
 
 const Allocator = std.mem.Allocator;
 const GPA = std.heap.GeneralPurposeAllocator;
 
 /// Common types from the Zigdown namespace
-const TokenType = zd.TokenType;
-const Token = zd.Token;
-const TokenList = zd.TokenList;
+const TokenType = toks.TokenType;
+const Token = toks.Token;
+const TokenList = toks.TokenList;
 
 /// Convert Markdown text into a stream of tokens
 pub const Lexer = struct {
     data: []const u8 = undefined,
     cursor: usize = 0,
-    src: zd.SourceLocation = zd.SourceLocation{},
+    src: toks.SourceLocation = toks.SourceLocation{},
 
     /// Store the text and reset the cursor position
     pub fn setText(self: *Lexer, text: []const u8) void {
@@ -61,15 +59,15 @@ pub const Lexer = struct {
     /// Consume the next token in the text
     pub fn next(self: *Lexer) Token {
         if (self.cursor > self.data.len) {
-            return zd.Eof;
+            return toks.Eof;
         } else if (self.cursor == self.data.len) {
             self.cursor += 1;
             self.src.col += 1;
-            return zd.Eof;
+            return toks.Eof;
         }
 
         // Apply each of our tokenizers to the current text
-        inline for (zd.Tokenizers) |tokenizer| {
+        inline for (toks.Tokenizers) |tokenizer| {
             const text = self.data[self.cursor..];
             if (tokenizer.peek(text)) |token| {
                 self.cursor += token.text.len;

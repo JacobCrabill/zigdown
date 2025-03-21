@@ -9,25 +9,21 @@ const errorReturn = debug.errorReturn;
 const errorMsg = debug.errorMsg;
 const Logger = debug.Logger;
 
-const zd = struct {
-    usingnamespace @import("../utils.zig");
-    usingnamespace @import("../tokens.zig");
-    usingnamespace @import("../inlines.zig");
-    usingnamespace @import("../leaves.zig");
-    usingnamespace @import("inlines.zig");
-};
-
-/// Parser utilities
+const toks = @import("../tokens.zig");
+const inls = @import("../inlines.zig");
 const utils = @import("utils.zig");
 
-const TokenType = zd.TokenType;
-const Token = zd.Token;
-const TokenList = zd.TokenList;
+const TokenType = toks.TokenType;
+const Token = toks.Token;
+const TokenList = toks.TokenList;
 
-const InlineType = zd.InlineType;
-const Inline = zd.Inline;
+const InlineType = inls.InlineType;
+const Inline = inls.Inline;
+const TextStyle = @import("../utils.zig").TextStyle;
 
 const ParserOpts = utils.ParserOpts;
+const appendWords = utils.appendWords;
+const appendText = utils.appendText;
 
 /// Global logger
 var g_logger = Logger{ .enabled = false };
@@ -81,15 +77,15 @@ pub const InlineParser = struct {
     fn setCursor(self: *Self, cursor: usize) void {
         if (cursor >= self.tokens.items.len) {
             self.cursor = self.tokens.items.len;
-            self.cur_token = zd.Eof;
-            self.next_token = zd.Eof;
+            self.cur_token = toks.Eof;
+            self.next_token = toks.Eof;
             return;
         }
 
         self.cursor = cursor;
         self.cur_token = self.tokens.items[cursor];
         if (cursor + 1 >= self.tokens.items.len) {
-            self.next_token = zd.Eof;
+            self.next_token = toks.Eof;
         } else {
             self.next_token = self.tokens.items[cursor + 1];
         }
@@ -131,7 +127,7 @@ pub const InlineParser = struct {
     /// Parse raw text content into inline content
     pub fn parseInlines(self: *Self, tokens: []const Token) !ArrayList(Inline) {
         var inlines = ArrayList(Inline).init(self.alloc);
-        var style = zd.TextStyle{};
+        var style = TextStyle{};
         // TODO: make this 'scratch workspace' part of the Parser struct
         // to avoid constant re-init (use clearRetainingCapacity() instead of deinit())
         var words = ArrayList([]const u8).init(self.alloc);
@@ -151,13 +147,13 @@ pub const InlineParser = struct {
 
             switch (tok.kind) {
                 .EMBOLD => {
-                    try utils.appendWords(self.alloc, &inlines, &words, style);
+                    try appendWords(self.alloc, &inlines, &words, style);
                     style.bold = !style.bold;
                     style.italic = !style.italic;
                 },
                 .STAR, .BOLD => {
                     // TODO: Properly handle emphasis between *, **, ***, * word ** word***, etc.
-                    try utils.appendWords(self.alloc, &inlines, &words, style);
+                    try appendWords(self.alloc, &inlines, &words, style);
                     style.bold = !style.bold;
                 },
                 .USCORE => {
@@ -165,19 +161,19 @@ pub const InlineParser = struct {
                     if (prev_type == .WORD and next_type == .WORD) {
                         try words.append(tok.text);
                     } else {
-                        try utils.appendWords(self.alloc, &inlines, &words, style);
+                        try appendWords(self.alloc, &inlines, &words, style);
                         style.italic = !style.italic;
                     }
                 },
                 .TILDE => {
-                    try utils.appendWords(self.alloc, &inlines, &words, style);
+                    try appendWords(self.alloc, &inlines, &words, style);
                     style.underline = !style.underline;
                 },
                 .BANG, .LBRACK => {
                     const bang: bool = tok.kind == .BANG;
                     const start: usize = if (bang) i + 1 else i;
                     if (utils.validateLink(tokens[start..])) {
-                        try utils.appendWords(self.alloc, &inlines, &words, style);
+                        try appendWords(self.alloc, &inlines, &words, style);
                         const n: usize = try self.parseLinkOrImage(&inlines, tokens[i..], bang);
                         i += n - 1;
                     } else {
@@ -185,7 +181,7 @@ pub const InlineParser = struct {
                     }
                 },
                 .CODE_INLINE => {
-                    try utils.appendWords(self.alloc, &inlines, &words, style);
+                    try appendWords(self.alloc, &inlines, &words, style);
                     if (utils.findFirstOf(tokens, i + 1, &.{.CODE_INLINE})) |end| {
                         for (tokens[i + 1 .. end]) |ctok| {
                             try words.append(ctok.text);
@@ -198,13 +194,13 @@ pub const InlineParser = struct {
                             defer self.alloc.free(new_text);
                             const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
 
-                            const codespan = zd.Codespan{
+                            const codespan = inls.Codespan{
                                 .alloc = self.alloc,
                                 .text = try self.alloc.dupe(u8, new_text_ws),
                             };
                             try inlines.append(Inline.initWithContent(
                                 self.alloc,
-                                zd.InlineData{ .codespan = codespan },
+                                inls.InlineData{ .codespan = codespan },
                             ));
                             words.clearRetainingCapacity();
                         }
@@ -215,7 +211,7 @@ pub const InlineParser = struct {
                 .LT => {
                     // Autolink
                     if (utils.findFirstOf(tokens, i + 1, &.{.GT})) |end| {
-                        try utils.appendWords(self.alloc, &inlines, &words, style);
+                        try appendWords(self.alloc, &inlines, &words, style);
                         for (tokens[i + 1 .. end]) |ctok| {
                             try words.append(ctok.text);
                         }
@@ -225,14 +221,14 @@ pub const InlineParser = struct {
                             const new_text: []u8 = try std.mem.concat(self.alloc, u8, words.items);
                             defer self.alloc.free(new_text);
 
-                            const autolink = zd.Autolink{
+                            const autolink = inls.Autolink{
                                 .alloc = self.alloc,
                                 .url = try self.alloc.dupe(u8, new_text),
                                 .heap_url = true,
                             };
                             try inlines.append(Inline.initWithContent(
                                 self.alloc,
-                                zd.InlineData{ .autolink = autolink },
+                                inls.InlineData{ .autolink = autolink },
                             ));
                             words.clearRetainingCapacity();
                         }
@@ -253,21 +249,21 @@ pub const InlineParser = struct {
 
             prev_type = tok.kind;
         }
-        try utils.appendWords(self.alloc, &inlines, &words, style);
+        try appendWords(self.alloc, &inlines, &words, style);
 
         return inlines;
     }
 
     /// Parse tokens as basic (formatted) text
-    fn parseInlineText(self: *Self, tokens: []const Token) !ArrayList(zd.Text) {
-        var style = zd.TextStyle{};
+    fn parseInlineText(self: *Self, tokens: []const Token) !ArrayList(inls.Text) {
+        var style = TextStyle{};
         var words = ArrayList([]const u8).init(self.alloc);
         defer words.deinit();
 
         var prev_type: TokenType = .BREAK;
         var next_type: TokenType = .BREAK;
 
-        var text_parts = ArrayList(zd.Text).init(self.alloc);
+        var text_parts = ArrayList(inls.Text).init(self.alloc);
 
         var i: usize = 0;
         while (i < tokens.len) : (i += 1) {
@@ -280,13 +276,13 @@ pub const InlineParser = struct {
 
             switch (tok.kind) {
                 .EMBOLD => {
-                    try utils.appendText(self.alloc, &text_parts, &words, style);
+                    try appendText(self.alloc, &text_parts, &words, style);
                     style.bold = !style.bold;
                     style.italic = !style.italic;
                 },
                 .STAR, .BOLD => {
                     // TODO: Properly handle emphasis between *, **, ***, * word ** word***, etc.
-                    try utils.appendText(self.alloc, &text_parts, &words, style);
+                    try appendText(self.alloc, &text_parts, &words, style);
                     style.bold = !style.bold;
                 },
                 .USCORE => {
@@ -294,12 +290,12 @@ pub const InlineParser = struct {
                     if (prev_type == .WORD and next_type == .WORD) {
                         try words.append(tok.text);
                     } else {
-                        try utils.appendText(self.alloc, &text_parts, &words, style);
+                        try appendText(self.alloc, &text_parts, &words, style);
                         style.italic = !style.italic;
                     }
                 },
                 .TILDE => {
-                    try utils.appendText(self.alloc, &text_parts, &words, style);
+                    try appendText(self.alloc, &text_parts, &words, style);
                     style.underline = !style.underline;
                 },
                 .BREAK => {
@@ -315,7 +311,7 @@ pub const InlineParser = struct {
         }
 
         // Add any last parsed words
-        try utils.appendText(self.alloc, &text_parts, &words, style);
+        try appendText(self.alloc, &text_parts, &words, style);
 
         return text_parts;
     }
@@ -352,13 +348,13 @@ pub const InlineParser = struct {
 
         var inl: Inline = undefined;
         if (bang) {
-            var img = zd.Image.init(self.alloc);
+            var img = inls.Image.init(self.alloc);
             img.heap_src = true;
             img.src = try std.mem.concat(self.alloc, u8, words.items); // TODO
             img.alt = link_text_block;
             inl = Inline.initWithContent(self.alloc, .{ .image = img });
         } else {
-            var link = zd.Link.init(self.alloc);
+            var link = inls.Link.init(self.alloc);
             link.heap_url = true;
             link.url = try std.mem.concat(self.alloc, u8, words.items);
             link.text = link_text_block;

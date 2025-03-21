@@ -1,15 +1,16 @@
 /// utils.zig
 /// Common utilities.
 const std = @import("std");
-const zd = struct {
-    usingnamespace @import("blocks.zig");
-    usingnamespace @import("containers.zig");
-    usingnamespace @import("leaves.zig");
-    usingnamespace @import("inlines.zig");
-};
+
+const blocks = @import("blocks.zig");
+const containers = @import("containers.zig");
+const leaves = @import("leaves.zig");
+const inls = @import("inlines.zig");
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
+
+const Block = blocks.Block;
 
 pub const Color = enum(u8) {
     Black,
@@ -182,7 +183,7 @@ pub const Timer = struct {
 };
 
 /// Traverse the tree until a Leaf is found, and return it
-pub fn getLeafNode(block: *zd.Block) ?*zd.Block {
+pub fn getLeafNode(block: *Block) ?*Block {
     if (block.isLeaf()) {
         return block;
     }
@@ -196,16 +197,16 @@ pub fn getLeafNode(block: *zd.Block) ?*zd.Block {
 
 /// Create a Table of Contents from a Markdown AST
 /// The returned Block is a List of plain text containing the text for each heading
-pub fn generateTableOfContents(alloc: Allocator, block: *const zd.Block) !zd.Block {
+pub fn generateTableOfContents(alloc: Allocator, block: *const Block) !Block {
     std.debug.assert(block.isContainer());
     std.debug.assert(block.Container.content == .Document);
     const doc = block.Container;
 
-    var toc = zd.Block.initContainer(alloc, .List, 0);
+    var toc = Block.initContainer(alloc, .List, 0);
 
     const Entry = struct {
         level: usize = 0,
-        block: *zd.Block = undefined, // The List block for this Heading level
+        block: *Block = undefined, // The List block for this Heading level
     };
     var stack = ArrayList(Entry).init(alloc);
     defer stack.deinit();
@@ -223,8 +224,8 @@ pub fn generateTableOfContents(alloc: Allocator, block: *const zd.Block) !zd.Blo
                             // Go one layer deeper
                             // Create a new List and add it as a child of the current ListItem
                             // TODO: Better handling for jumping straight from level 1 to level N
-                            const cur_item: *zd.Block = last.block.lastChild() orelse last.block;
-                            const sub_toc = zd.Block.initContainer(block.allocator(), .List, 0);
+                            const cur_item: *Block = last.block.lastChild() orelse last.block;
+                            const sub_toc = Block.initContainer(block.allocator(), .List, 0);
                             try cur_item.addChild(sub_toc);
 
                             // Push the new List onto the stack
@@ -255,19 +256,19 @@ pub fn generateTableOfContents(alloc: Allocator, block: *const zd.Block) !zd.Blo
 
 /// Given a Heading node, create a ListItem Block containing a Link to that heading
 /// (The Link is an Inline inside a Paragraph Leaf Block)
-fn getListItemForHeading(alloc: Allocator, H: zd.Heading, depth: usize) !zd.Block {
-    var block = zd.Block.initContainer(alloc, .ListItem, depth);
-    var text = zd.Block.initLeaf(alloc, .Paragraph, depth);
+fn getListItemForHeading(alloc: Allocator, H: leaves.Heading, depth: usize) !Block {
+    var block = Block.initContainer(alloc, .ListItem, depth);
+    var text = Block.initLeaf(alloc, .Paragraph, depth);
 
     // Create the Link object
-    var link = zd.Link.init(alloc);
+    var link = inls.Link.init(alloc);
     link.heap_url = true;
     link.url = try headingToUri(alloc, H.text);
-    link.text = ArrayList(zd.Text).init(alloc);
-    try link.text.append(zd.Text{ .text = H.text, .style = .{ .bold = true } });
+    link.text = ArrayList(inls.Text).init(alloc);
+    try link.text.append(inls.Text{ .text = H.text, .style = .{ .bold = true } });
 
     // Create an Inline to hold the Link; add it to the Paragraph and the ListItem
-    const inl = zd.Inline.initWithContent(alloc, .{ .link = link });
+    const inl = inls.Inline.initWithContent(alloc, .{ .link = link });
     try text.leaf().addInline(inl);
     try block.addChild(text);
 
@@ -320,7 +321,6 @@ pub fn isDirectiveToC(directive: []const u8) bool {
 ////////////////////////////////////////////////////////////////////////////////
 
 test "Table Of Contents" {
-    const Block = zd.Block;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const alloc = arena.allocator();

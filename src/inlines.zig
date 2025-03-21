@@ -1,17 +1,12 @@
 const std = @import("std");
-
-const zd = struct {
-    usingnamespace @import("utils.zig");
-    usingnamespace @import("tokens.zig");
-    usingnamespace @import("lexer.zig");
-    usingnamespace @import("utils.zig");
-};
+const utils = @import("utils.zig");
 
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 
-const Token = zd.Token;
-const printIndent = zd.printIndent;
+const TextStyle = utils.TextStyle;
+const Token = @import("tokens.zig").Token;
+const printIndent = utils.printIndent;
 
 /// Inlines are considered Phrasing content
 /// Phrasing content represents the text in a document, and its markup
@@ -98,14 +93,14 @@ pub const Inline = struct {
 /// Example: "plain text" or "**bold text**"
 pub const Text = struct {
     alloc: ?Allocator = null,
-    style: zd.TextStyle = zd.TextStyle{},
+    style: TextStyle = TextStyle{},
     text: []const u8 = undefined, // The Text is assumed to own the string if 'alloc' is not null
 
     pub fn print(self: Text, depth: u8) void {
         printIndent(depth);
         std.debug.print("Text: '{s}' [Style: ", .{self.text});
         std.debug.print("fg: {s}, bg: {s} ", .{ @tagName(self.style.fg_color), @tagName(self.style.bg_color) });
-        inline for (@typeInfo(zd.TextStyle).Struct.fields) |field| {
+        inline for (@typeInfo(TextStyle).Struct.fields) |field| {
             const T: type = @TypeOf(@field(self.style, field.name));
             if (T == bool) {
                 if (@field(self.style, field.name)) {

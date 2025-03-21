@@ -1,26 +1,28 @@
 const std = @import("std");
 
+const utils = @import("../utils.zig");
+const toks = @import("../tokens.zig");
+const blocks = @import("../blocks.zig");
+const containers = @import("../containers.zig");
+const leaves = @import("../leaves.zig");
+const inls = @import("../inlines.zig");
+
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
-const debug = @import("../debug.zig");
+const TokenType = toks.TokenType;
+const Token = toks.Token;
+const TokenList = toks.TokenList;
 
+const TextStyle = utils.TextStyle;
+const Text = inls.Text;
+const Inline = inls.Inline;
+const InlineData = inls.InlineData;
+
+const debug = @import("../debug.zig");
 const errorReturn = debug.errorReturn;
 const errorMsg = debug.errorMsg;
 const Logger = debug.Logger;
-
-const zd = struct {
-    usingnamespace @import("../utils.zig");
-    usingnamespace @import("../tokens.zig");
-    usingnamespace @import("../blocks.zig");
-    usingnamespace @import("../containers.zig");
-    usingnamespace @import("../leaves.zig");
-    usingnamespace @import("../inlines.zig");
-};
-
-const TokenType = zd.TokenType;
-const Token = zd.Token;
-const TokenList = zd.TokenList;
 
 /// Logger levels
 /// TODO: Make use of this
@@ -352,7 +354,7 @@ pub fn concatRawText(alloc: Allocator, tok_words: ArrayList(Token)) Allocator.Er
 }
 
 /// Append a list of words to the given TextBlock as Text objects
-pub fn appendText(alloc: Allocator, text_parts: *ArrayList(zd.Text), words: *ArrayList([]const u8), style: zd.TextStyle) Allocator.Error!void {
+pub fn appendText(alloc: Allocator, text_parts: *ArrayList(Text), words: *ArrayList([]const u8), style: TextStyle) Allocator.Error!void {
     if (words.items.len > 0) {
         // Merge all words into a single string, merging consecutive whitespace
         const new_text: []u8 = try std.mem.concat(alloc, u8, words.items);
@@ -360,7 +362,7 @@ pub fn appendText(alloc: Allocator, text_parts: *ArrayList(zd.Text), words: *Arr
         const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
 
         // End the current Text object with the current style
-        const text = zd.Text{
+        const text = Text{
             .alloc = alloc,
             .style = style,
             .text = try alloc.dupe(u8, new_text_ws),
@@ -371,7 +373,7 @@ pub fn appendText(alloc: Allocator, text_parts: *ArrayList(zd.Text), words: *Arr
 }
 
 /// Append a list of words to the given TextBlock as Inline Text objects
-pub fn appendWords(alloc: Allocator, inlines: *ArrayList(zd.Inline), words: *ArrayList([]const u8), style: zd.TextStyle) Allocator.Error!void {
+pub fn appendWords(alloc: Allocator, inlines: *ArrayList(Inline), words: *ArrayList([]const u8), style: TextStyle) Allocator.Error!void {
     if (words.items.len > 0) {
         // Merge all words into a single string
         // Merge duplicate ' ' characters
@@ -380,12 +382,12 @@ pub fn appendWords(alloc: Allocator, inlines: *ArrayList(zd.Inline), words: *Arr
         const new_text_ws = std.mem.collapseRepeats(u8, new_text, ' ');
 
         // End the current Text object with the current style
-        const text = zd.Text{
+        const text = Text{
             .alloc = alloc,
             .style = style,
             .text = try alloc.dupe(u8, new_text_ws),
         };
-        try inlines.append(zd.Inline.initWithContent(alloc, zd.InlineData{ .text = text }));
+        try inlines.append(Inline.initWithContent(alloc, InlineData{ .text = text }));
         words.clearRetainingCapacity();
     }
 }

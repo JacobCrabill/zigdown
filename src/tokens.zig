@@ -4,9 +4,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
-const zd = struct {
-    usingnamespace @import("utils.zig");
-};
+const utils = @import("utils.zig");
 
 pub const TokenType = enum {
     EOF,
@@ -129,7 +127,7 @@ pub const WordTokenizer = struct {
     pub fn peek(text: []const u8) ?Token {
         var end = text.len; // TODO: Should be '0'?
         for (text, 0..) |c, i| {
-            if (!std.ascii.isASCII(c) or std.ascii.isWhitespace(c) or zd.isPunctuation(c)) {
+            if (!std.ascii.isASCII(c) or std.ascii.isWhitespace(c) or utils.isPunctuation(c)) {
                 end = i;
                 break;
             }

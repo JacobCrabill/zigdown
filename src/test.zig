@@ -1,9 +1,8 @@
 test "All Tests" {
-    _ = struct {
-        usingnamespace @import("lexer.zig");
-        usingnamespace @import("parsers/blocks.zig");
-        usingnamespace @import("parsers/utils.zig");
-        usingnamespace @import("blocks.zig");
-        usingnamespace @import("render.zig");
-    };
+    _ = @import("lexer.zig");
+    _ = @import("parsers/blocks.zig");
+    _ = @import("parsers/utils.zig");
+    _ = @import("blocks.zig");
+    _ = @import("render.zig");
+    _ = @import("image.zig");
 }

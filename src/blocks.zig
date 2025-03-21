@@ -1,34 +1,32 @@
 const std = @import("std");
 
-const zd = struct {
-    usingnamespace @import("utils.zig");
-    usingnamespace @import("tokens.zig");
-    usingnamespace @import("lexer.zig");
-    usingnamespace @import("inlines.zig");
-    usingnamespace @import("leaves.zig");
-    usingnamespace @import("containers.zig");
-};
+const utils = @import("utils.zig");
+const toks = @import("tokens.zig");
+const lexer = @import("lexer.zig");
+const inls = @import("inlines.zig");
+const leaves = @import("leaves.zig");
+const containers = @import("containers.zig");
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
-const Lexer = zd.Lexer;
-const TokenType = zd.TokenType;
-const Token = zd.Token;
-const TokenList = zd.TokenList;
+const Lexer = lexer.Lexer;
+const TokenType = toks.TokenType;
+const Token = toks.Token;
+const TokenList = toks.TokenList;
 
-const ContainerType = zd.ContainerType;
-const ContainerData = zd.ContainerData;
-const LeafType = zd.LeafType;
-const LeafData = zd.LeafData;
+const ContainerType = containers.ContainerType;
+const ContainerData = containers.ContainerData;
+const LeafType = leaves.LeafType;
+const LeafData = leaves.LeafData;
 
-const Inline = zd.Inline;
-const InlineType = zd.InlineType;
+const Inline = inls.Inline;
+const InlineType = inls.InlineType;
 
-const Text = zd.Text;
-const Link = zd.Link;
+const Text = inls.Text;
+const Link = inls.Link;
 
-const printIndent = zd.printIndent;
+const printIndent = utils.printIndent;
 
 /// Generic Block type. The AST is contructed from this type.
 pub const BlockType = enum(u8) {
@@ -151,9 +149,9 @@ pub const Container = struct {
         block.content = switch (kind) {
             .Document => ContainerData{ .Document = {} },
             .Quote => ContainerData{ .Quote = {} },
-            .List => ContainerData{ .List = zd.List{} },
-            .ListItem => ContainerData{ .ListItem = zd.ListItem{} },
-            .Table => ContainerData{ .Table = zd.Table{} },
+            .List => ContainerData{ .List = containers.List{} },
+            .ListItem => ContainerData{ .ListItem = containers.ListItem{} },
+            .Table => ContainerData{ .Table = containers.Table{} },
         };
 
         return block;
@@ -220,8 +218,8 @@ pub const Leaf = struct {
             .content = blk: {
                 switch (kind) {
                     .Break => break :blk .{ .Break = {} },
-                    .Code => break :blk .{ .Code = zd.Code.init(alloc) },
-                    .Heading => break :blk .{ .Heading = zd.Heading.init(alloc) },
+                    .Code => break :blk .{ .Code = leaves.Code.init(alloc) },
+                    .Heading => break :blk .{ .Heading = leaves.Heading.init(alloc) },
                     .Paragraph => break :blk .{ .Paragraph = {} },
                 }
             },
@@ -243,12 +241,12 @@ pub const Leaf = struct {
 
     /// Append a chunk of Text to our inlines
     pub fn addText(self: *Self, text: Text) !void {
-        try self.inlines.append(zd.Inline.initWithContent(self.alloc, .{ .text = text }));
+        try self.inlines.append(Inline.initWithContent(self.alloc, .{ .text = text }));
     }
 
     /// Append a Link to the contents Paragraph
     pub fn addLink(self: *Self, link: Link) !void {
-        try self.inlines.append(zd.Inline.initWithContent(self.alloc, .{ .link = link }));
+        try self.inlines.append(Inline.initWithContent(self.alloc, .{ .link = link }));
     }
 
     pub fn close(self: *Self) void {
@@ -269,7 +267,7 @@ pub const Leaf = struct {
 
 pub fn isBreak(block: Block) bool {
     if (!block.isLeaf()) return false;
-    return block.Leaf.content == zd.LeafType.Break;
+    return block.Leaf.content == LeafType.Break;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -348,7 +346,7 @@ fn createTestAst(alloc: Allocator) !Block {
     text3.style.italic = true;
 
     // Create a Link
-    var link = zd.Link.init(alloc);
+    var link = inls.Link.init(alloc);
     link.url = "www.google.com";
     try link.text.append(Text{ .text = "Google", .style = .{ .underline = true } });
 

@@ -2,23 +2,21 @@
 /// Leaf Block type implementations
 const std = @import("std");
 
-const zd = struct {
-    usingnamespace @import("tokens.zig");
-    usingnamespace @import("inlines.zig");
-    usingnamespace @import("utils.zig");
-};
+const tokens = @import("tokens.zig");
+const inlines = @import("inlines.zig");
+const utils = @import("utils.zig");
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
-const Inline = zd.Inline;
-const InlineType = zd.InlineType;
+const Inline = inlines.Inline;
+const InlineType = inlines.InlineType;
 
-const Text = zd.Text;
-const Link = zd.Link;
-// const Image = zd.Image;
+const Text = inlines.Text;
+const Link = inlines.Link;
+// const Image = inlines.Image;
 
-const printIndent = zd.printIndent;
+const printIndent = utils.printIndent;
 
 /// All types of Leaf blocks that can be contained in Container blocks
 pub const LeafType = enum(u8) {

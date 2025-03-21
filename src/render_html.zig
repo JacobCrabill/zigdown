@@ -1,17 +1,21 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const zd = struct {
-    usingnamespace @import("blocks.zig");
-    usingnamespace @import("inlines.zig");
-    usingnamespace @import("leaves.zig");
-    usingnamespace @import("containers.zig");
-    usingnamespace @import("utils.zig");
-};
+
+const blocks = @import("blocks.zig");
+const inls = @import("inlines.zig");
+const leaves = @import("leaves.zig");
+const containers = @import("containers.zig");
+const utils = @import("utils.zig");
 const syntax = @import("syntax.zig");
 const ts_queries = @import("ts_queries.zig");
 const wasm = @import("wasm.zig");
 
 const Allocator = std.mem.Allocator;
+
+const Block = blocks.Block;
+const Container = blocks.Container;
+const Leaf = blocks.Leaf;
+const Inline = inls.Inline;
 
 const css = @embedFile("style.css");
 
@@ -23,10 +27,10 @@ const google_fonts =
 pub fn HtmlRenderer(comptime OutStream: type) type {
     return struct {
         const Self = @This();
-        const WriteError = OutStream.Error || Allocator.Error || zd.Block.Error;
+        const WriteError = OutStream.Error || Allocator.Error || Block.Error;
         stream: OutStream,
         alloc: Allocator,
-        root: ?zd.Block = null,
+        root: ?Block = null,
 
         pub fn init(stream: OutStream, alloc: Allocator) Self {
             if (!wasm.is_wasm) {
@@ -62,7 +66,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         // Top-Level Block Rendering Functions --------------------------------
 
         /// Render a generic Block (may be a Container or a Leaf)
-        pub fn renderBlock(self: *Self, block: zd.Block) WriteError!void {
+        pub fn renderBlock(self: *Self, block: Block) WriteError!void {
             if (self.root == null) {
                 self.root = block;
             }
@@ -73,7 +77,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         /// Render a Container block
-        pub fn renderContainer(self: *Self, block: zd.Container) !void {
+        pub fn renderContainer(self: *Self, block: Container) !void {
             switch (block.content) {
                 .Document => try self.renderDocument(block),
                 .Quote => try self.renderQuote(block),
@@ -84,7 +88,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         /// Render a Leaf block
-        pub fn renderLeaf(self: *Self, block: zd.Leaf) !void {
+        pub fn renderLeaf(self: *Self, block: Leaf) !void {
             switch (block.content) {
                 .Break => try self.renderBreak(),
                 .Code => |c| try self.renderCode(c),
@@ -96,7 +100,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         // Container Rendering Functions --------------------------------------
 
         /// Render a Document block (contains only other blocks)
-        pub fn renderDocument(self: *Self, doc: zd.Container) !void {
+        pub fn renderDocument(self: *Self, doc: Container) !void {
             try self.renderBegin();
             for (doc.children.items) |block| {
                 try self.renderBlock(block);
@@ -105,7 +109,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         /// Render a Quote block
-        pub fn renderQuote(self: *Self, block: zd.Container) !void {
+        pub fn renderQuote(self: *Self, block: Container) !void {
             // const q = block.content.Quote;
 
             self.print("\n<blockquote>", .{});
@@ -118,7 +122,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         /// Render a List of Items (may be ordered or unordered)
-        fn renderList(self: *Self, list: zd.Container) !void {
+        fn renderList(self: *Self, list: Container) !void {
             switch (list.content.List.kind) {
                 .ordered => self.print("<ol start={d}>\n", .{list.content.List.start}),
                 .unordered => self.print("<ul>\n", .{}),
@@ -155,7 +159,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             }
         }
 
-        fn renderListItem(self: *Self, list: zd.Container) !void {
+        fn renderListItem(self: *Self, list: Container) !void {
             for (list.children.items) |item| {
                 try self.renderBlock(item);
             }
@@ -169,8 +173,8 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         /// Render an ATX Heading
-        fn renderHeading(self: *Self, leaf: zd.Leaf) !void {
-            const h: zd.Heading = leaf.content.Heading;
+        fn renderHeading(self: *Self, leaf: Leaf) !void {
+            const h: leaves.Heading = leaf.content.Heading;
 
             // Generate the link name for the heading
             const id_s = std.ascii.allocLowerString(self.alloc, h.text) catch unreachable;
@@ -191,7 +195,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         /// Render a raw block of code
-        fn renderCode(self: *Self, c: zd.Code) !void {
+        fn renderCode(self: *Self, c: leaves.Code) !void {
             if (c.directive) |_| {
                 try self.renderDirective(c);
                 return;
@@ -219,7 +223,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
                     // Alternative: Have a CSS class for each color ( 'var(--color-x)' )
                     // Split by line into a table with line numbers
                     if (range.content.len > 0) {
-                        self.print("<span style=\"color:{s}\">{s}</span>", .{ zd.colorToCss(range.color), range.content });
+                        self.print("<span style=\"color:{s}\">{s}</span>", .{ utils.colorToCss(range.color), range.content });
                     }
                     if (range.newline) {
                         self.write("</pre></td></tr>\n");
@@ -242,7 +246,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
                     // Alternative: Have a CSS class for each color ( 'var(--color-x)' )
                     // Split by line into a table with line numbers
                     self.print("<tr><td><span style=\"color:var(--color-peach)\">{d}</span></td>", .{lino});
-                    self.print("<td><pre><span style=\"color:{s}\">{s}</span></pre></td></tr>\n", .{ zd.colorToCss(.Default), line });
+                    self.print("<td><pre><span style=\"color:{s}\">{s}</span></pre></td></tr>\n", .{ utils.colorToCss(.Default), line });
                     lino += 1;
                 }
                 self.write("</pre></td></tr></tbody></table>\n");
@@ -251,12 +255,12 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             self.print("</div>\n", .{});
         }
 
-        fn renderDirective(self: *Self, d: zd.Code) !void {
+        fn renderDirective(self: *Self, d: leaves.Code) !void {
             // TODO: Enum for builtin directive types w/ string aliases mapped to them
             const directive = d.directive orelse "note";
-            if (zd.isDirectiveToC(directive)) {
+            if (utils.isDirectiveToC(directive)) {
                 // Generate and render a Table of Contents for the whole document
-                var toc: zd.Block = try zd.generateTableOfContents(self.alloc, &self.root.?);
+                var toc: Block = try utils.generateTableOfContents(self.alloc, &self.root.?);
                 defer toc.deinit();
                 try self.renderBlock(toc);
                 return;
@@ -269,7 +273,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
         }
 
         /// Render a standard paragraph of text
-        fn renderParagraph(self: *Self, leaf: zd.Leaf) !void {
+        fn renderParagraph(self: *Self, leaf: Leaf) !void {
             self.write("<p>");
             for (leaf.inlines.items) |item| {
                 try self.renderInline(item);
@@ -279,7 +283,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
 
         // Inline rendering functions -----------------------------------------
 
-        fn renderInline(self: *Self, item: zd.Inline) !void {
+        fn renderInline(self: *Self, item: Inline) !void {
             switch (item.content) {
                 .autolink => |l| try self.renderAutolink(l),
                 .codespan => |c| try self.renderInlineCode(c),
@@ -290,15 +294,15 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             }
         }
 
-        fn renderAutolink(self: *Self, link: zd.Autolink) !void {
+        fn renderAutolink(self: *Self, link: inls.Autolink) !void {
             self.print("<a href=\"{s}\"/>", .{link.url});
         }
 
-        fn renderInlineCode(self: *Self, code: zd.Codespan) !void {
+        fn renderInlineCode(self: *Self, code: inls.Codespan) !void {
             self.print("<code>{s}</code>", .{code.text});
         }
 
-        fn renderText(self: *Self, text: zd.Text) !void {
+        fn renderText(self: *Self, text: inls.Text) !void {
             // for style in style => add style tag
             if (text.style.bold)
                 self.print("<b>", .{});
@@ -322,7 +326,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
                 self.print("</b>", .{});
         }
 
-        fn renderNumlist(self: *Self, list: zd.List) !void {
+        fn renderNumlist(self: *Self, list: containers.List) !void {
             self.print("<ol start=\"{d}\">\n", .{list.start});
             for (list.lines.items) |line| {
                 // TODO: Number
@@ -333,7 +337,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             self.print("</ol>\n", .{});
         }
 
-        fn renderTable(self: *Self, table: zd.Container) !void {
+        fn renderTable(self: *Self, table: Container) !void {
             const ncol = table.content.Table.ncol;
             const nrow: usize = @divFloor(table.children.items.len, ncol);
             std.debug.assert(table.children.items.len == ncol * nrow);
@@ -359,7 +363,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             self.write("</tbody></table></div>\n");
         }
 
-        fn renderLink(self: *Self, link: zd.Link) !void {
+        fn renderLink(self: *Self, link: inls.Link) !void {
             self.print("<a href=\"{s}\">", .{link.url});
             for (link.text.items) |text| {
                 try self.renderText(text);
@@ -367,7 +371,7 @@ pub fn HtmlRenderer(comptime OutStream: type) type {
             self.print("</a>", .{});
         }
 
-        fn renderImage(self: *Self, image: zd.Image) !void {
+        fn renderImage(self: *Self, image: inls.Image) !void {
             self.print("<img src=\"{s}\" class=\"center\" alt=\"", .{image.src});
             for (image.alt.items) |text| {
                 try self.renderText(text);

@@ -2,9 +2,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 const cons = @import("console.zig");
 const wasm = @import("wasm.zig");
-const zd = struct {
-    usingnamespace @import("tokens.zig");
-};
+
+const Token = @import("tokens.zig").Token;
 
 pub fn errorReturn(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) !void {
     switch (builtin.cpu.arch) {
@@ -50,7 +49,7 @@ pub const Logger = struct {
         }
     }
 
-    pub fn printTypes(self: Self, tokens: []const zd.Token, indent: bool) void {
+    pub fn printTypes(self: Self, tokens: []const Token, indent: bool) void {
         if (indent) self.doIndent();
         for (tokens) |tok| {
             self.raw("{s}, ", .{@tagName(tok.kind)});
@@ -58,7 +57,7 @@ pub const Logger = struct {
         self.raw("\n", .{});
     }
 
-    pub fn printText(self: Self, tokens: []const zd.Token, indent: bool) void {
+    pub fn printText(self: Self, tokens: []const Token, indent: bool) void {
         if (indent) self.doIndent();
         self.raw("\"", .{});
         for (tokens) |tok| {

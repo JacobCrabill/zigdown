@@ -10,37 +10,26 @@ const errorReturn = debug.errorReturn;
 const errorMsg = debug.errorMsg;
 const Logger = debug.Logger;
 
-const zd = struct {
-    usingnamespace @import("../utils.zig");
-    usingnamespace @import("../tokens.zig");
-    usingnamespace @import("../lexer.zig");
-    usingnamespace @import("../inlines.zig");
-    usingnamespace @import("../leaves.zig");
-    usingnamespace @import("../containers.zig");
-    usingnamespace @import("../blocks.zig");
-    usingnamespace @import("inlines.zig");
-};
+const common_utils = @import("../utils.zig");
+const toks = @import("../tokens.zig");
+const lexer = @import("../lexer.zig");
+const inls = @import("../inlines.zig");
+const leaves = @import("../leaves.zig");
+const containers = @import("../containers.zig");
+const blocks = @import("../blocks.zig");
+const inline_parser = @import("inlines.zig");
 
 /// Parser utilities
 const utils = @import("utils.zig");
 
-const Lexer = zd.Lexer;
-const TokenType = zd.TokenType;
-const Token = zd.Token;
-const TokenList = zd.TokenList;
-
-const InlineType = zd.InlineType;
-const Inline = zd.Inline;
-const BlockType = zd.BlockType;
-const ContainerBlockType = zd.ContainerBlockType;
-const LeafBlockType = zd.LeafBlockType;
-
-const Block = zd.Block;
-const ContainerBlock = zd.ContainerBlock;
-const LeafBlock = zd.LeafBlock;
+const Lexer = lexer.Lexer;
+const Token = toks.Token;
+const TokenList = toks.TokenList;
+const Inline = inls.Inline;
+const Block = blocks.Block;
 
 const ParserOpts = utils.ParserOpts;
-const InlineParser = zd.InlineParser;
+const InlineParser = inline_parser.InlineParser;
 
 /// Global logger
 var g_logger = Logger{ .enabled = false };
@@ -193,7 +182,7 @@ fn trimContinuationMarkersTable(line: []const Token) []const Token {
     @panic("Can't be here!");
 }
 
-fn parseOneInline(alloc: Allocator, tokens: []const Token) ?zd.Inline {
+fn parseOneInline(alloc: Allocator, tokens: []const Token) ?inls.Inline {
     if (tokens.len < 1) return null;
 
     for (tokens, 0..) |tok, i| {
@@ -202,7 +191,7 @@ fn parseOneInline(alloc: Allocator, tokens: []const Token) ?zd.Inline {
             .WORD => {
                 // todo: parse (concatenate) all following words until a change
                 // For now, just take the lazy approach
-                return zd.Inline.initWithContent(alloc, .{ .text = zd.Text{ .text = tok.text } });
+                return inls.Inline.initWithContent(alloc, .{ .text = inls.Text{ .text = tok.text } });
             },
         }
     }
@@ -309,8 +298,8 @@ pub const Parser = struct {
         self.tokens = try self.lexer.tokenize(self.alloc, self.text.?);
 
         // Initialize current and next tokens
-        self.cur_token = zd.Eof;
-        self.next_token = zd.Eof;
+        self.cur_token = toks.Eof;
+        self.next_token = toks.Eof;
 
         if (self.tokens.items.len > 0)
             self.cur_token = self.tokens.items[0];
@@ -323,15 +312,15 @@ pub const Parser = struct {
     fn setCursor(self: *Self, cursor: usize) void {
         if (cursor >= self.tokens.items.len) {
             self.cursor = self.tokens.items.len;
-            self.cur_token = zd.Eof;
-            self.next_token = zd.Eof;
+            self.cur_token = toks.Eof;
+            self.next_token = toks.Eof;
             return;
         }
 
         self.cursor = cursor;
         self.cur_token = self.tokens.items[cursor];
         if (cursor + 1 >= self.tokens.items.len) {
-            self.next_token = zd.Eof;
+            self.next_token = toks.Eof;
         } else {
             self.next_token = self.tokens.items[cursor + 1];
         }
@@ -484,7 +473,7 @@ pub const Parser = struct {
 
             // Check if the line starts a new item of the wrong type
             // In that case, we must close and return false (A new List must be started)
-            var kind: ?zd.List.Kind = undefined;
+            var kind: ?containers.List.Kind = undefined;
             if (utils.isTaskListItem(line)) {
                 kind = .task;
             } else if (utils.isUnorderedListItem(line)) {
@@ -659,7 +648,7 @@ pub const Parser = struct {
     pub fn handleLineCode(self: *Self, block: *Block, line: []const Token) bool {
         self.logger.depth += 1;
         defer self.logger.depth -= 1;
-        var code: *zd.Code = &block.Leaf.content.Code;
+        var code: *leaves.Code = &block.Leaf.content.Code;
 
         if (!block.isOpen())
             return false;
@@ -679,7 +668,7 @@ pub const Parser = struct {
             // Parse the directive tag (language, or special command like "warning")
             const end: usize = utils.findFirstOf(trimmed_line, 1, &.{.BREAK}) orelse trimmed_line.len;
             if (end > 1) {
-                code.tag = zd.concatWords(block.allocator(), trimmed_line[1..end]) catch unreachable;
+                code.tag = toks.concatWords(block.allocator(), trimmed_line[1..end]) catch unreachable;
             }
 
             if (code.tag) |tag| {
@@ -730,7 +719,7 @@ pub const Parser = struct {
         if (level <= 0) return false;
         const trimmed_line = utils.trimLeadingWhitespace(line[level..]);
 
-        var head: *zd.Heading = &block.Leaf.content.Heading;
+        var head: *leaves.Heading = &block.Leaf.content.Heading;
         head.level = level;
 
         const end: usize = utils.findFirstOf(trimmed_line, 0, &.{.BREAK}) orelse trimmed_line.len;
@@ -795,10 +784,10 @@ pub const Parser = struct {
                     // Parse unorderd list block
                     self.logger.log("Parsing list with start_col {d}\n", .{col});
                     b = Block.initContainer(self.alloc, .List, col);
-                    var kind: zd.List.Kind = .unordered;
+                    var kind: containers.List.Kind = .unordered;
                     if (utils.isTaskListItem(line))
                         kind = .task;
-                    b.Container.content.List = zd.List{ .kind = kind };
+                    b.Container.content.List = containers.List{ .kind = kind };
                     if (!self.handleLineList(&b, line))
                         return error.ParseError;
                 } else {
@@ -812,7 +801,7 @@ pub const Parser = struct {
                 if (line.len > 1 and line[1].kind == .SPACE) {
                     // Parse unorderd list block
                     b = Block.initContainer(self.alloc, .List, col);
-                    b.Container.content.List = zd.List{ .kind = .unordered };
+                    b.Container.content.List = containers.List{ .kind = .unordered };
                     if (!self.handleLineList(&b, line))
                         return error.ParseError;
                 }
@@ -886,7 +875,7 @@ pub const Parser = struct {
                 switch (l.content) {
                     .Code => self.closeBlockCode(block),
                     else => {
-                        var p = zd.InlineParser.init(self.alloc, self.opts);
+                        var p = InlineParser.init(self.alloc, self.opts);
                         defer p.deinit();
                         l.inlines = p.parseInlines(l.raw_contents.items) catch unreachable;
                     },
@@ -897,7 +886,7 @@ pub const Parser = struct {
     }
 
     fn closeBlockCode(_: *Self, block: *Block) void {
-        const code: *zd.Code = &block.Leaf.content.Code;
+        const code: *leaves.Code = &block.Leaf.content.Code;
         if (code.text) |text| {
             code.alloc.free(text);
             code.text = null;
@@ -913,7 +902,7 @@ pub const Parser = struct {
     }
 
     fn closeBlockParagraph(self: *Self, block: *Block) void {
-        const leaf: *zd.Leaf = block.leaf();
+        const leaf: *blocks.Leaf = block.leaf();
         const tokens = leaf.raw_contents.items;
         self.parseInlines(&leaf.inlines, tokens) catch unreachable;
     }

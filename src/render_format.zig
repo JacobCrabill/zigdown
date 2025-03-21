@@ -1,11 +1,10 @@
 const std = @import("std");
-const zd = struct {
-    usingnamespace @import("blocks.zig");
-    usingnamespace @import("containers.zig");
-    usingnamespace @import("leaves.zig");
-    usingnamespace @import("inlines.zig");
-    usingnamespace @import("utils.zig");
-};
+
+const blocks = @import("blocks.zig");
+const containers = @import("containers.zig");
+const leaves = @import("leaves.zig");
+const inls = @import("inlines.zig");
+const utils = @import("utils.zig");
 
 const cons = @import("console.zig");
 const debug = @import("debug.zig");
@@ -20,13 +19,20 @@ const errorMsg = debug.errorMsg;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
-const quote_indent = zd.Text{ .text = "> " };
-const list_indent = zd.Text{ .style = .{}, .text = "  " };
-const numlist_indent_0 = zd.Text{ .style = .{}, .text = "   " };
-const numlist_indent_10 = zd.Text{ .style = .{}, .text = "    " };
-const numlist_indent_100 = zd.Text{ .style = .{}, .text = "     " };
-const numlist_indent_1000 = zd.Text{ .style = .{}, .text = "      " };
-const task_list_indent = zd.Text{ .style = .{}, .text = "      " };
+const Block = blocks.Block;
+const Container = blocks.Container;
+const Leaf = blocks.Leaf;
+const Inline = inls.Inline;
+const Text = inls.Text;
+const TextStyle = utils.TextStyle;
+
+const quote_indent = Text{ .text = "> " };
+const list_indent = Text{ .style = .{}, .text = "  " };
+const numlist_indent_0 = Text{ .style = .{}, .text = "   " };
+const numlist_indent_10 = Text{ .style = .{}, .text = "    " };
+const numlist_indent_100 = Text{ .style = .{}, .text = "     " };
+const numlist_indent_1000 = Text{ .style = .{}, .text = "      " };
+const task_list_indent = Text{ .style = .{}, .text = "      " };
 
 const SystemError = error{
     OutOfMemory,
@@ -48,7 +54,7 @@ const SystemError = error{
     SystemError,
 };
 
-const ErrorSet = SystemError || zd.Block.Error;
+const ErrorSet = SystemError || Block.Error;
 
 pub const RenderOpts = struct {
     width: usize = 90, // Column at which to wrap all text
@@ -72,11 +78,11 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         opts: RenderOpts = undefined,
         column: usize = 0,
         alloc: std.mem.Allocator,
-        leader_stack: ArrayList(zd.Text),
+        leader_stack: ArrayList(Text),
         needs_leaders: bool = true,
-        style_override: ?zd.TextStyle = null,
-        cur_style: zd.TextStyle = .{},
-        root: ?zd.Block = null,
+        style_override: ?TextStyle = null,
+        cur_style: TextStyle = .{},
+        root: ?Block = null,
         scratch: ArrayList(u8), // Scratch buffer for pre-rendering (to find length)
         scratch_stream: ArrayList(u8).Writer = undefined,
         mode: RenderMode = .normal,
@@ -88,7 +94,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
                 .opts = opts,
                 .stream = stream,
                 .alloc = alloc,
-                .leader_stack = ArrayList(zd.Text).init(alloc),
+                .leader_stack = ArrayList(Text).init(alloc),
                 .scratch = ArrayList(u8).init(alloc),
             };
         }
@@ -102,7 +108,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         /// Configure the terminal to start printing with the given (single) style
         /// Attempts to be 'minimally invasive' by monitoring current style and
         /// changing only what is necessary
-        pub fn startStyleImpl(self: *Self, style: zd.TextStyle) void {
+        pub fn startStyleImpl(self: *Self, style: TextStyle) void {
             if (style.bold != self.cur_style.bold) {
                 self.write("**");
             }
@@ -117,7 +123,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         }
 
         /// Reset all active style flags
-        pub fn endStyle(self: *Self, style: zd.TextStyle) void {
+        pub fn endStyle(self: *Self, style: TextStyle) void {
             if (style.bold) self.write("**");
             if (style.italic) self.write("_");
             if (style.underline) self.write("~");
@@ -125,14 +131,14 @@ pub fn FormatRenderer(comptime OutStream: type) type {
 
         /// Configure the terminal to start printing with the given style,
         /// applying the global style overrides afterwards
-        pub fn startStyle(self: *Self, style: zd.TextStyle) void {
+        pub fn startStyle(self: *Self, style: TextStyle) void {
             self.startStyleImpl(style);
             if (self.style_override) |override| self.startStyleImpl(override);
         }
 
         /// Reset all style in the terminal
         pub fn resetStyle(self: *Self) void {
-            self.cur_style = zd.TextStyle{};
+            self.cur_style = TextStyle{};
         }
 
         /// Write an array of bytes to the underlying writer, and update the current column
@@ -293,7 +299,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         // Top-Level Block Rendering Functions --------------------------------
 
         /// Render a generic Block (may be a Container or a Leaf)
-        pub fn renderBlock(self: *Self, block: zd.Block) RenderError!void {
+        pub fn renderBlock(self: *Self, block: Block) RenderError!void {
             if (self.root == null) {
                 self.root = block;
             }
@@ -304,7 +310,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         }
 
         /// Render a Container block
-        pub fn renderContainer(self: *Self, block: zd.Container) !void {
+        pub fn renderContainer(self: *Self, block: Container) !void {
             switch (block.content) {
                 .Document => try self.renderDocument(block),
                 .Quote => try self.renderQuote(block),
@@ -315,7 +321,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         }
 
         /// Render a Leaf block
-        pub fn renderLeaf(self: *Self, block: zd.Leaf) !void {
+        pub fn renderLeaf(self: *Self, block: Leaf) !void {
             if (self.needs_leaders) {
                 self.writeLeaders(); // HACK - TESTING
                 self.needs_leaders = false;
@@ -331,21 +337,21 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         // Container Rendering Functions --------------------------------------
 
         /// Render a Document block (contains only other blocks)
-        pub fn renderDocument(self: *Self, doc: zd.Container) !void {
+        pub fn renderDocument(self: *Self, doc: Container) !void {
             self.renderBegin();
             for (doc.children.items, 0..) |block, i| {
                 try self.renderBlock(block);
 
                 if (i < doc.children.items.len - 1) {
                     if (self.column > self.opts.indent) self.renderBreak(); // Begin new line
-                    if (!zd.isBreak(block)) self.renderBreak(); // Add blank line
+                    if (!blocks.isBreak(block)) self.renderBreak(); // Add blank line
                 }
             }
             self.renderEnd();
         }
 
         /// Render a Quote block
-        pub fn renderQuote(self: *Self, block: zd.Container) !void {
+        pub fn renderQuote(self: *Self, block: Container) !void {
             try self.leader_stack.append(quote_indent);
             if (!self.needs_leaders) {
                 self.startStyle(quote_indent.style);
@@ -369,7 +375,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         }
 
         /// Render a List of Items (may be ordered or unordered)
-        fn renderList(self: *Self, list: zd.Container) !void {
+        fn renderList(self: *Self, list: Container) !void {
             switch (list.content.List.kind) {
                 .ordered => try self.renderNumberedList(list),
                 .unordered => try self.renderUnorderedList(list),
@@ -378,7 +384,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         }
 
         /// Render an unordered list of items
-        fn renderUnorderedList(self: *Self, list: zd.Container) !void {
+        fn renderUnorderedList(self: *Self, list: Container) !void {
             for (list.children.items) |item| {
                 // Ensure we start each list item on a new line
                 if (self.column > self.opts.indent)
@@ -398,7 +404,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         }
 
         /// Render an ordered (numbered) list of items
-        fn renderNumberedList(self: *Self, list: zd.Container) !void {
+        fn renderNumberedList(self: *Self, list: Container) !void {
             const start: usize = list.content.List.start;
             var buffer: [16]u8 = undefined;
             for (list.children.items, 0..) |item, i| {
@@ -431,7 +437,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         }
 
         /// Render a list of task items
-        fn renderTaskList(self: *Self, list: zd.Container) !void {
+        fn renderTaskList(self: *Self, list: Container) !void {
             for (list.children.items) |item| {
                 // Ensure we start each list item on a new line
                 if (self.column > self.opts.indent)
@@ -455,7 +461,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         }
 
         /// Render a single ListItem
-        fn renderListItem(self: *Self, list: zd.Container) !void {
+        fn renderListItem(self: *Self, list: Container) !void {
             for (list.children.items, 0..) |item, i| {
                 if (i > 0) {
                     self.renderBreak();
@@ -465,7 +471,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         }
 
         /// Render a table
-        fn renderTable(self: *Self, table: zd.Container) !void {
+        fn renderTable(self: *Self, table: Container) !void {
             if (self.column > self.opts.indent)
                 self.renderBreak();
 
@@ -602,8 +608,8 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         }
 
         /// Render an ATX Heading
-        fn renderHeading(self: *Self, leaf: zd.Leaf) void {
-            const h: zd.Heading = leaf.content.Heading;
+        fn renderHeading(self: *Self, leaf: Leaf) void {
+            const h: leaves.Heading = leaf.content.Heading;
 
             // Indent
             self.writeNTimes("#", h.level);
@@ -621,7 +627,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         }
 
         /// Render a raw block of code
-        fn renderCode(self: *Self, c: zd.Code) !void {
+        fn renderCode(self: *Self, c: leaves.Code) !void {
             const dir: []const u8 = c.directive orelse "";
             const tag = c.tag orelse dir;
             const source = c.text orelse "";
@@ -640,7 +646,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         }
 
         /// Render a standard paragraph of text
-        fn renderParagraph(self: *Self, leaf: zd.Leaf) void {
+        fn renderParagraph(self: *Self, leaf: Leaf) void {
             self.mode = .scratch;
             self.scratch_stream = self.scratch.writer();
             for (leaf.inlines.items) |item| {
@@ -653,7 +659,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
 
         // Inline rendering functions -----------------------------------------
 
-        fn renderInline(self: *Self, item: zd.Inline) void {
+        fn renderInline(self: *Self, item: Inline) void {
             switch (item.content) {
                 .autolink => |l| self.renderAutolink(l),
                 .codespan => |c| self.renderInlineCode(c),
@@ -664,22 +670,22 @@ pub fn FormatRenderer(comptime OutStream: type) type {
             }
         }
 
-        fn renderAutolink(self: *Self, link: zd.Autolink) void {
+        fn renderAutolink(self: *Self, link: inls.Autolink) void {
             self.print("<{s}>", .{link.url});
         }
 
-        fn renderInlineCode(self: *Self, code: zd.Codespan) void {
+        fn renderInlineCode(self: *Self, code: inls.Codespan) void {
             self.write("`");
             self.write(code.text);
             self.write("`");
         }
 
-        fn renderText(self: *Self, text: zd.Text) void {
+        fn renderText(self: *Self, text: Text) void {
             self.startStyle(text.style);
             self.write(text.text);
         }
 
-        fn renderLink(self: *Self, link: zd.Link) void {
+        fn renderLink(self: *Self, link: inls.Link) void {
             if (self.mode == .scratch) {
                 self.dumpScratchBuffer();
             }
@@ -693,7 +699,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
             self.write(")");
         }
 
-        fn renderImage(self: *Self, image: zd.Image) void {
+        fn renderImage(self: *Self, image: inls.Image) void {
             if (self.mode == .scratch) {
                 self.dumpScratchBuffer();
             }
@@ -706,6 +712,11 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         }
 
         fn dumpScratchBuffer(self: *Self) void {
+            // TODO:
+            // scratch should be an ArrayList([]const u8) in which each entry
+            // is a "word" that should not be wrapped.  Then we can go "word by word"
+            // and write each one out appropriately.
+            // ("Word" here can also be an image, link, etc. - any Inline)
             if (self.scratch.items.len == 0) return;
             self.mode = .normal;
             if (self.column > 0) self.write(" ");
