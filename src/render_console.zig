@@ -306,12 +306,8 @@ pub fn ConsoleRenderer(comptime OutStream: type) type {
                 if (need_space == 0) need_space = 1;
             }
 
-            // TODO: This still feels fishy
-            // backup over the trailing " " we added if the given text didn't have one
-            if (!std.mem.endsWith(u8, text, " ") and self.column > self.opts.indent) {
-                self.printno(cons.move_left, .{1});
-                self.writeno(cons.clear_line_end);
-                self.column -= 1;
+            if (std.mem.endsWith(u8, text, " ") and need_space > 0) {
+                self.write(" ");
             }
         }
 

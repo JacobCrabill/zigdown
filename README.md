@@ -29,7 +29,7 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 - [x] Ordered lists
 - [x] Code blocks, including syntax highlighting using TreeSitter
 - [x] Images (rendered to the console using the
-  [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)
+  [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/))
 - [x] Neovim integration
   - Optional: If you have Lua 5.1 system libraries, can build as a Lua plugin module
 - [x] Task lists
