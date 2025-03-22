@@ -22,8 +22,8 @@
             .hash = "1220ae181067a549c7a99cc0868193a7889b151381410419191ab1a79304f914336e",
         },
         .treez = .{
-            .url = "https://github.com/JacobCrabill/treez/archive/b12635dcab8b3514c8dcc25d294fff4b451848a7.tar.gz",
-            .hash = "treez-0.1.0-4JX9hQWlAAC9BSiW6G8YmQze0pgwxpHkxBcArPthH3Qd",
+            .url = "https://github.com/JacobCrabill/treez/archive/640de7530c4567a0cadf3f701d1c315724eed4c3.tar.gz",
+            .hash = "treez-0.1.0-4JX9hQSlAAAR1_cQTapcK9qGwbVI4bHrnwFMGQOafXXL",
         },
 
         // Individual TreeSitter language parsers
