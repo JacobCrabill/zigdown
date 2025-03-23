@@ -40,8 +40,8 @@ end
 -- Build the Zigdown binary, and optionally the Lua plugin module
 ---@param load_lib boolean Load the Lua module
 function M.build_zigdown(load_lib)
-  vim.notify("Building zigdown:" .. table.concat(M.build_cmd, " "), vim.log.levels.INFO)
-  vim.notify("Please wait...", vim.log.levels.INFO)
+  vim.notify("Building zigdown using:" .. table.concat(M.build_cmd, " "), vim.log.levels.INFO)
+  vim.notify("Compiling zigdown - Please wait... (This will block the main NeoVim thread, sorry!)", vim.log.levels.INFO)
 
   local cmd = { M.zig_binary, "build", "-Doptimize=ReleaseSafe" }
   if load_lib then

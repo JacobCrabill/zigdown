@@ -524,7 +524,6 @@ pub fn FormatRenderer(comptime OutStream: type) type {
                         n_lines += 1;
                     }
                     max_rows = @max(max_rows, n_lines);
-                    // std.debug.print("{d}\n", .{max_rows});
                 }
 
                 // Loop over the # of rows of text in this single row of the table
@@ -549,7 +548,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
 
                             // Move the cursor to the start of the next cell
                             // TODO: Need to render to a raw buffer to avoid control codes
-                            // Out output is the plain text, not ANSI terminal output
+                            // Our output is the plain text, not ANSI terminal output
                             self.printno(cons.set_col, .{self.opts.indent + (j + 2) + (j + 1) * col_w});
                         } else {
                             self.writeNTimes(" ", col_w - 1);
