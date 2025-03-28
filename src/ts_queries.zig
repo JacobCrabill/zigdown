@@ -6,6 +6,7 @@ const utils = @import("utils.zig");
 const treez = @import("treez");
 const config = @import("config");
 const wasm = @import("wasm.zig");
+const known = @import("known-folders");
 
 const TsParserPair = struct {
     name: []const u8,
@@ -137,7 +138,9 @@ pub fn getTsConfigDir() ![]const u8 {
     if (env_map.get("TS_CONFIG_DIR")) |d| {
         ts_config_dir = try allocator.dupe(u8, d);
     } else {
-        if (env_map.get("HOME")) |home| {
+        const home_path = try known.getPath(allocator, .home);
+        if (home_path) |home| {
+            defer allocator.free(home);
             ts_config_dir = try std.fmt.allocPrint(allocator, "{s}/.config/tree-sitter/", .{home});
         } else {
             std.debug.print("ERROR: Could not get home directory. Defaulting to current directory\n", .{});
@@ -145,6 +148,13 @@ pub fn getTsConfigDir() ![]const u8 {
         }
     }
     defer allocator.free(ts_config_dir);
+
+    std.fs.cwd().access(ts_config_dir, .{ .mode = .read_write }) catch |err| switch (err) {
+        error.FileNotFound => {
+            try std.fs.cwd().makePath(ts_config_dir);
+        },
+        else => return err,
+    };
 
     // Ensure the path is an absolute path
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;

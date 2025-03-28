@@ -68,5 +68,9 @@
         //     .url = "https://github.com/LuaJIT/LuaJIT/archive/c525bcb9024510cad9e170e12b6209aedb330f83.tar.gz",
         //     .hash = "1220ae2d84cfcc2a7aa670661491f21bbed102d335de18ce7d36866640fd9dfcc33a",
         // },
+        .known_folders = .{
+            .url = "git+https://github.com/ziglibs/known-folders.git#aa24df42183ad415d10bc0a33e6238c437fc0f59",
+            .hash = "known_folders-0.0.0-Fy-PJtLDAADGDOwYwMkVydMSTp_aN-nfjCZw6qPQ2ECL",
+        },
     },
 }

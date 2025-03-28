@@ -403,6 +403,11 @@ fn getDependencies(b: *std.Build, target: std.Build.ResolvedTarget, optimize: st
         const flags_dep = Dependency{ .name = "flags", .module = flags.module("flags") };
         try dependencies.append(flags_dep);
 
+        // Known-Folders
+        const known_folders = b.dependency("known_folders", .{ .optimize = optimize, .target = target });
+        const known_folders_dep = Dependency{ .name = "known-folders", .module = known_folders.module("known-folders") };
+        try dependencies.append(known_folders_dep);
+
         // Treez (TreeSitter wrapper library)
         const treez = b.dependency("treez", .{ .optimize = optimize, .target = target });
         const treez_dep = Dependency{ .name = "treez", .module = treez.module("treez") };

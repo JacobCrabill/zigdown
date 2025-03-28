@@ -1,6 +1,7 @@
 const std = @import("std");
 const zd = @import("zigdown");
 const flags = @import("flags");
+const known = @import("known-folders");
 
 const ArrayList = std.ArrayList;
 const File = std.fs.File;
@@ -13,6 +14,10 @@ const consoleRenderer = zd.consoleRenderer;
 const formatRenderer = zd.formatRenderer;
 const Parser = zd.Parser;
 const TokenList = zd.TokenList;
+
+pub const known_folders_config: known.KnownFolderConfig = .{
+    .xdg_on_mac = true,
+};
 
 fn print_usage(diags: flags.Diagnostics) void {
     const help = diags.help;
