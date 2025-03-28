@@ -15,9 +15,9 @@ const Parser = zd.Parser;
 const TokenList = zd.TokenList;
 
 fn print_usage(diags: flags.Diagnostics) void {
-    const help = diags.help.generated;
+    const help = diags.help;
     const stdout = std.io.getStdOut();
-    help.usage.render(stdout, flags.ColorScheme.default) catch @panic("Failed to render help text");
+    help.usage.render(stdout, &flags.ColorScheme.default) catch @panic("Failed to render help text");
 }
 
 /// Command-line arguments definition for the Flags module
@@ -74,6 +74,9 @@ const Flags = struct {
 };
 
 pub fn main() !void {
+    if (@import("builtin").target.os.tag == .windows) {
+        _ = std.os.windows.kernel32.SetConsoleOutputCP(65001);
+    }
     const stdout = std.io.getStdOut().writer(); // Fun fact: This must be in function scope on Windows
 
     var gpa = std.heap.GeneralPurposeAllocator(.{ .never_unmap = true }){};
@@ -84,18 +87,29 @@ pub fn main() !void {
     var args = try std.process.argsWithAllocator(alloc);
     defer args.deinit();
 
+    var args_list = std.ArrayList([:0]const u8).init(alloc);
+    defer args_list.deinit();
+
+    while (args.next()) |arg| {
+        try args_list.append(arg);
+    }
+
+    const list: []const [:0]const u8 = args_list.items;
+
     // Diagnostics store the name and help info about the command being parsed.
     // You can use this to display help / usage if there is a parsing error.
     var diags: flags.Diagnostics = undefined;
 
-    const result = flags.parse(&args, "zigdown", Flags, .{
-        .diagnostics = &diags,
-        .colors = .{
+    const color_scheme: flags.ColorScheme =
+        .{
             .error_label = &.{ .red, .bold },
             .header = &.{ .bright_green, .bold },
             .command_name = &.{.bright_blue},
             .option_name = &.{.bright_magenta},
-        },
+        };
+    const result = flags.parse(list, "zigdown", Flags, .{
+        .diagnostics = &diags,
+        .colors = &color_scheme,
     }) catch |err| {
         // This error is returned when "--help" is passed, not when an actual error occured.
         if (err == error.PrintedHelp) {
@@ -104,7 +118,7 @@ pub fn main() !void {
 
         std.debug.print(
             "\nEncountered error while parsing for command '{s}': {s}\n\n",
-            .{ diags.command, @errorName(err) },
+            .{ diags.command_name, @errorName(err) },
         );
 
         // Print command usage.

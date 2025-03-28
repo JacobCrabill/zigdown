@@ -19,7 +19,7 @@
         },
         .flags = .{
             .url = "https://github.com/n0s4/flags/archive/0e2491d8e6d2be38dc0c2ce8e103469886e468bb.tar.gz",
-            .hash = "1220ae181067a549c7a99cc0868193a7889b151381410419191ab1a79304f914336e",
+            .hash = "12204d01f68f191c8e386996b1fbf5d8793a2503d35f830ce38eac74fe38d4b12127",
         },
         .treez = .{
             .url = "https://github.com/JacobCrabill/treez/archive/640de7530c4567a0cadf3f701d1c315724eed4c3.tar.gz",
