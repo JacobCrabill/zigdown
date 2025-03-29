@@ -25,6 +25,10 @@
             .url = "https://github.com/JacobCrabill/treez/archive/640de7530c4567a0cadf3f701d1c315724eed4c3.tar.gz",
             .hash = "treez-0.1.0-4JX9hQSlAAAR1_cQTapcK9qGwbVI4bHrnwFMGQOafXXL",
         },
+        .known_folders = .{
+            .url = "git+https://github.com/ziglibs/known-folders.git#aa24df42183ad415d10bc0a33e6238c437fc0f59",
+            .hash = "known_folders-0.0.0-Fy-PJtLDAADGDOwYwMkVydMSTp_aN-nfjCZw6qPQ2ECL",
+        },
 
         // Individual TreeSitter language parsers
         .tree_sitter_bash = .{

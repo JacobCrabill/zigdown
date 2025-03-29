@@ -412,6 +412,10 @@ fn getDependencies(b: *std.Build, target: std.Build.ResolvedTarget, optimize: st
         const treez_dep = Dependency{ .name = "treez", .module = treez.module("treez") };
         try dependencies.append(treez_dep);
         query_mod.addImport(treez_dep.name, treez_dep.module);
+
+        const known_folders = b.dependency("known_folders", .{ .optimize = optimize, .target = target });
+        const known_folders_dep = Dependency{ .name = "known-folders", .module = known_folders.module("known-folders") };
+        try dependencies.append(known_folders_dep);
     }
 
     return dependencies;

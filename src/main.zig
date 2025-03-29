@@ -74,6 +74,10 @@ const Flags = struct {
 };
 
 pub fn main() !void {
+    if (@import("builtin").target.os.tag == .windows) {
+        // Windows needs special handling for UTF-8
+        _ = std.os.windows.kernel32.SetConsoleOutputCP(65001);
+    }
     const stdout = std.io.getStdOut().writer(); // Fun fact: This must be in function scope on Windows
 
     var gpa = std.heap.GeneralPurposeAllocator(.{ .never_unmap = true }){};
