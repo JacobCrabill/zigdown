@@ -15,9 +15,9 @@ const Parser = zd.Parser;
 const TokenList = zd.TokenList;
 
 fn print_usage(diags: flags.Diagnostics) void {
-    const help = diags.help.generated;
+    const help = diags.help;
     const stdout = std.io.getStdOut();
-    help.usage.render(stdout, flags.ColorScheme.default) catch @panic("Failed to render help text");
+    help.usage.render(stdout, &flags.ColorScheme.default) catch @panic("Failed to render help text");
 }
 
 /// Command-line arguments definition for the Flags module
@@ -81,16 +81,16 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     var alloc = gpa.allocator();
 
-    var args = try std.process.argsWithAllocator(alloc);
-    defer args.deinit();
+    const args = try std.process.argsAlloc(alloc);
+    defer std.process.argsFree(alloc, args);
 
     // Diagnostics store the name and help info about the command being parsed.
     // You can use this to display help / usage if there is a parsing error.
     var diags: flags.Diagnostics = undefined;
 
-    const result = flags.parse(&args, "zigdown", Flags, .{
+    const result = flags.parse(args, "zigdown", Flags, .{
         .diagnostics = &diags,
-        .colors = .{
+        .colors = &flags.ColorScheme{
             .error_label = &.{ .red, .bold },
             .header = &.{ .bright_green, .bold },
             .command_name = &.{.bright_blue},
@@ -104,7 +104,7 @@ pub fn main() !void {
 
         std.debug.print(
             "\nEncountered error while parsing for command '{s}': {s}\n\n",
-            .{ diags.command, @errorName(err) },
+            .{ diags.command_name, @errorName(err) },
         );
 
         // Print command usage.
