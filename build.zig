@@ -50,7 +50,7 @@ pub fn build(b: *std.Build) !void {
 
     const wasm_optimize = b.option(std.builtin.OptimizeMode, "wasm-optimize", "Optimization mode for WASM targets") orelse .ReleaseSmall;
 
-    const build_lua = b.option(bool, "lua", "Build Zigdown as a Lua module") orelse false;
+    const build_lua = b.option(bool, "lua", "[BROKEN - DON'T USE] Build Zigdown as a Lua module") orelse false;
     const build_query_fetcher = b.option(bool, "build-query-fetcher", "Build the TreeSitter query fetcher") orelse false;
     const build_test_exes = b.option(bool, "build-test-exes", "Build the custom test executables") orelse false;
 
@@ -102,6 +102,7 @@ pub fn build(b: *std.Build) !void {
     addExecutable(b, exe_config, exe_opts);
 
     if (build_lua) {
+        // NOTE - This is currently broken! I may fix this later but for now, don't use.
         // TODO
         // const luajit = b.dependency("luajit", .{ .optimize = optimize, .target = target });
         // const luajit_dep = Dependency{ .name = "luajit", .module = luajit.module("luajit") };
@@ -117,6 +118,7 @@ pub fn build(b: *std.Build) !void {
             .root_source_file = b.path("src/lua_api.zig"),
             .target = target,
             .optimize = optimize,
+            .pic = true,
         });
         if (exe_opts.dependencies) |deplist| {
             for (deplist) |dep| {
@@ -127,7 +129,9 @@ pub fn build(b: *std.Build) !void {
         // Point the compiler to the location of the Lua headers (lua.h and friends)
         // Note that we require Lua 5.1, specifically
         // This is compatible with the version of LuaJIT built into NeoVim
-        lua_mod.addIncludePath(b.path("/usr/include/luajit-2.1"));
+        lua_mod.addIncludePath(.{ .cwd_relative = "/usr/include/luajit-2.1" });
+        lua_mod.addIncludePath(.{ .cwd_relative = "/usr/include/x86_64-linux-gnu/" });
+        lua_mod.addLibraryPath(.{ .cwd_relative = "/usr/lib/x86_64-linux-gnu/" });
         lua_mod.linkSystemLibrary("lua5.1");
 
         // "Install" to the output dir using the correct naming convention to load with lua
