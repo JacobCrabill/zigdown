@@ -47,6 +47,10 @@
             .url = "https://github.com/tree-sitter/tree-sitter-json/archive/4d770d31f732d50d3ec373865822fbe659e47c75.tar.gz",
             .hash = "N-V-__8AACVXAgCEl--zqcqoXlvXpEMk5BTS748bsLVslERc",
         },
+        .tree_sitter_make = .{
+            .url = "https://github.com/tree-sitter-grammars/tree-sitter-make/archive/5e9e8f8ff3387b0edcaa90f46ddf3629f4cfeb1d.tar.gz",
+            .hash = "N-V-__8AAD6dEwA9hwePYcn8FdDAJEeYqCBBlYI2Oey6O5g2",
+        },
         .tree_sitter_python = .{
             .url = "https://github.com/tree-sitter/tree-sitter-python/archive/de0c01e7102e755f6c2e1b3055ae6ca85f261a10.tar.gz",
             .hash = "N-V-__8AANVLPgC-yBA9l867GoeMn95l0Y_Q9CAzcizA7qlT",
@@ -55,9 +59,13 @@
             .url = "https://github.com/tree-sitter/tree-sitter-rust/archive/c447dcce961ac438aaeaf117347749fe7d1e8365.tar.gz",
             .hash = "N-V-__8AAJ3uaABprqh1hqE6xstGrAJWc4xL3u1HfJ6Plj6E",
         },
+        .tree_sitter_yaml = .{
+            .url = "https://github.com/tree-sitter-grammars/tree-sitter-yaml/archive/1805917414a9a8ba2473717fd69447277a175fae.tar.gz",
+            .hash = "N-V-__8AABBcGwBNXXnYqPiNmGDO5T2k7__Tglt1pwNFI_YN",
+        },
         .tree_sitter_zig = .{
-            .url = "https://github.com/maxxnino/tree-sitter-zig/archive/a80a6e9be81b33b182ce6305ae4ea28e29211bd5.tar.gz",
-            .hash = "N-V-__8AADLAWgBszUZPv5YTGyO5ZNyxNcuuR8MB3mIMJrZf",
+            .url = "https://github.com/tree-sitter-grammars/tree-sitter-zig/archive/b670c8df85a1568f498aa5c8cae42f51a90473c0.tar.gz",
+            .hash = "N-V-__8AAN6NXgCZxLUnqe4620P_FqHrEY8PHTA1-VlOn4yX",
         },
 
         // // We do not use the lua.org version of Lua 5.1.5 because there is a known security issue

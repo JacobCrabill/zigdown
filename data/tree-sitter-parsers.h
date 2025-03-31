@@ -12,8 +12,10 @@ const TSLanguage *tree_sitter_bash(void);
 const TSLanguage *tree_sitter_c(void);
 const TSLanguage *tree_sitter_cpp(void);
 const TSLanguage *tree_sitter_json(void);
+const TSLanguage *tree_sitter_make(void);
 const TSLanguage *tree_sitter_python(void);
 const TSLanguage *tree_sitter_rust(void);
+const TSLanguage *tree_sitter_yaml(void);
 const TSLanguage *tree_sitter_zig(void);
 
 // #ifdef __cplusplus

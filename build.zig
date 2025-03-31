@@ -56,9 +56,12 @@ pub fn build(b: *std.Build) !void {
 
     // Add an option to list the set of TreeSitter parsers to statically link into the build
     // This should match the list of parsers defined below and added to the 'queries' module
+    // TODO:
+    //   This is currently unused b/c I couldn't get the approach to work.
+    //   May need to auto-generate some files here to get it to work properly.
     const builtin_ts_option = "builtin_ts_parsers";
     const builtin_ts_option_desc = "List of TreeSitter parsers to bake into the build";
-    const ts_parser_list = b.option([]const u8, builtin_ts_option, builtin_ts_option_desc) orelse "bash,c,cpp,json,python,rust,zig";
+    const ts_parser_list = b.option([]const u8, builtin_ts_option, builtin_ts_option_desc) orelse "bash,c,cpp,json,python,rust,yaml,zig";
 
     const options: *Options = b.addOptions();
     options.addOption([]const u8, builtin_ts_option, ts_parser_list);
@@ -378,8 +381,10 @@ fn getDependencies(b: *std.Build, target: std.Build.ResolvedTarget, optimize: st
             .{ .name = "c" },
             .{ .name = "cpp", .scanner = "src/scanner.c" },
             .{ .name = "json" },
+            .{ .name = "make" },
             .{ .name = "python", .scanner = "src/scanner.c" },
             .{ .name = "rust", .scanner = "src/scanner.c" },
+            .{ .name = "yaml", .scanner = "src/scanner.c" },
             .{ .name = "zig" },
         };
         for (parsers) |parser| {

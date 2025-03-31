@@ -49,6 +49,14 @@ root:
     echo -e Hello, World!
 ```
 
+```make
+# Default target
+all: foo bar baz
+
+clean:
+    rm foo bar baz
+```
+
 ```
 code with no language set
 ```
