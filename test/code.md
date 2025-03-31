@@ -57,6 +57,12 @@ clean:
     rm foo bar baz
 ```
 
+```cmake
+cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
+set(FOO "${BAR}" CACHE "Description" FORCE)
+option(DO_STUFF "Do some stuff" ON)
+```
+
 ```
 code with no language set
 ```

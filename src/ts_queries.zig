@@ -65,6 +65,7 @@ pub fn init(alloc: Allocator) void {
     builtin_languages = std.StringHashMap(TsParserPair).init(alloc);
     builtin_languages.put("bash", .{ .name = "bash", .language = queries_mod.tree_sitter_bash() }) catch unreachable;
     builtin_languages.put("c", .{ .name = "c", .language = queries_mod.tree_sitter_c() }) catch unreachable;
+    builtin_languages.put("cmake", .{ .name = "cmake", .language = queries_mod.tree_sitter_cmake() }) catch unreachable;
     builtin_languages.put("cpp", .{ .name = "cpp", .language = queries_mod.tree_sitter_cpp() }) catch unreachable;
     builtin_languages.put("json", .{ .name = "json", .language = queries_mod.tree_sitter_json() }) catch unreachable;
     builtin_languages.put("make", .{ .name = "make", .language = queries_mod.tree_sitter_make() }) catch unreachable;

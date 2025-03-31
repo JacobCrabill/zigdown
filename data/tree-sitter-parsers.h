@@ -10,6 +10,7 @@ typedef struct TSLanguage TSLanguage;
 // TODO: Auto-generate from build.zig?
 const TSLanguage *tree_sitter_bash(void);
 const TSLanguage *tree_sitter_c(void);
+const TSLanguage *tree_sitter_cmake(void);
 const TSLanguage *tree_sitter_cpp(void);
 const TSLanguage *tree_sitter_json(void);
 const TSLanguage *tree_sitter_make(void);

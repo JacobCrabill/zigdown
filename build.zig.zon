@@ -39,6 +39,10 @@
             .url = "https://github.com/tree-sitter/tree-sitter-c/archive/e8841a6a9431b7365ac9055688429e1deb8db90f.tar.gz",
             .hash = "N-V-__8AALWcSAD2F6Vd1LSqa0js-e6kawfanpXMUnMhQeq6",
         },
+        .tree_sitter_cmake = .{
+            .url = "https://github.com/uyha/tree-sitter-cmake/archive/fe48221d4d9842d916d66b5e71ab3c6307ec28b3.tar.gz",
+            .hash = "N-V-__8AACLOCQCV8GF5uI_qg4S3tygmCZMpxB9qk4L2evjb",
+        },
         .tree_sitter_cpp = .{
             .url = "https://github.com/tree-sitter/tree-sitter-cpp/archive/f41b4f66a42100be405f96bdc4ebc4a61095d3e8.tar.gz",
             .hash = "N-V-__8AABV0FwF4Ttn0MFCCLOxdUUKUC07SL-wqYa-2ySus",

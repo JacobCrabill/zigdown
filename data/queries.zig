@@ -8,6 +8,7 @@ pub const c = @cImport({
 pub const builtin_queries = std.StaticStringMap([]const u8).initComptime(.{
     .{ "bash", @embedFile("queries/highlights-bash.scm") },
     .{ "c", @embedFile("queries/highlights-c.scm") },
+    .{ "cmake", @embedFile("queries/highlights-cmake.scm") },
     .{ "cpp", @embedFile("queries/highlights-cpp.scm") },
     .{ "json", @embedFile("queries/highlights-json.scm") },
     .{ "make", @embedFile("queries/highlights-make.scm") },
@@ -27,6 +28,10 @@ pub fn tree_sitter_bash() *const treez.Language {
 
 pub fn tree_sitter_c() *const treez.Language {
     return toLanguage(c.tree_sitter_c());
+}
+
+pub fn tree_sitter_cmake() *const treez.Language {
+    return toLanguage(c.tree_sitter_cmake());
 }
 
 pub fn tree_sitter_cpp() *const treez.Language {

@@ -61,7 +61,7 @@ pub fn build(b: *std.Build) !void {
     //   May need to auto-generate some files here to get it to work properly.
     const builtin_ts_option = "builtin_ts_parsers";
     const builtin_ts_option_desc = "List of TreeSitter parsers to bake into the build";
-    const ts_parser_list = b.option([]const u8, builtin_ts_option, builtin_ts_option_desc) orelse "bash,c,cpp,json,python,rust,yaml,zig";
+    const ts_parser_list = b.option([]const u8, builtin_ts_option, builtin_ts_option_desc) orelse "bash,c,cmake,cpp,json,python,rust,yaml,zig";
 
     const options: *Options = b.addOptions();
     options.addOption([]const u8, builtin_ts_option, ts_parser_list);
@@ -379,6 +379,7 @@ fn getDependencies(b: *std.Build, target: std.Build.ResolvedTarget, optimize: st
         const parsers: []const TsParserConfig = &[_]TsParserConfig{
             .{ .name = "bash", .scanner = "src/scanner.c" },
             .{ .name = "c" },
+            .{ .name = "cmake", .scanner = "src/scanner.c" },
             .{ .name = "cpp", .scanner = "src/scanner.c" },
             .{ .name = "json" },
             .{ .name = "make" },
