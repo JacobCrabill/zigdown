@@ -5,9 +5,7 @@ local M = {}
 M.root = utils.parent_dir(utils.parent_dir(utils.script_dir()))
 
 local zigdown = nil
-local buf = nil    -- Destination buffer
 local job_id = nil -- Job ID of render process (cat to term)
-local dest_win = nil
 
 local config = {
   src_win = nil,
@@ -21,11 +19,13 @@ local config = {
 ---@param filename string The absolute path to the file to render
 function M.render_file(filename)
   -- If we don't already have a preview window open, open one
-  config.src_win = vim.api.nvim_get_current_win()
+  config.src_win = vim.fn.win_getid()
+  config.src_buf = vim.fn.bufnr()
   local wins = vim.api.nvim_list_wins()
   if #wins < 2 then
     vim.cmd('vsplit')
     wins = vim.api.nvim_list_wins()
+    config.src_win = wins[1]
   end
   config.dest_win = wins[#wins]
   vim.api.nvim_set_current_win(config.dest_win)
@@ -58,9 +58,8 @@ function M.render_file(filename)
       vim.api.nvim_set_current_buf(config.dest_buf)
       -- Rename the term window to a temp file with a consistent name
       vim.cmd("keepalt file zd-render")
-      -- Why does this not work?
+      -- Return to the source window
       vim.api.nvim_set_current_win(config.src_win)
-      vim.api.nvim_set_current_buf(config.src_buf)
     end,
   }
 
