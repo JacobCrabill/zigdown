@@ -1,0 +1,204 @@
+/* -------- Markdown Render Styling -------- */
+
+html, body {
+  height: fit-content;
+  overflow-wrap: break-word;
+}
+
+/* Set the basic style: bg color, fg color, typeface */
+body {
+  --color-rosewater: #f2d5cf;
+  --color-flamingo: #eebebe;
+  --color-pink: #f4b8e4;
+  --color-mauve: #cda1e6;
+  --color-red: #e78284;
+  --color-maroon: #ea999c;
+  --color-peach: #ef9f76;
+  --color-yellow: #eaca60;
+  --color-green: #96dd87;
+  --color-teal: #81c8be;
+  --color-sky: #99d1db;
+  --color-sapphire: #85c1dc;
+  --color-blue: #66aaff;
+  --color-lavender: #babbf1;
+  --color-text: #d6e0ff;
+  --color-subtext1: #b5bfe2;
+  --color-subtext0: #a5adce;
+  --color-overlay2: #949cbb;
+  --color-overlay1: #838ba7;
+  --color-overlay0: #737994;
+  --color-surface2: #626880;
+  --color-surface1: #51576d;
+  --color-surface0: #414559;
+  --color-base: #303446;
+  --color-mantle: #292c3c;
+  --color-crust: #232634;
+
+  background-image: none;
+  background-color: var(--color-base);
+
+  text-align: left;
+  font-family: "Ubuntu Mono";
+  font-size: 20px;
+  color: var(--color-text);
+
+  --padding-vertical: clamp(1.5em, 5vh, 2.5em);
+  margin: 0 auto;
+  max-width: min(90ch, 100%);
+  min-height: calc(100% - 2 * var(--padding-vertical));
+  padding: var(--padding-vertical) clamp(1.5em, 5vw, 2.5em);
+}
+
+*::selection {
+    background: var(--color-blue);
+    color: var(--color-base);
+}
+
+/* Title-style header (H1) */
+.header {
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  padding: 20px;
+}
+
+/* Basic centering of simple elements */
+.center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 50%;
+}
+
+h1 {
+  color: var(--color-blue);
+  margin-top: 20px;
+  margin-bottom: 0px;
+}
+
+h2 {
+  color: var(--color-peach);
+  margin-top: 20px;
+  margin-bottom: 0px;
+}
+
+h3 {
+  color: var(--color-green);
+  margin-top: 16px;
+  margin-bottom: 0px;
+}
+
+h4 {
+  color: var(--color-mauve);
+  margin-top: 16px;
+  margin-bottom: 0px;
+}
+
+p {
+  margin-top: 0px;
+  margin-bottom: 12px;
+}
+
+ol, ul {
+  margin-top: 0px;
+  margin-bottom: 0px;
+}
+
+code {
+  background-color: var(--color-mantle);
+  color: var(--color-lavender); /* #c0b0f0; */
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.directive {
+  border: 4px solid #e44026;
+  border-radius: 10px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+  padding: 20px;
+  background-color: var(--color-red); /* #ff5860; */
+  color: white;
+}
+
+/* ------------------------------------
+ *         Syntax Highlighting
+ * ------------------------------------ */
+
+/**
+ * TODO: keyword, constant, identifier, function, ...
+ * Currently defined in syntax.zig; should instead define
+ * classes here that get referenced there
+ */
+
+.code_block {
+  color: var(--color-lavender); /* #c0b0f0; */
+  font-family: monospace;
+  background-color: var(--color-mantle); /* #424050; */
+  padding: 0px 12px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+tr {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+td {
+  padding-left: 6px;
+}
+
+/**
+ * Bits from a a very nicely styled blog I found:
+ * https://git.sr.ht/~ashie/blog/tree/master/item/assets/main.scss
+ */
+
+a {
+    color: var(--color-sky);
+    text-decoration: none;
+    padding: 0.05em;
+
+    &:visited {
+        color: var(--color-mauve);
+
+        &:hover {
+            background: var(--color-mauve);
+        }
+    }
+
+    &:hover {
+        text-decoration: underline;
+        background: var(--color-sky);
+        color: var(--color-base);
+    }
+}
+
+blockquote {
+    background: var(--color-crust);
+    color: var(--color-subtext1);
+    margin: 0;
+    margin-left: 0.75em;
+    max-width: fit-content;
+    padding: 0.5em;
+    font-style: italic;
+    margin: 0;
+
+    i {
+      font-style: normal;
+    }
+}
+
+code {
+    padding: 0.1ch 0.5ch;
+    background: var(--color-crust);
+}
+
+li {
+    margin: 0.25em 0;
+}
+
+ul sup {
+    line-height: 0;
+    vertical-align: super;
+}
