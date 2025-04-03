@@ -409,30 +409,3 @@ test "Print basic AST" {
     std.debug.print("Print basic AST result:\n", .{});
     root.print(1);
 }
-
-// !! TODO: !!
-//   ts_queries has an issue with how the test runner works
-//   When more than one test calls ts_queries.init()/.deinit(), we get segfaults
-//   on the builtin queries or some related hash map; I guess because it's
-//   effectively a static variable that's reused across the single test process
-// !!!!!!!!!!!
-// test "Render basic AST" {
-//     std.debug.print("\n", .{});
-//     const alloc = std.testing.allocator;
-//
-//     var buffer = ArrayList(u8).init(alloc);
-//     defer buffer.deinit();
-//     const writer = buffer.writer();
-//     // const writer = std.io.getStdErr().writer();
-//
-//     var arena = std.heap.ArenaAllocator.init(alloc);
-//     defer arena.deinit();
-//
-//     const html = @import("render_html.zig");
-//     var renderer = html.HtmlRenderer(@TypeOf(writer)).init(writer, arena.allocator());
-//
-//     var root = try createTestAst(arena.allocator());
-//     defer root.deinit();
-//
-//     try renderer.renderBlock(root);
-// }

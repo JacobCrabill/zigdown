@@ -1,8 +1,8 @@
-## Code Parsing Test
+# Code Parsing Test
 
 `inline` code
 
-# CPP Code Block
+## CPP Code Block
 
 ```cpp
 #include <stdio.h> /* Comment */
@@ -37,11 +37,14 @@ int main() {
 }
 ```
 
+## BASH, YAML, None
+
 ```bash
 echo -e "Hello, World!"
 ```
 
 ```yaml
+# TODO: I need to fork the current tree-sitter-yaml Github repo to make it work
 root:
   foo: "bar"
   baz: hello

@@ -1,17 +1,17 @@
 const std = @import("std");
 const cons = @import("console.zig");
-const zd = struct {
-    usingnamespace @import("parser.zig");
-    usingnamespace @import("render.zig");
-    usingnamespace @import("render_html.zig");
-    usingnamespace @import("utils.zig");
-};
+const parser = @import("parser.zig");
+const render = @import("render.zig");
+const utils = @import("utils.zig");
 
-pub const HtmlRenderer = zd.HtmlRenderer;
-pub const htmlRenderer = zd.htmlRenderer;
+const TextStyle = utils.TextStyle;
+const Parser = parser.Parser;
 
-pub const ConsoleRenderer = zd.ConsoleRenderer;
-pub const consoleRenderer = zd.consoleRenderer;
+const HtmlRenderer = render.HtmlRenderer;
+const htmlRenderer = render.htmlRenderer;
+
+const ConsoleRenderer = render.ConsoleRenderer;
+const consoleRenderer = render.consoleRenderer;
 
 pub fn main() !void {
     const text1: []const u8 =
@@ -68,7 +68,7 @@ pub fn main() !void {
     const text = text1;
 
     const stdout = std.io.getStdOut().writer();
-    var style: zd.TextStyle = zd.TextStyle{ .fg_color = .Green, .bold = true };
+    var style: TextStyle = TextStyle{ .fg_color = .Green, .bold = true };
     cons.printStyled(stdout, style, "\n────────────────── Test Document ──────────────────\n", .{});
     try stdout.print("{s}\n", .{text});
     cons.printStyled(stdout, style, "───────────────────────────────────────────────────\n", .{});
@@ -77,7 +77,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
-    var p: zd.Parser = zd.Parser.init(alloc, .{ .copy_input = false, .verbose = true });
+    var p: Parser = Parser.init(alloc, .{ .copy_input = false, .verbose = true });
     defer p.deinit();
     try p.parseMarkdown(text);
 

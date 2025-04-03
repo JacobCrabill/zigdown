@@ -81,9 +81,12 @@ Zigdown comes with a number of TreeSitter parsers and highlight queries built-in
 - bash
 - C
 - C++
+- CMake
 - JSON
+- Make
 - Python
 - Rust
+- YAML
 - Zig
 
 The parsers are downloaded from Github and the relevant source files are added to the build, and the

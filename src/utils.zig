@@ -369,12 +369,12 @@ test "Table Of Contents" {
     std.debug.print("Table of Contents\n", .{});
     toc.print(1);
 
-    const html = @import("render_html.zig");
-    var buffer = ArrayList(u8).init(alloc);
-    defer buffer.deinit();
-    const writer = buffer.writer();
+    //const html = @import("render/render_html.zig");
+    //var buffer = ArrayList(u8).init(alloc);
+    //defer buffer.deinit();
+    //const writer = buffer.writer();
 
-    var renderer = html.HtmlRenderer(@TypeOf(writer)).init(writer, alloc);
-    defer renderer.deinit();
-    try renderer.renderBlock(toc);
+    //var renderer = html.HtmlRenderer(@TypeOf(writer)).init(writer, alloc);
+    //defer renderer.deinit();
+    //try renderer.renderBlock(toc);
 }

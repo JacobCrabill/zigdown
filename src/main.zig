@@ -72,7 +72,7 @@ const Flags = struct {
         };
         render: RenderCmd,
 
-        format: struct {},
+        format: RenderCmdOpts,
         serve: struct {
             root_file: ?[]const u8 = null,
             root_directory: ?[]const u8 = null,
@@ -130,12 +130,11 @@ pub fn main() !void {
         // Windows needs special handling for UTF-8
         _ = std.os.windows.kernel32.SetConsoleOutputCP(65001);
     }
-    const stdout = std.io.getStdOut().writer(); // Fun fact: This must be in function scope on Windows
 
     var gpa = std.heap.GeneralPurposeAllocator(.{ .never_unmap = true }){};
 
     defer _ = gpa.deinit();
-    var alloc = gpa.allocator();
+    const alloc = gpa.allocator();
 
     const args = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, args);
@@ -167,68 +166,19 @@ pub fn main() !void {
     const verbose_parsing: bool = result.verbose;
 
     switch (result.command) {
-        .format => std.debug.print("Format command!\n", .{}),
+        .format => |r_opts| {
+            try handleRender(alloc, &diags, &colorscheme, .format, r_opts, verbose_parsing, timeit);
+            std.process.exit(0);
+        },
         .render => |r_cmd| {
-            const filename: ?[]const u8 = switch (r_cmd.command) {
-                inline else => |p| p.positional.file,
-            };
             const r_opts: RenderCmdOpts = switch (r_cmd.command) {
                 inline else => |c| c,
             };
-
-            var md_text: []const u8 = undefined;
-            var md_dir: ?[]const u8 = null;
-            if (r_opts.stdin) {
-                // Read document from stdin
-                const stdin = std.io.getStdIn().reader();
-                md_text = try stdin.readAllAlloc(alloc, 1e9);
-            } else {
-                if (filename == null) {
-                    printHelpAndExit(&diags, &colorscheme, error.NoFilenameProvided);
-                }
-                // Read file into memory; Set root directory
-                var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-                const realpath = try std.fs.realpath(filename.?, &path_buf);
-                var md_file: File = try std.fs.openFileAbsolute(realpath, .{});
-                md_text = try md_file.readToEndAlloc(alloc, 1e9);
-                md_dir = std.fs.path.dirname(realpath);
-            }
-            defer alloc.free(md_text);
-
-            // Parse the document
-            const parsed = try parse(alloc, md_text, verbose_parsing);
-
-            // Get the output stream
-            var out_stream: std.io.AnyWriter = undefined;
-            if (r_opts.output) |f| {
-                const outfile: std.fs.File = try std.fs.cwd().createFile(f, .{ .truncate = true });
-                out_stream = outfile.writer().any();
-            } else {
-                out_stream = stdout.any();
-            }
-
-            // Configure and perform the rendering
-            const method: zd.render.RenderMethod = blk: switch (r_cmd.command) {
-                .console => break :blk .console,
-                .html => break :blk .html,
+            const method: zd.render.RenderMethod = switch (r_cmd.command) {
+                .console => .console,
+                .html => .html,
             };
-
-            var rtimer = zd.utils.Timer.start();
-            try zd.render.render(.{
-                .alloc = alloc,
-                .document = parsed.document,
-                .document_dir = md_dir,
-                .out_stream = out_stream,
-                .stdin = r_opts.stdin,
-                .width = r_opts.width,
-                .method = method,
-            });
-            const rtime_s = rtimer.read();
-
-            if (timeit) {
-                cons.printColor(stdout, .Green, "  Parsed in:   {d:.3} ms\n", .{parsed.time_s * 1000});
-                cons.printColor(stdout, .Green, "  Rendered in: {d:.3} ms\n", .{rtime_s * 1000});
-            }
+            try handleRender(alloc, &diags, &colorscheme, method, r_opts, verbose_parsing, timeit);
             std.process.exit(0);
         },
         .serve => |s_opts| {
@@ -273,7 +223,7 @@ pub fn main() !void {
 
 const ParseResult = struct {
     time_s: f64,
-    document: zd.Block,
+    parser: zd.Parser,
 };
 
 fn parse(alloc: std.mem.Allocator, input: []const u8, verbose: bool) !ParseResult {
@@ -283,18 +233,78 @@ fn parse(alloc: std.mem.Allocator, input: []const u8, verbose: bool) !ParseResul
         .verbose = verbose,
     };
     var parser = zd.Parser.init(alloc, opts);
-    defer parser.deinit();
 
     var ptimer = zd.utils.Timer.start();
     try parser.parseMarkdown(input);
     const ptime_s = ptimer.read();
 
-    const md: zd.Block = parser.document;
-
     if (verbose) {
         std.debug.print("AST:\n", .{});
-        md.print(0);
+        parser.document.print(0);
     }
 
-    return .{ .time_s = ptime_s, .document = md };
+    return .{ .time_s = ptime_s, .parser = parser };
+}
+
+fn handleRender(
+    alloc: std.mem.Allocator,
+    diags: *const flags.Diagnostics,
+    colorscheme: *const flags.ColorScheme,
+    method: zd.render.RenderMethod,
+    r_opts: RenderCmdOpts,
+    verbose_parsing: bool,
+    timeit: bool,
+) !void {
+    const stdout = std.io.getStdOut().writer();
+    const filename: ?[]const u8 = r_opts.positional.file;
+
+    var md_text: []const u8 = undefined;
+    var md_dir: ?[]const u8 = null;
+    if (r_opts.stdin) {
+        // Read document from stdin
+        const stdin = std.io.getStdIn().reader();
+        md_text = try stdin.readAllAlloc(alloc, 1e9);
+    } else {
+        if (filename == null) {
+            printHelpAndExit(diags, colorscheme, error.NoFilenameProvided);
+        }
+        // Read file into memory; Set root directory
+        var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+        const realpath = try std.fs.realpath(filename.?, &path_buf);
+        var md_file: File = try std.fs.openFileAbsolute(realpath, .{});
+        md_text = try md_file.readToEndAlloc(alloc, 1e9);
+        md_dir = std.fs.path.dirname(realpath);
+    }
+    defer alloc.free(md_text);
+
+    // Parse the document
+    var parsed = try parse(alloc, md_text, verbose_parsing);
+    defer parsed.parser.deinit();
+
+    // Get the output stream
+    var out_stream: std.io.AnyWriter = undefined;
+    if (r_opts.output) |f| {
+        const outfile: std.fs.File = try std.fs.cwd().createFile(f, .{ .truncate = true });
+        out_stream = outfile.writer().any();
+    } else {
+        out_stream = stdout.any();
+    }
+
+    // Configure and perform the rendering
+    var rtimer = zd.utils.Timer.start();
+    try zd.render.render(.{
+        .alloc = alloc,
+        .document = parsed.parser.document,
+        .document_dir = md_dir,
+        .out_stream = out_stream,
+        .stdin = r_opts.stdin,
+        .width = r_opts.width,
+        .method = method,
+    });
+    const rtime_s = rtimer.read();
+
+    if (timeit) {
+        cons.printColor(stdout, .Green, "  Parsed in:   {d:.3} ms\n", .{parsed.time_s * 1000});
+        cons.printColor(stdout, .Green, "  Rendered in: {d:.3} ms\n", .{rtime_s * 1000});
+    }
 }

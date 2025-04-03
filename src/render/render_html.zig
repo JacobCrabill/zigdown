@@ -1,14 +1,14 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const blocks = @import("blocks.zig");
-const inls = @import("inlines.zig");
-const leaves = @import("leaves.zig");
-const containers = @import("containers.zig");
-const utils = @import("utils.zig");
-const syntax = @import("syntax.zig");
-const ts_queries = @import("ts_queries.zig");
-const wasm = @import("wasm.zig");
+const blocks = @import("../blocks.zig");
+const inls = @import("../inlines.zig");
+const leaves = @import("../leaves.zig");
+const containers = @import("../containers.zig");
+const utils = @import("../utils.zig");
+const syntax = @import("../syntax.zig");
+const ts_queries = @import("../ts_queries.zig");
+const wasm = @import("../wasm.zig");
 
 const Allocator = std.mem.Allocator;
 

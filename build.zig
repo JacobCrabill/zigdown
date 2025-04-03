@@ -29,16 +29,7 @@ const BuildOpts = struct {
 };
 
 pub fn build(b: *std.Build) !void {
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
     const target = b.standardTargetOptions(.{});
-
-    // Standard optimize options allows the user to choose the optimization mode
-    // when running 'zig build'.  This applies to downstream consumers of this package
-    // as well, e.g. when added as a dependency in build.zig.zon.
-    // Default to Debug, but allow the user to specify ReleaseSafe or ReleaseFast builds
     var optimize: std.builtin.OptimizeMode = b.standardOptimizeOption(.{});
     if (b.option(bool, "safe", "Build ReleaseSafe mode") != null) {
         optimize = .ReleaseSafe;

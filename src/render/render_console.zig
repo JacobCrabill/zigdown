@@ -1,17 +1,17 @@
 const std = @import("std");
-
-const blocks = @import("blocks.zig");
-const containers = @import("containers.zig");
-const leaves = @import("leaves.zig");
-const inls = @import("inlines.zig");
-const utils = @import("utils.zig");
-
-const cons = @import("console.zig");
-const debug = @import("debug.zig");
-const gfx = @import("image.zig");
-const ts_queries = @import("ts_queries.zig");
 const stb = @import("stb_image");
-const syntax = @import("syntax.zig");
+
+const blocks = @import("../blocks.zig");
+const containers = @import("../containers.zig");
+const leaves = @import("../leaves.zig");
+const inls = @import("../inlines.zig");
+const utils = @import("../utils.zig");
+
+const cons = @import("../console.zig");
+const debug = @import("../debug.zig");
+const gfx = @import("../image.zig");
+const ts_queries = @import("../ts_queries.zig");
+const syntax = @import("../syntax.zig");
 
 const errorReturn = debug.errorReturn;
 const errorMsg = debug.errorMsg;

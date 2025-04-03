@@ -2,9 +2,9 @@ const std = @import("std");
 const blocks = @import("blocks.zig");
 const gfx = @import("image.zig");
 
-pub const render_html = @import("render_html.zig");
-pub const render_console = @import("render_console.zig");
-pub const render_format = @import("render_format.zig");
+pub const render_html = @import("render/render_html.zig");
+pub const render_console = @import("render/render_console.zig");
+pub const render_format = @import("render/render_format.zig");
 
 const Allocator = std.mem.Allocator;
 
