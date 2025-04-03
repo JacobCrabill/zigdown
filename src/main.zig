@@ -14,48 +14,52 @@ const formatRenderer = zd.formatRenderer;
 const Parser = zd.Parser;
 const TokenList = zd.TokenList;
 
-fn print_usage(diags: flags.Diagnostics) void {
-    const help = diags.help;
-    const stdout = std.io.getStdOut();
-    help.usage.render(stdout, &flags.ColorScheme.default) catch @panic("Failed to render help text");
+fn printHelpAndExit(diags: *const flags.Diagnostics, colorscheme: *const flags.ColorScheme, err: anyerror) noreturn {
+    std.debug.print(
+        "\nEncountered error while parsing for command '{s}': {s}\n\n",
+        .{ diags.command_name, @errorName(err) },
+    );
+
+    diags.printHelp(colorscheme) catch unreachable;
+    std.process.exit(1);
 }
+
+pub const RenderCmdOpts = struct {
+    stdin: bool = false,
+    width: ?usize = null,
+    output: ?[]const u8 = null,
+    positional: struct {
+        file: ?[]const u8,
+
+        pub const descriptions = .{
+            .file = "Markdown file to render",
+        };
+    },
+    pub const descriptions = .{
+        .stdin = "Read document from stdin (instead of from a file)",
+        .width = "Console width to render within (default: 90 chars)",
+        .output = "Output to a file, instead of to stdout",
+    };
+    pub const switches = .{
+        .stdin = 'i',
+        .width = 'w',
+        .output = 'o',
+    };
+};
 
 /// Command-line arguments definition for the Flags module
 const Flags = struct {
     pub const description = "Markdown parser supporting console and HTML rendering, and auto-formatting";
 
-    // pub const descriptions = .{
-    //     .console = "Render to the console [default]",
-    //     .html = "Render to HTML",
-    //     .format = "Format the document (to stdout, or to given output file)",
-    //     .stdin = "Read document from stdin",
-    //     .width = "Console width to render within (default: 90 chars)",
-    //     .output = "Output to a file, instead of to stdout",
-    //     .timeit = "Time the parsing & rendering and display the results",
-    //     .verbose = "Enable verbose output from the parser",
-    // };
+    pub const descriptions = .{
+        .timeit = "Time the parsing & rendering and display the results",
+        .verbose = "Enable verbose output from the parser",
+    };
 
-    // console: bool = false,
-    // html: bool = false,
-    format: bool = false,
-    stdin: bool = false,
-    width: ?usize = null,
     timeit: bool = false,
     verbose: bool = false,
-    output: ?[]const u8 = null,
 
     command: union(enum(u8)) {
-        pub const RenderCmdOpts = struct {
-            width: ?usize = null,
-            positional: struct {
-                file: []const u8,
-
-                pub const descriptions = .{
-                    .file = "Markdown file to render",
-                };
-            },
-        };
-
         pub const RenderCmd = struct {
             command: union(enum) {
                 console: RenderCmdOpts,
@@ -94,7 +98,7 @@ const Flags = struct {
             };
         },
 
-        help: struct {},
+        // help: struct {},
 
         install_parsers: struct {
             positional: struct {
@@ -104,9 +108,8 @@ const Flags = struct {
 
         pub const descriptions = .{
             .render = "Render a document to either a console (ANSI escaped text) or to HTML",
-            .format = "Format a Markdown document",
+            .format = "Format the document (to stdout, or to given output file)",
             .serve = "Serve up documents from a directory to a localhost HTTP server",
-            .help = "Show this help menu",
             .install_parsers =
             \\Install one or more TreeSitter language parsers from Github.
             \\Comma-separated list of <lang>, <github_user>:<lang>, or <user>:<branch>:<lang>.
@@ -116,16 +119,10 @@ const Flags = struct {
         };
     },
 
-    // pub const switches = .{
-    //     .console = 'c',
-    //     .html = 'x', // note: '-h' is reserved by Flags for 'help'
-    //     .stdin = 'i',
-    //     .width = 'w',
-    //     .timeit = 't',
-    //     .verbose = 'v',
-    //     .output = 'o',
-    //     .install_parsers = 'p',
-    // };
+    pub const switches = .{
+        .timeit = 't',
+        .verbose = 'v',
+    };
 };
 
 pub fn main() !void {
@@ -146,114 +143,90 @@ pub fn main() !void {
     // Diagnostics store the name and help info about the command being parsed.
     // You can use this to display help / usage if there is a parsing error.
     var diags: flags.Diagnostics = undefined;
+    const colorscheme = flags.ColorScheme{
+        .error_label = &.{ .red, .bold },
+        .header = &.{ .bright_green, .bold },
+        .command_name = &.{.bright_blue},
+        .option_name = &.{.bright_magenta},
+    };
 
     const result = flags.parse(args, "zigdown", Flags, .{
         .diagnostics = &diags,
-        .colors = &flags.ColorScheme{
-            .error_label = &.{ .red, .bold },
-            .header = &.{ .bright_green, .bold },
-            .command_name = &.{.bright_blue},
-            .option_name = &.{.bright_magenta},
-        },
+        .colors = &colorscheme,
     }) catch |err| {
         // This error is returned when "--help" is passed, not when an actual error occured.
         if (err == error.PrintedHelp) {
             std.process.exit(0);
         }
 
-        std.debug.print(
-            "\nEncountered error while parsing for command '{s}': {s}\n\n",
-            .{ diags.command_name, @errorName(err) },
-        );
-
-        // Print command usage.
-        print_usage(diags);
-
-        std.process.exit(1);
+        printHelpAndExit(&diags, &colorscheme, err);
     };
 
     // Process the command-line arguments
     const timeit: bool = result.timeit;
     const verbose_parsing: bool = result.verbose;
-    const outfile: ?[]const u8 = result.output;
 
     switch (result.command) {
-        .help => {
-            print_usage(diags);
-            std.process.exit(0);
-        },
         .format => std.debug.print("Format command!\n", .{}),
-        .render => |r_opts| {
-            std.debug.print("Render command!\n", .{});
-            const filename: []const u8 = switch (r_opts.command) {
+        .render => |r_cmd| {
+            const filename: ?[]const u8 = switch (r_cmd.command) {
                 inline else => |p| p.positional.file,
             };
-
-            const do_console: bool = r_opts.command == .console;
-            const do_html: bool = r_opts.command == .html;
+            const r_opts: RenderCmdOpts = switch (r_cmd.command) {
+                inline else => |c| c,
+            };
 
             var md_text: []const u8 = undefined;
             var md_dir: ?[]const u8 = null;
-            if (result.stdin) {
+            if (r_opts.stdin) {
                 // Read document from stdin
                 const stdin = std.io.getStdIn().reader();
                 md_text = try stdin.readAllAlloc(alloc, 1e9);
             } else {
+                if (filename == null) {
+                    printHelpAndExit(&diags, &colorscheme, error.NoFilenameProvided);
+                }
                 // Read file into memory; Set root directory
                 var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-                const realpath = try std.fs.realpath(filename, &path_buf);
+                const realpath = try std.fs.realpath(filename.?, &path_buf);
                 var md_file: File = try std.fs.openFileAbsolute(realpath, .{});
                 md_text = try md_file.readToEndAlloc(alloc, 1e9);
                 md_dir = std.fs.path.dirname(realpath);
             }
             defer alloc.free(md_text);
 
-            // Parse the input text
-            const opts = zd.parser.ParserOpts{
-                .copy_input = false,
-                .verbose = verbose_parsing,
-            };
-            var parser = zd.Parser.init(alloc, opts);
-            defer parser.deinit();
+            // Parse the document
+            const parsed = try parse(alloc, md_text, verbose_parsing);
 
-            var ptimer = zd.utils.Timer.start();
-            try parser.parseMarkdown(md_text);
-            const ptime_s = ptimer.read();
-
-            const md: zd.Block = parser.document;
-
-            if (verbose_parsing) {
-                std.debug.print("AST:\n", .{});
-                md.print(0);
+            // Get the output stream
+            var out_stream: std.io.AnyWriter = undefined;
+            if (r_opts.output) |f| {
+                const outfile: std.fs.File = try std.fs.cwd().createFile(f, .{ .truncate = true });
+                out_stream = outfile.writer().any();
+            } else {
+                out_stream = stdout.any();
             }
 
-            const render_type: RenderType = if (do_console) blk0: {
-                break :blk0 .console;
-            } else if (do_html) blk1: {
-                break :blk1 .html;
-                // } else if (do_format) blk2: {
-                //     break :blk2 .format;
-            } else blk3: {
-                break :blk3 .console;
-            };
-
-            const render_opts = RenderOpts{
-                .kind = render_type,
-                .root_dir = md_dir,
-                .console_width = result.width,
+            // Configure and perform the rendering
+            const method: zd.render.RenderMethod = blk: switch (r_cmd.command) {
+                .console => break :blk .console,
+                .html => break :blk .html,
             };
 
             var rtimer = zd.utils.Timer.start();
-            if (outfile) |outname| {
-                var out_file: File = try std.fs.cwd().createFile(outname, .{ .truncate = true });
-                try render(out_file.writer(), md, render_opts);
-            } else {
-                try render(stdout, md, render_opts);
-            }
+            try zd.render.render(.{
+                .alloc = alloc,
+                .document = parsed.document,
+                .document_dir = md_dir,
+                .out_stream = out_stream,
+                .stdin = r_opts.stdin,
+                .width = r_opts.width,
+                .method = method,
+            });
             const rtime_s = rtimer.read();
 
             if (timeit) {
-                cons.printColor(stdout, .Green, "  Parsed in:   {d:.3} ms\n", .{ptime_s * 1000});
+                cons.printColor(stdout, .Green, "  Parsed in:   {d:.3} ms\n", .{parsed.time_s * 1000});
                 cons.printColor(stdout, .Green, "  Rendered in: {d:.3} ms\n", .{rtime_s * 1000});
             }
             std.process.exit(0);
@@ -296,89 +269,32 @@ pub fn main() !void {
             std.process.exit(0);
         },
     }
-
-    // if (filename) |f| {
-    //     if (std.mem.eql(u8, f, "help")) {
-    //         print_usage(diags);
-    //         std.process.exit(0);
-    //     }
-    // }
-
-    // if (filename == null and !result.stdin) {
-    //     cons.printColor(stdout, .Red, "Error: ", .{});
-    //     cons.printColor(stdout, .White, "No filename provided\n\n", .{});
-    //     print_usage(diags);
-    //     std.process.exit(2);
-    // }
-
 }
 
-const RenderType = enum(u8) {
-    console,
-    html,
-    format,
+const ParseResult = struct {
+    time_s: f64,
+    document: zd.Block,
 };
 
-const RenderOpts = struct {
-    kind: RenderType = .console,
-    root_dir: ?[]const u8 = null,
-    console_width: ?usize = null,
-};
+fn parse(alloc: std.mem.Allocator, input: []const u8, verbose: bool) !ParseResult {
+    // Parse the input text
+    const opts = zd.parser.ParserOpts{
+        .copy_input = false,
+        .verbose = verbose,
+    };
+    var parser = zd.Parser.init(alloc, opts);
+    defer parser.deinit();
 
-fn render(stream: anytype, md: zd.Block, opts: RenderOpts) !void {
-    var arena = std.heap.ArenaAllocator.init(md.allocator());
-    defer arena.deinit(); // Could do this, but no reason to do so
+    var ptimer = zd.utils.Timer.start();
+    try parser.parseMarkdown(input);
+    const ptime_s = ptimer.read();
 
-    switch (opts.kind) {
-        .html => {
-            var h_renderer = htmlRenderer(stream, arena.allocator());
-            defer h_renderer.deinit();
-            try h_renderer.renderBlock(md);
-        },
-        .console => {
-            // Get the terminal size; limit our width to that
-            // Some tools like `fzf --preview` cause the getTerminalSize() to fail, so work around that
-            // Kinda hacky, but :shrug:
-            var columns: usize = 90;
-            const tsize = zd.gfx.getTerminalSize() catch zd.gfx.TermSize{};
-            if (opts.console_width) |width| {
-                columns = width;
-            } else {
-                columns = if (tsize.cols > 0) @min(tsize.cols, 90) else 90;
-            }
+    const md: zd.Block = parser.document;
 
-            const render_opts = zd.render.render_console.RenderOpts{
-                .root_dir = opts.root_dir,
-                .indent = 2,
-                .width = columns,
-                .max_image_cols = columns - 4,
-                .termsize = tsize,
-            };
-            var c_renderer = consoleRenderer(stream, arena.allocator(), render_opts);
-            defer c_renderer.deinit();
-            try c_renderer.renderBlock(md);
-        },
-        .format => {
-            // Get the terminal size; limit our width to that
-            // Some tools like `fzf --preview` cause the getTerminalSize() to fail, so work around that
-            // Kinda hacky, but :shrug:
-            var columns: usize = 90;
-            const tsize = zd.gfx.getTerminalSize() catch zd.gfx.TermSize{};
-            if (opts.console_width) |width| {
-                columns = width;
-            } else {
-                columns = if (tsize.cols > 0) @min(tsize.cols, 90) else 90;
-            }
-
-            const render_opts = zd.render.render_format.RenderOpts{
-                .root_dir = opts.root_dir,
-                .indent = 0,
-                .width = columns,
-                .termsize = tsize,
-            };
-            var formatter = formatRenderer(stream, arena.allocator(), render_opts);
-            defer formatter.deinit();
-            try formatter.renderBlock(md);
-        },
+    if (verbose) {
+        std.debug.print("AST:\n", .{});
+        md.print(0);
     }
+
+    return .{ .time_s = ptime_s, .document = md };
 }
