@@ -60,19 +60,10 @@ const Flags = struct {
     verbose: bool = false,
 
     command: union(enum(u8)) {
-        pub const RenderCmd = struct {
-            command: union(enum) {
-                console: RenderCmdOpts,
-                html: RenderCmdOpts,
-                pub const descriptions = .{
-                    .console = "Render to the console [default]",
-                    .html = "Render to HTML",
-                };
-            },
-        };
-        render: RenderCmd,
-
+        console: RenderCmdOpts,
+        html: RenderCmdOpts,
         format: RenderCmdOpts,
+
         serve: struct {
             root_file: ?[]const u8 = null,
             root_directory: ?[]const u8 = null,
@@ -107,7 +98,8 @@ const Flags = struct {
         },
 
         pub const descriptions = .{
-            .render = "Render a document to either a console (ANSI escaped text) or to HTML",
+            .console = "Render a document as console output (ANSI escaped text)",
+            .html = "Render a document to HTML",
             .format = "Format the document (to stdout, or to given output file)",
             .serve = "Serve up documents from a directory to a localhost HTTP server",
             .install_parsers =
@@ -166,17 +158,12 @@ pub fn main() !void {
     const verbose_parsing: bool = result.verbose;
 
     switch (result.command) {
-        .format => |r_opts| {
-            try handleRender(alloc, &diags, &colorscheme, .format, r_opts, verbose_parsing, timeit);
-            std.process.exit(0);
-        },
-        .render => |r_cmd| {
-            const r_opts: RenderCmdOpts = switch (r_cmd.command) {
-                inline else => |c| c,
-            };
-            const method: zd.render.RenderMethod = switch (r_cmd.command) {
+        .console, .html, .format => |r_opts| {
+            const method: zd.render.RenderMethod = switch (result.command) {
                 .console => .console,
                 .html => .html,
+                .format => .format,
+                else => unreachable,
             };
             try handleRender(alloc, &diags, &colorscheme, method, r_opts, verbose_parsing, timeit);
             std.process.exit(0);

@@ -13,6 +13,7 @@ local config = {
   job_id = nil,
   src_buf = nil,
   dest_buf = nil,
+  win_width = nil,
 }
 
 -- Render the file using a system command ('/path/to/zigdown -c filename')
@@ -48,8 +49,10 @@ function M.render_file(filename)
   vim.api.nvim_buf_attach(config.dest_buf, false, {
     on_detach = function()
       config.dest_buf = nil
+      config.win_width = nil
     end,
   })
+  config.win_width = vim.api.nvim_win_get_width(config.dest_win)
 
   -- Create a tmp output dir (sorry, Linux only right now)
   local cbs = {
@@ -64,7 +67,11 @@ function M.render_file(filename)
   }
 
   local zd_bin = utils.path_append(M.root, "zig-out/bin/zigdown")
-  local zd_cmd = { zd_bin, "-c", filename }
+  local zd_cmd = { zd_bin, "console", filename }
+  if config.win_width ~= nil then
+    table.insert(zd_cmd, "-w")
+    table.insert(zd_cmd, config.win_width)
+  end
   job_id = vim.fn.termopen(zd_cmd, cbs)
 end
 

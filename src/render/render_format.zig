@@ -71,8 +71,9 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         const Self = @This();
         const RenderError = OutStream.Error || ErrorSet;
         const RenderMode = enum(u8) {
-            normal,
+            prerender,
             scratch,
+            final,
         };
         stream: OutStream,
         opts: RenderOpts = undefined,
@@ -85,7 +86,9 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         root: ?Block = null,
         scratch: ArrayList(u8), // Scratch buffer for pre-rendering (to find length)
         scratch_stream: ArrayList(u8).Writer = undefined,
-        mode: RenderMode = .normal,
+        prerender: ArrayList(u8) = undefined,
+        prerender_stream: ArrayList(u8).Writer = undefined,
+        mode: RenderMode = .prerender,
 
         pub fn init(stream: OutStream, alloc: Allocator, opts: RenderOpts) Self {
             // Initialize the TreeSitter query functionality in case we need it
@@ -96,6 +99,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
                 .alloc = alloc,
                 .leader_stack = ArrayList(Text).init(alloc),
                 .scratch = ArrayList(u8).init(alloc),
+                .prerender = ArrayList(u8).init(alloc),
             };
         }
 
@@ -103,6 +107,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
             self.leader_stack.deinit();
             ts_queries.deinit();
             self.scratch.deinit();
+            self.prerender.deinit();
         }
 
         /// Configure the terminal to start printing with the given (single) style
@@ -144,9 +149,9 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         /// Write an array of bytes to the underlying writer, and update the current column
         pub fn write(self: *Self, bytes: []const u8) void {
             switch (self.mode) {
-                .normal => {
-                    self.stream.writeAll(bytes) catch |err| {
-                        errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
+                .prerender => {
+                    self.prerender_stream.writeAll(bytes) catch |err| {
+                        errorMsg(@src(), "Unable to write to prerender buffer! {s}\n", .{@errorName(err)});
                     };
                     self.column += std.unicode.utf8CountCodepoints(bytes) catch bytes.len;
                 },
@@ -155,20 +160,31 @@ pub fn FormatRenderer(comptime OutStream: type) type {
                         errorMsg(@src(), "Unable to write to scratch! {s}\n", .{@errorName(err)});
                     };
                 },
+                .final => {
+                    self.stream.writeAll(bytes) catch |err| {
+                        errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
+                    };
+                    self.column += std.unicode.utf8CountCodepoints(bytes) catch bytes.len;
+                },
             }
         }
 
         /// Write an array of bytes to the underlying writer, without updating the current column
         pub fn writeno(self: Self, bytes: []const u8) void {
             switch (self.mode) {
-                .normal => {
-                    self.stream.writeAll(bytes) catch |err| {
-                        errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
+                .prerender => {
+                    self.prerender_stream.writeAll(bytes) catch |err| {
+                        errorMsg(@src(), "Unable to write to prerender buffer! {s}\n", .{@errorName(err)});
                     };
                 },
                 .scratch => {
                     self.scratch_stream.writeAll(bytes) catch |err| {
                         errorMsg(@src(), "Unable to write to scratch! {s}\n", .{@errorName(err)});
+                    };
+                },
+                .final => {
+                    self.stream.writeAll(bytes) catch |err| {
+                        errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
                     };
                 },
             }
@@ -187,14 +203,19 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         /// Print the format and args to the output stream, without updating the current column
         pub fn printno(self: *Self, comptime fmt: []const u8, args: anytype) void {
             switch (self.mode) {
-                .normal => {
-                    self.stream.print(fmt, args) catch |err| {
-                        errorMsg(@src(), "Unable to print! {s}\n", .{@errorName(err)});
+                .prerender => {
+                    self.prerender_stream.print(fmt, args) catch |err| {
+                        errorMsg(@src(), "Unable to print to prerender buffer! {s}\n", .{@errorName(err)});
                     };
                 },
                 .scratch => {
                     self.scratch_stream.print(fmt, args) catch |err| {
                         errorMsg(@src(), "Unable to print to scratch! {s}\n", .{@errorName(err)});
+                    };
+                },
+                .final => {
+                    self.stream.print(fmt, args) catch |err| {
+                        errorMsg(@src(), "Unable to print! {s}\n", .{@errorName(err)});
                     };
                 },
             }
@@ -209,7 +230,23 @@ pub fn FormatRenderer(comptime OutStream: type) type {
 
         /// Complete the rendering
         fn renderEnd(self: *Self) void {
+            // We might have trailing whitespace due to how we wrapped text
+            // Remove it before dumping the final buffer to the output stream
+            var i: usize = 0;
+            while (i < self.prerender.items.len - 1) {
+                const c: u8 = self.prerender.items[i];
+                const nc: u8 = self.prerender.items[i + 1];
+                if (c == ' ' and nc == '\n')
+                    _ = self.prerender.orderedRemove(i);
+                i += 1;
+            }
+            if (self.prerender.getLastOrNull()) |c| {
+                if (c == ' ')
+                    _ = self.prerender.pop();
+            }
             self.column = 0;
+            self.mode = .final;
+            self.write(self.prerender.items);
         }
 
         /// Write the given text 'count' times
@@ -301,6 +338,8 @@ pub fn FormatRenderer(comptime OutStream: type) type {
         /// Render a generic Block (may be a Container or a Leaf)
         pub fn renderBlock(self: *Self, block: Block) RenderError!void {
             if (self.root == null) {
+                std.debug.assert(block.isContainer());
+                std.debug.assert(block.Container.content == .Document);
                 self.root = block;
             }
             switch (block) {
@@ -338,6 +377,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
 
         /// Render a Document block (contains only other blocks)
         pub fn renderDocument(self: *Self, doc: Container) !void {
+            self.prerender_stream = self.prerender.writer();
             self.renderBegin();
             for (doc.children.items, 0..) |block, i| {
                 try self.renderBlock(block);
@@ -651,7 +691,7 @@ pub fn FormatRenderer(comptime OutStream: type) type {
             for (leaf.inlines.items) |item| {
                 self.renderInline(item);
             }
-            self.mode = .normal;
+            self.mode = .prerender;
             self.wrapText(self.scratch.items);
             self.scratch.clearRetainingCapacity();
         }
@@ -696,18 +736,25 @@ pub fn FormatRenderer(comptime OutStream: type) type {
             self.write("](");
             self.write(link.url);
             self.write(")");
+
+            if (self.mode == .scratch) {
+                self.dumpScratchBuffer();
+            }
         }
 
         fn renderImage(self: *Self, image: inls.Image) void {
             if (self.mode == .scratch) {
                 self.dumpScratchBuffer();
             }
-
             self.write("![");
             for (image.alt.items) |text| {
                 self.renderText(text);
             }
             self.print("]({s})", .{image.src});
+
+            if (self.mode == .scratch) {
+                self.dumpScratchBuffer();
+            }
         }
 
         fn dumpScratchBuffer(self: *Self) void {
@@ -717,12 +764,20 @@ pub fn FormatRenderer(comptime OutStream: type) type {
             // and write each one out appropriately.
             // ("Word" here can also be an image, link, etc. - any Inline)
             if (self.scratch.items.len == 0) return;
-            self.mode = .normal;
-            if (self.column > 0) self.write(" ");
-            self.wrapText(self.scratch.items);
+            self.mode = .prerender;
+
+            if (self.column > self.opts.indent and self.column + self.scratch.items.len + self.opts.indent > self.opts.width) {
+                self.renderBreak();
+                self.writeLeaders();
+            }
+            // else if (self.column > 0) {
+            //     self.write(" ");
+            // }
+            self.write(self.scratch.items);
+
             self.scratch.clearRetainingCapacity();
             self.mode = .scratch;
-            if (self.column > 0) self.write(" ");
+            // if (self.column > 0) self.write(" ");
         }
     };
 }
