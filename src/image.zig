@@ -275,7 +275,7 @@ test "Display image" {
     const stdout = std.io.getStdOut().writer();
     std.debug.print("Rendering Zero the Ziguana here:\n", .{});
 
-    try sendImagePNG(stdout, alloc, "test/zig-zero.png", 100, 60);
+    try sendImagePNG(stdout, alloc, "src/assets/zig-zero.png", 100, 60);
 
     std.debug.print("\n--------------------------------\n", .{});
 }

@@ -55,7 +55,7 @@ root:
 
 # Images
 
-![Image Alt](zig-zero.png) [Click Me!](https://google.com)
+![Image Alt](../src/assets/zig-zero.png) [Click Me!](https://google.com)
 
 Rendered to the console using the
 [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/).

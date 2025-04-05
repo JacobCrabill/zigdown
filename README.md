@@ -4,7 +4,7 @@
 <This block will be rendered as a Table of Contents>
 ```
 
-![Zig is Awesome!](test/zig-zero.png)
+![Zig is Awesome!](src/assets/zig-zero.png)
 
 Zigdown, inspired by [Glow](https://github.com/charmbracelet/glow) and
 [mdcat](https://github.com/swsnr/mdcat), is a tool to parse and render Markdown-like content to the

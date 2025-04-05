@@ -30,7 +30,7 @@ pub fn main() !void {
         \\>
         \\> foo
         \\
-        \\Image: ![Some Image](../test/zig-zero.png)
+        \\Image: ![Some Image](assets/zig-zero.png)
         \\
         \\Link: [Click Me!](https://google.com)
         \\

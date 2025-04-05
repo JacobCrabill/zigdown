@@ -7,4 +7,4 @@ pub const error_page =
     \\</body></html>
 ;
 
-pub const favicon = @embedFile("imgs/zig-zero.png");
+pub const favicon = @embedFile("../assets/zig-zero.png");
