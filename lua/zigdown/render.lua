@@ -70,7 +70,7 @@ function M.render_file(filename)
   local zd_cmd = { zd_bin, "console", filename }
   if config.win_width ~= nil then
     table.insert(zd_cmd, "-w")
-    table.insert(zd_cmd, config.win_width)
+    table.insert(zd_cmd, math.min(config.win_width - 4, 100))
   end
   job_id = vim.fn.termopen(zd_cmd, cbs)
 end
