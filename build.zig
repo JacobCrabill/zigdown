@@ -181,7 +181,7 @@ pub fn build(b: *std.Build) !void {
     const wasm_target = b.resolveTargetQuery(.{
         .cpu_arch = .wasm32,
         .os_tag = .freestanding,
-        // .abi = .none,
+        .abi = .musl,
     });
 
     var wasm_deps: std.ArrayList(Dependency) = try getDependencies(b, wasm_target, wasm_optimize);
@@ -204,11 +204,7 @@ pub fn build(b: *std.Build) !void {
         .name = "zigdown-wasm",
         .root_source_file = b.path("src/wasm_main.zig"),
         .optimize = .ReleaseSmall,
-        .target = b.resolveTargetQuery(.{
-            .cpu_arch = .wasm32,
-            .os_tag = .freestanding,
-            // .abi = .gnu,
-        }),
+        .target = wasm_target,
         .link_libc = true,
     });
     wasm.entry = .disabled;

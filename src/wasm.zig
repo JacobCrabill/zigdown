@@ -17,25 +17,33 @@ pub const Imports = struct {
 /// Provides console logging functionality in the browser
 pub const Console = struct {
     pub const Logger = struct {
-        pub const Error = error{};
-        pub const Writer = std.io.Writer(void, Error, write_impl);
-
-        fn write_impl(_: void, bytes: []const u8) Error!usize {
+        fn writeFn(bytes: []const u8) anyerror!usize {
             Imports.jsConsoleLogWrite(bytes.ptr, bytes.len);
             return bytes.len;
         }
-    };
 
-    const logger = Logger.Writer{ .context = {} };
+        /// Returns an AnyWriter suitable for use in the Zigdown render APIs
+        pub inline fn any(self: *const Logger) std.io.AnyWriter {
+            return .{
+                .context = self,
+                .writeFn = typeErasedWriteFn,
+            };
+        }
+
+        fn typeErasedWriteFn(_: *const anyopaque, bytes: []const u8) anyerror!usize {
+            return writeFn(bytes);
+        }
+    };
+    const logger = Logger{};
 
     /// Write formatted data to the JS buffer
     pub fn write(bytes: []const u8) void {
-        logger.write(bytes) catch return;
+        logger.any().write(bytes) catch return;
     }
 
     /// Write formatted data to the JS buffer
     pub fn print(comptime format: []const u8, args: anytype) void {
-        logger.print(format, args) catch return;
+        logger.any().print(format, args) catch return;
     }
 
     /// Flush the stream (tell JS to dump the buffer to the console)
@@ -52,19 +60,27 @@ pub const Console = struct {
 
 pub const Renderer = struct {
     pub const Impl = struct {
-        pub const Error = error{};
-        pub const Writer = std.io.Writer(void, Error, write);
-
-        fn write(_: void, bytes: []const u8) Error!usize {
+        fn writeFn(bytes: []const u8) anyerror!usize {
             Imports.jsHtmlBufferWrite(bytes.ptr, bytes.len);
             return bytes.len;
         }
-    };
 
-    pub const writer = Impl.Writer{ .context = {} };
+        /// Returns an AnyWriter suitable for use in the Zigdown render APIs
+        pub inline fn any(self: *const Impl) std.io.AnyWriter {
+            return .{
+                .context = self,
+                .writeFn = typeErasedWriteFn,
+            };
+        }
+
+        fn typeErasedWriteFn(_: *const anyopaque, bytes: []const u8) anyerror!usize {
+            return Impl.writeFn(bytes);
+        }
+    };
+    pub const writer = Impl{};
 
     pub fn log(comptime format: []const u8, args: anytype) void {
-        writer.print(format, args) catch return;
+        writer.any().print(format, args) catch return;
         Imports.jsHtmlBufferFlush();
     }
 

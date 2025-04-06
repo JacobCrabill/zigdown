@@ -259,3 +259,8 @@ ul sup {
     line-height: 0;
     vertical-align: super;
 }
+
+li.task_item {
+  list-style: none outside none
+  list-style-image: none
+}

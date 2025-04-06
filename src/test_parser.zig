@@ -8,7 +8,6 @@ const TextStyle = utils.TextStyle;
 const Parser = parser.Parser;
 
 const HtmlRenderer = render.HtmlRenderer;
-const htmlRenderer = render.htmlRenderer;
 
 const ConsoleRenderer = render.ConsoleRenderer;
 const consoleRenderer = render.consoleRenderer;
@@ -67,7 +66,7 @@ pub fn main() !void {
     _ = text2;
     const text = text1;
 
-    const stdout = std.io.getStdOut().writer();
+    const stdout = std.io.getStdOut().writer().any();
     var style: TextStyle = TextStyle{ .fg_color = .Green, .bold = true };
     cons.printStyled(stdout, style, "\n────────────────── Test Document ──────────────────\n", .{});
     try stdout.print("{s}\n", .{text});
@@ -86,7 +85,7 @@ pub fn main() !void {
     p.document.print(0);
     cons.printStyled(stdout, style, "───────────────────────────────────────────────────\n", .{});
 
-    var hrenderer = htmlRenderer(stdout, alloc);
+    var hrenderer = HtmlRenderer.init(stdout, alloc);
     defer hrenderer.deinit();
 
     style.fg_color = .Cyan;
@@ -94,7 +93,7 @@ pub fn main() !void {
     try hrenderer.renderBlock(p.document);
     cons.printStyled(stdout, style, "───────────────────────────────────────────────────\n", .{});
 
-    var crenderer = consoleRenderer(stdout, alloc, .{ .width = 70 });
+    var crenderer = ConsoleRenderer.init(alloc, .{ .out_stream = stdout, .width = 70 });
     defer crenderer.deinit();
 
     style.fg_color = .Red;

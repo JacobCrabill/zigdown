@@ -4,9 +4,6 @@ const stdlib = @import("wasm/stdlib.zig");
 const wasm = zd.wasm;
 
 const ArrayList = std.ArrayList;
-const htmlRenderer = zd.htmlRenderer;
-const Parser = zd.Parser;
-const TokenList = zd.TokenList;
 
 const alloc = std.heap.wasm_allocator;
 
@@ -35,7 +32,8 @@ export fn renderToHtml(md_ptr: [*:0]u8) void {
     };
 
     Console.log("Rendering...\n", .{});
-    var h_renderer = htmlRenderer(Renderer.writer, alloc);
+
+    var h_renderer = zd.HtmlRenderer.init(Renderer.writer.any(), alloc);
     defer h_renderer.deinit();
     h_renderer.renderBlock(parser.document) catch |err| {
         Console.log("[render] Caught Zig error: {any}\n", .{err});

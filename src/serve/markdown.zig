@@ -98,7 +98,7 @@ fn renderMarkdownImpl(path: []const u8) ?[]const u8 {
     defer buf.deinit();
 
     // Render slide
-    var h_renderer = zd.htmlRenderer(buf.writer(), alloc);
+    var h_renderer = zd.HtmlRenderer.init(buf.writer().any(), alloc);
     defer h_renderer.deinit();
 
     h_renderer.renderBlock(parser.document) catch |err| {

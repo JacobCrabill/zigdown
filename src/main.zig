@@ -8,9 +8,6 @@ const os = std.os;
 
 const cons = zd.cons;
 const TextStyle = zd.utils.TextStyle;
-const htmlRenderer = zd.htmlRenderer;
-const consoleRenderer = zd.consoleRenderer;
-const formatRenderer = zd.formatRenderer;
 const Parser = zd.Parser;
 const TokenList = zd.TokenList;
 
@@ -169,7 +166,6 @@ pub fn main() !void {
             std.process.exit(0);
         },
         .serve => |s_opts| {
-            std.debug.print("Serve command!\n", .{});
             const serve = @import("serve.zig");
             const opts = serve.ServeOpts{
                 .root_file = s_opts.root_file,
@@ -180,7 +176,6 @@ pub fn main() !void {
             std.process.exit(0);
         },
         .install_parsers => |ip_opts| {
-            std.debug.print("Install Parsers command!\n", .{});
             zd.ts_queries.init(alloc);
             defer zd.ts_queries.deinit();
 
@@ -245,6 +240,8 @@ fn handleRender(
     const stdout = std.io.getStdOut().writer();
     const filename: ?[]const u8 = r_opts.positional.file;
 
+    // Read the Markdown document to be rendered
+    // This will either come from stdin, or from a file
     var md_text: []const u8 = undefined;
     var md_dir: ?[]const u8 = null;
     if (r_opts.stdin) {
@@ -284,7 +281,6 @@ fn handleRender(
         .document = parsed.parser.document,
         .document_dir = md_dir,
         .out_stream = out_stream,
-        .stdin = r_opts.stdin,
         .width = r_opts.width,
         .method = method,
     });
