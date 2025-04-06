@@ -1,4 +1,4 @@
-pub const style_css = @embedFile("style.css");
+pub const style_css = @embedFile("../assets/style.css");
 
 pub const error_page =
     \\<html><body>

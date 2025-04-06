@@ -20,7 +20,7 @@ const Container = blocks.Container;
 const Leaf = blocks.Leaf;
 const Inline = inls.Inline;
 
-const css = @embedFile("style.css");
+const css = @embedFile("../assets/style.css");
 
 const google_fonts =
     \\ <link href="https://fonts.googleapis.com/css2?family=Ubuntu+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
@@ -140,14 +140,10 @@ pub const HtmlRenderer = struct {
 
     /// Render a Quote block
     fn renderQuote(self: *Self, block: Container) !void {
-        // const q = block.content.Quote;
-
         self.print("\n<blockquote>", .{});
-
         for (block.children.items) |child| {
             try self.renderBlock(child);
         }
-
         self.print("</blockquote>\n", .{});
     }
 
@@ -155,8 +151,8 @@ pub const HtmlRenderer = struct {
     fn renderList(self: *Self, list: Container) !void {
         switch (list.content.List.kind) {
             .ordered => self.print("<ol start={d}>\n", .{list.content.List.start}),
-            .unordered => self.print("<ul>\n", .{}),
-            .task => self.print("<br>\n", .{}),
+            .unordered => self.write("<ul>\n"),
+            .task => self.write("<ul class=\"task_list\">\n"),
         }
 
         // Although Lists should only contain ListItems, we are simply
@@ -166,27 +162,21 @@ pub const HtmlRenderer = struct {
             switch (list.content.List.kind) {
                 .ordered, .unordered => self.write("<li>\n"),
                 .task => {
-                    self.write("<li class=\"task_item\">\n");
                     if (item.Container.content.ListItem.checked) {
-                        self.write("<input type=checkbox checked=true>\n");
+                        self.write("<li class=\"checked\">\n");
                     } else {
-                        self.write("<input type=checkbox>\n");
+                        self.write("<li class=\"unchecked\">\n");
                     }
                 },
             }
 
             try self.renderBlock(item);
-
-            switch (list.content.List.kind) {
-                .ordered, .unordered => self.print("</li>\n", .{}),
-                .task => self.print("</li><br>\n", .{}),
-            }
+            self.write("</li>\n");
         }
 
         switch (list.content.List.kind) {
-            .ordered => self.print("</ol>\n", .{}),
-            .unordered => self.print("</ul>\n", .{}),
-            .task => self.print("\n", .{}),
+            .ordered => self.write("</ol>\n"),
+            .unordered, .task => self.write("</ul>\n"),
         }
     }
 
