@@ -30,17 +30,17 @@ pub fn main() !void {
     const printer = Printer.init();
     printer.fmt("\r\x1b[0K", .{}); // beginning of line and clear to end of line
 
-    for (builtin.test_functions) |t| {
+    for (builtin.test_functions, 0..) |t, idx| {
         if (isSetup(t)) {
             current_test = friendlyName(t.name);
             t.func() catch |err| {
-                printer.status(.fail, "\nsetup \"{s}\" failed: {}\n", .{ t.name, err });
+                printer.status(.fail, "\n[{d}] setup \"{s}\" failed: {}\n", .{ idx, t.name, err });
                 return err;
             };
         }
     }
 
-    for (builtin.test_functions) |t| {
+    for (builtin.test_functions, 0..) |t, idx| {
         if (isSetup(t) or isTeardown(t)) {
             continue;
         }
@@ -69,7 +69,7 @@ pub fn main() !void {
 
         if (std.testing.allocator_instance.deinit() == .leak) {
             leak += 1;
-            printer.status(.fail, "\n{s}\n\"{s}\" - Memory Leak\n{s}\n", .{ BORDER, friendly_name, BORDER });
+            printer.status(.fail, "\n{s}\n[{d}] \"{s}\" - Memory Leak\n{s}\n", .{ BORDER, idx, friendly_name, BORDER });
         }
 
         if (result) |_| {
@@ -82,7 +82,7 @@ pub fn main() !void {
             else => {
                 status = .fail;
                 fail += 1;
-                printer.status(.fail, "\n{s}\n\"{s}\" - {s}\n{s}\n", .{ BORDER, friendly_name, @errorName(err), BORDER });
+                printer.status(.fail, "\n{s}\n[{d}] \"{s}\" - {s}\n{s}\n", .{ BORDER, idx, friendly_name, @errorName(err), BORDER });
                 if (@errorReturnTrace()) |trace| {
                     std.debug.dumpStackTrace(trace.*);
                 }
@@ -94,9 +94,9 @@ pub fn main() !void {
 
         if (env.verbose) {
             const ms = @as(f64, @floatFromInt(ns_taken)) / 1_000_000.0;
-            printer.status(status, "{s} ({d:.2}ms)\n", .{ friendly_name, ms });
+            printer.status(status, "[{d}] {s} ({d:.2}ms)\n", .{ idx, friendly_name, ms });
         } else {
-            printer.status(status, ".", .{});
+            printer.status(status, "[{d}]", .{idx});
         }
     }
 
@@ -286,7 +286,6 @@ pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_
     if (current_test) |ct| {
         std.debug.print("\x1b[31m{s}\npanic running \"{s}\"\n{s}\x1b[0m\n", .{ BORDER, ct, BORDER });
     }
-    // implemented in bleeding-edge zig (0.14-dev)
     _ = error_return_trace;
     std.debug.defaultPanic(msg, ret_addr);
 }

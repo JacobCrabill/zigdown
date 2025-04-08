@@ -5,6 +5,8 @@ const blocks = @import("../blocks.zig");
 const inls = @import("../inlines.zig");
 const leaves = @import("../leaves.zig");
 const containers = @import("../containers.zig");
+
+const debug = @import("../debug.zig");
 const utils = @import("../utils.zig");
 const syntax = @import("../syntax.zig");
 const ts_queries = @import("../ts_queries.zig");
@@ -71,7 +73,7 @@ pub const HtmlRenderer = struct {
     fn write(self: *Self, bytes: []const u8) void {
         self.stream.writeAll(bytes) catch |err| {
             if (!wasm.is_wasm) {
-                std.debug.print("Cannot write to stream: {any}\n", .{err});
+                debug.print("Cannot write to stream: {any}\n", .{err});
             }
             @panic("Cannot Render - Quitting");
         };
@@ -80,7 +82,7 @@ pub const HtmlRenderer = struct {
     fn print(self: *Self, comptime fmt: []const u8, args: anytype) void {
         self.stream.print(fmt, args) catch |err| {
             if (!wasm.is_wasm) {
-                std.debug.print("Cannot write to stream: {any}\n", .{err});
+                debug.print("Cannot write to stream: {any}\n", .{err});
             }
             @panic("Cannot Render - Quitting");
         };

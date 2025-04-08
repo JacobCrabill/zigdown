@@ -119,6 +119,7 @@ pub fn main() !void {
         // Windows needs special handling for UTF-8
         _ = std.os.windows.kernel32.SetConsoleOutputCP(65001);
     }
+    zd.debug.setStream(std.io.getStdErr().writer().any());
 
     var gpa = std.heap.GeneralPurposeAllocator(.{ .never_unmap = true }){};
 
@@ -221,7 +222,7 @@ fn parse(alloc: std.mem.Allocator, input: []const u8, verbose: bool) !ParseResul
     const ptime_s = ptimer.read();
 
     if (verbose) {
-        std.debug.print("AST:\n", .{});
+        zd.debug.print("AST:\n", .{});
         parser.document.print(0);
     }
 
@@ -237,7 +238,7 @@ fn handleRender(
     verbose_parsing: bool,
     timeit: bool,
 ) !void {
-    const stdout = std.io.getStdOut().writer();
+    const stdout = std.io.getStdOut().writer().any();
     const filename: ?[]const u8 = r_opts.positional.file;
 
     // Read the Markdown document to be rendered
@@ -271,7 +272,7 @@ fn handleRender(
         const outfile: std.fs.File = try std.fs.cwd().createFile(f, .{ .truncate = true });
         out_stream = outfile.writer().any();
     } else {
-        out_stream = stdout.any();
+        out_stream = stdout;
     }
 
     // Configure and perform the rendering

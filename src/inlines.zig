@@ -1,5 +1,6 @@
 const std = @import("std");
 const utils = @import("utils.zig");
+const debug = @import("debug.zig");
 
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
@@ -53,7 +54,7 @@ pub const InlineData = union(InlineType) {
         switch (self) {
             .codespan, .linebreak => {
                 printIndent(depth);
-                std.debug.print("Inline {s}\n", .{@tagName(self)});
+                debug.print("Inline {s}\n", .{@tagName(self)});
             },
             inline else => |item| item.print(depth),
         }
@@ -98,17 +99,17 @@ pub const Text = struct {
 
     pub fn print(self: Text, depth: u8) void {
         printIndent(depth);
-        std.debug.print("Text: '{s}' [Style: ", .{self.text});
-        std.debug.print("fg: {s}, bg: {s} ", .{ @tagName(self.style.fg_color), @tagName(self.style.bg_color) });
+        debug.print("Text: '{s}' [Style: ", .{self.text});
+        debug.print("fg: {s}, bg: {s} ", .{ @tagName(self.style.fg_color), @tagName(self.style.bg_color) });
         inline for (@typeInfo(TextStyle).Struct.fields) |field| {
             const T: type = @TypeOf(@field(self.style, field.name));
             if (T == bool) {
                 if (@field(self.style, field.name)) {
-                    std.debug.print("{s}", .{field.name});
+                    debug.print("{s}", .{field.name});
                 }
             }
         }
-        std.debug.print("]\n", .{});
+        debug.print("]\n", .{});
     }
 
     pub fn deinit(self: *Text) void {
@@ -145,7 +146,7 @@ pub const Link = struct {
 
     pub fn print(self: Link, depth: u8) void {
         printIndent(depth);
-        std.debug.print("Link to {s}\n", .{self.url});
+        debug.print("Link to {s}\n", .{self.url});
         for (self.text.items) |text| {
             text.print(depth + 1);
         }
@@ -193,7 +194,7 @@ pub const Image = struct {
 
     pub fn print(self: Image, depth: u8) void {
         printIndent(depth);
-        std.debug.print("Image: {s}\n", .{self.src});
+        debug.print("Image: {s}\n", .{self.src});
     }
 };
 
@@ -205,7 +206,7 @@ pub const Autolink = struct {
 
     pub fn print(self: Autolink, depth: u8) void {
         printIndent(depth);
-        std.debug.print("Autolink: {s}\n", .{self.url});
+        debug.print("Autolink: {s}\n", .{self.url});
     }
 
     pub fn deinit(self: *Autolink) void {

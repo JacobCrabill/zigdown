@@ -6,6 +6,7 @@ const blocks = @import("blocks.zig");
 const containers = @import("containers.zig");
 const leaves = @import("leaves.zig");
 const inls = @import("inlines.zig");
+const debug = @import("debug.zig");
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
@@ -104,7 +105,7 @@ pub const Vec2i = struct {
 pub fn printIndent(depth: u8) void {
     var i: u8 = 0;
     while (i < depth) : (i += 1) {
-        std.debug.print("│ ", .{});
+        debug.print("│ ", .{});
     }
 }
 
@@ -316,6 +317,17 @@ pub fn isDirectiveToC(directive: []const u8) bool {
     return false;
 }
 
+/// Given a string, return the substring after any leading whitespace
+pub fn trimLeadingWhitespace(line: []const u8) []const u8 {
+    for (line, 0..) |c, i| {
+        switch (c) {
+            ' ', '\n' => {},
+            else => return line[i..],
+        }
+    }
+    return line;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Unit Tests
 ////////////////////////////////////////////////////////////////////////////////
@@ -366,15 +378,26 @@ test "Table Of Contents" {
     toc.close();
     defer toc.deinit();
 
-    std.debug.print("Table of Contents\n", .{});
+    var buf = ArrayList(u8).init(alloc);
+    defer buf.deinit();
+    debug.setStream(buf.writer().any());
     toc.print(1);
 
-    //const html = @import("render/render_html.zig");
-    //var buffer = ArrayList(u8).init(alloc);
-    //defer buffer.deinit();
-    //const writer = buffer.writer();
-
-    //var renderer = html.HtmlRenderer(@TypeOf(writer)).init(writer, alloc);
-    //defer renderer.deinit();
-    //try renderer.renderBlock(toc);
+    const expected =
+        \\│ Container: open: false, type: List with 2 children
+        \\│ │ Container: open: false, type: ListItem with 2 children
+        \\│ │ │ Leaf: open: false, type: Paragraph
+        \\│ │ │ Container: open: false, type: List with 2 children
+        \\│ │ │ │ Container: open: false, type: ListItem with 2 children
+        \\│ │ │ │ │ Leaf: open: false, type: Paragraph
+        \\│ │ │ │ │ Container: open: false, type: List with 1 children
+        \\│ │ │ │ │ │ Container: open: false, type: ListItem with 1 children
+        \\│ │ │ │ │ │ │ Leaf: open: false, type: Paragraph
+        \\│ │ │ │ Container: open: false, type: ListItem with 1 children
+        \\│ │ │ │ │ Leaf: open: false, type: Paragraph
+        \\│ │ Container: open: false, type: ListItem with 1 children
+        \\│ │ │ Leaf: open: false, type: Paragraph
+        \\
+    ;
+    try std.testing.expectEqualStrings(expected, buf.items);
 }

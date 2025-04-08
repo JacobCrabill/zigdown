@@ -1,6 +1,8 @@
 const std = @import("std");
 const utils = @import("utils.zig");
 
+const AnyWriter = std.io.AnyWriter;
+
 const Color = utils.Color;
 const Style = utils.Style;
 const TextStyle = utils.TextStyle;
@@ -109,16 +111,6 @@ pub const end_strike = ansi ++ "[29m";
 pub const hyperlink = ansi ++ "]8;;";
 pub const link_end = ansi ++ "\\";
 
-/// TODO: Turn this file into a module with a global stream instance
-/// so we can do:
-///   const Console = @import("console.zig");
-///   const cons = Console{ .stream = std.debug };
-const DebugStream = struct {
-    pub fn print(_: DebugStream, comptime fmt: []const u8, args: anytype) void {
-        std.debug.print(fmt, args);
-    }
-};
-
 pub fn getFgColor(color: Color) []const u8 {
     return switch (color) {
         .Black => fg_black,
@@ -160,17 +152,17 @@ pub fn getBgColor(color: Color) []const u8 {
 }
 
 /// Configure the terminal to start printing with the given foreground color
-pub fn startFgColor(stream: anytype, color: Color) void {
+pub fn startFgColor(stream: AnyWriter, color: Color) void {
     stream.print("{s}", .{getFgColor(color)}) catch unreachable;
 }
 
 /// Configure the terminal to start printing with the given background color
-pub fn startBgColor(stream: anytype, color: Color) void {
+pub fn startBgColor(stream: AnyWriter, color: Color) void {
     stream.print("{s}", .{getBgColor(color)}) catch unreachable;
 }
 
 /// Configure the terminal to start printing with the given (single) style
-pub fn startStyle(stream: anytype, style: Style) void {
+pub fn startStyle(stream: AnyWriter, style: Style) void {
     switch (style) {
         .Bold => stream.print(text_bold, .{}) catch unreachable,
         .Italic => stream.print(text_italic, .{}) catch unreachable,
@@ -184,7 +176,7 @@ pub fn startStyle(stream: anytype, style: Style) void {
 }
 
 /// Configure the terminal to start printing one or more styles with color
-pub fn startStyles(stream: anytype, style: TextStyle) void {
+pub fn startStyles(stream: AnyWriter, style: TextStyle) void {
     if (style.bold) stream.print(text_bold, .{}) catch unreachable;
     if (style.italic) stream.print(text_italic, .{}) catch unreachable;
     if (style.underline) stream.print(text_underline, .{}) catch unreachable;
@@ -204,28 +196,22 @@ pub fn startStyles(stream: anytype, style: TextStyle) void {
 }
 
 /// Reset all style in the terminal
-pub fn resetStyle(stream: anytype) void {
+pub fn resetStyle(stream: AnyWriter) void {
     stream.print(ansi_end, .{}) catch unreachable;
 }
 
 /// Print the text using the given color
-pub fn printColor(stream: anytype, color: Color, comptime fmt: []const u8, args: anytype) void {
+pub fn printColor(stream: AnyWriter, color: Color, comptime fmt: []const u8, args: anytype) void {
     startFgColor(stream, color);
     stream.print(fmt, args) catch unreachable;
     resetStyle(stream);
 }
 
 /// Print the text using the given style description
-pub fn printStyled(stream: anytype, style: TextStyle, comptime fmt: []const u8, args: anytype) void {
+pub fn printStyled(stream: AnyWriter, style: TextStyle, comptime fmt: []const u8, args: anytype) void {
     startStyles(stream, style);
     stream.print(fmt, args) catch unreachable;
     resetStyle(stream);
-}
-
-test "styled printing" {
-    const stream = DebugStream{};
-    const style = TextStyle{ .bg_color = .Yellow, .fg_color = .Black, .blink = true, .bold = true };
-    printStyled(stream, style, "Hello, {s} World!\n", .{"Cruel"});
 }
 
 // ====================================================
@@ -328,124 +314,3 @@ pub const BoldBox = Box{
     .bj = "┻",
     .cj = "╋",
 };
-
-// ====================================================
-// Functions to print boxes
-// ----------------------------------------------------
-
-/// Wrapper function <stream>.print to catch and discard any errors
-fn print(stream: anytype, comptime fmt: []const u8, args: anytype) void {
-    stream.print(fmt, args) catch return;
-}
-
-/// Wrapper function to print a single object (i.e. char) as a string, discarding any errors
-fn printC(stream: anytype, c: anytype) void {
-    stream.print("{s}", .{c}) catch return;
-}
-
-/// Print a box with a given width and height, using the given style
-pub fn printBox(stream: anytype, str: []const u8, width: usize, height: usize, style: Box, text_style: TextStyle) void {
-    const len: usize = str.len;
-    const w: usize = @max(len + 2, width);
-    const h: usize = @max(height, 3);
-
-    const lpad: usize = (w - len - 2) / 2;
-    const rpad: usize = w - len - lpad - 2;
-
-    // Setup overall text style
-    startStyles(stream, text_style);
-
-    // Top row (┌─...─┐)
-    print(stream, "{s}", .{style.tl});
-    var i: u8 = 0;
-    while (i < w - 2) : (i += 1) {
-        print(stream, "{s}", .{style.hb});
-    }
-    print(stream, "{s}", .{style.tr});
-    print(stream, "{s}\n", .{ansi_end});
-
-    // Print the middle rows (│  ...  │)
-    var j: u8 = 0;
-    const mid = (h - 2) / 2;
-    while (j < h - 2) : (j += 1) {
-        startStyles(stream, text_style);
-
-        i = 0;
-        print(stream, "{s}", .{style.vb});
-        if (j == mid) {
-            var k: u8 = 0;
-            while (k < lpad) : (k += 1) {
-                print(stream, " ", .{});
-            }
-            print(stream, "{s}", .{str});
-            k = 0;
-            while (k < rpad) : (k += 1) {
-                print(stream, " ", .{});
-            }
-        } else {
-            while (i < w - 2) : (i += 1) {
-                print(stream, " ", .{});
-            }
-        }
-        print(stream, "{s}{s}\n", .{ style.vb, ansi_end });
-    }
-
-    // Bottom row (└─...─┘)
-    i = 0;
-    startStyles(stream, text_style);
-    printC(stream, style.bl);
-    while (i < w - 2) : (i += 1) {
-        printC(stream, style.hb);
-    }
-    printC(stream, style.br);
-    print(stream, "{s}", .{ansi_end});
-}
-
-// ====================================================
-// Tests of ANSI Escape Codes
-// ----------------------------------------------------
-
-inline fn printANSITable() !void {
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
-
-    const options = .{
-        @as([]const u8, "38;5{}"),
-        @as([]const u8, "38;1{}"),
-        @as([]const u8, "{}"),
-    };
-
-    // Give ourselves some lines to play with right here-o
-    try stdout.print("\n" ** 12, .{});
-    try stdout.print(move_up, .{1});
-
-    inline for (options) |option| {
-        try stdout.print(move_left, .{100});
-        try stdout.print(move_up, .{10});
-
-        const fmt = ansi ++ "[" ++ option ++ "m {d:>3}" ++ ansi ++ "[m";
-
-        var i: u8 = 0;
-        outer: while (i < 11) : (i += 1) {
-            var j: u8 = 0;
-            while (j < 10) : (j += 1) {
-                const n = 10 * i + j;
-                if (n > 108) continue :outer;
-                try stdout.print(fmt, .{ n, n });
-            }
-            try stdout.print("\n", .{});
-            try bw.flush(); // don't forget to flush!
-        }
-        try bw.flush(); // don't forget to flush!
-    }
-
-    try stdout.print("\n", .{});
-
-    try stdout.print(bg_red ++ text_blink ++ " hello! " ++ ansi_end ++ "\n", .{});
-    try bw.flush(); // don't forget to flush!
-}
-
-test "ANSI codepoint table" {
-    try printANSITable();
-}

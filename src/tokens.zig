@@ -5,6 +5,7 @@ const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
 const utils = @import("utils.zig");
+const debug = @import("debug.zig");
 
 pub const TokenType = enum {
     EOF,
@@ -265,21 +266,21 @@ pub fn typeStr(kind: TokenType) []const u8 {
 
 pub fn printTypes(tokens: []const Token) void {
     for (tokens) |tok| {
-        std.debug.print("{s}, ", .{typeStr(tok.kind)});
+        debug.print("{s}, ", .{typeStr(tok.kind)});
     }
-    std.debug.print("\n", .{});
+    debug.print("\n", .{});
 }
 
 pub fn printText(tokens: []const Token) void {
-    std.debug.print("\"", .{});
+    debug.print("\"", .{});
     for (tokens) |tok| {
         if (tok.kind == .BREAK) {
-            std.debug.print("\\n", .{});
+            debug.print("\\n", .{});
             continue;
         }
-        std.debug.print("{s}", .{tok.text});
+        debug.print("{s}", .{tok.text});
     }
-    std.debug.print("\"\n", .{});
+    debug.print("\"\n", .{});
 }
 
 /// Concatenate the raw text of each token into a single string

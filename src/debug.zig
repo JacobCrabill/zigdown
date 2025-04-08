@@ -1,3 +1,4 @@
+/// Debugging-related functionality such as logging and error reporting.
 const std = @import("std");
 const builtin = @import("builtin");
 const cons = @import("console.zig");
@@ -5,15 +6,40 @@ const wasm = @import("wasm.zig");
 
 const Token = @import("tokens.zig").Token;
 
+/// Global debug stream instance.
+/// Intended to be set once from main() via setStream().
+var stream: ?std.io.AnyWriter = null;
+
+/// Set the global debug output stream.
+///
+/// This can be, for example, a buffered writer for use in tests.
+pub fn setStream(out_stream: std.io.AnyWriter) void {
+    stream = out_stream;
+}
+
+/// Get the global debug output stream.
+///
+/// This should be used by all debug printing, e.g. from Block types.
+pub fn getStream() std.io.AnyWriter {
+    if (stream == null) {
+        @branchHint(.cold);
+        stream = std.io.getStdErr().writer().any();
+    }
+    return stream.?;
+}
+
+pub fn print(comptime fmt: []const u8, args: anytype) void {
+    getStream().print(fmt, args) catch @panic("Unable to write to debug stream!");
+}
+
 pub fn errorReturn(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) !void {
     switch (builtin.cpu.arch) {
         .wasm32, .wasm64 => return error.ParseError,
         else => {},
     }
-    const stderr = std.io.getStdErr().writer();
-    cons.printStyled(stderr, .{ .fg_color = .Red, .bold = true }, "{s}-{d}: ERROR: ", .{ src.fn_name, src.line });
-    cons.printStyled(stderr, .{ .bold = true }, fmt, args);
-    try stderr.print("\n", .{});
+    cons.printStyled(getStream(), .{ .fg_color = .Red, .bold = true }, "{s}-{d}: ERROR: ", .{ src.fn_name, src.line });
+    cons.printStyled(getStream(), .{ .bold = true }, fmt, args);
+    print("\n", .{});
     return error.ParseError;
 }
 
@@ -22,10 +48,9 @@ pub fn errorMsg(comptime src: std.builtin.SourceLocation, comptime fmt: []const 
         .wasm32, .wasm64 => return,
         else => {},
     }
-    const stderr = std.io.getStdErr().writer();
-    cons.printStyled(stderr, .{ .fg_color = .Red, .bold = true }, "{s}-{d}: ERROR: ", .{ src.fn_name, src.line });
-    cons.printStyled(stderr, .{ .bold = true }, fmt, args);
-    std.debug.print("\n", .{});
+    cons.printStyled(getStream(), .{ .fg_color = .Red, .bold = true }, "{s}-{d}: ERROR: ", .{ src.fn_name, src.line });
+    cons.printStyled(getStream(), .{ .bold = true }, fmt, args);
+    print("\n", .{});
 }
 
 /// Helper struct to log debug messages (normal host-cpu logger)
@@ -44,7 +69,7 @@ pub const Logger = struct {
             if (wasm.is_wasm) {
                 wasm.Console.log(fmt, args);
             } else {
-                std.debug.print(fmt, args);
+                print(fmt, args);
             }
         }
     }

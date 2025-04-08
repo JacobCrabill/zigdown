@@ -5,6 +5,7 @@ const std = @import("std");
 const tokens = @import("tokens.zig");
 const inlines = @import("inlines.zig");
 const utils = @import("utils.zig");
+const debug = @import("debug.zig");
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
@@ -68,8 +69,8 @@ pub const Heading = struct {
 
     pub fn print(h: Heading, depth: u8) void {
         printIndent(depth);
-        // std.debug.print("[H{d}] '{s}'\n", .{ h.level, h.text });
-        std.debug.print("[H{d}]\n", .{h.level});
+        // debug.print("[H{d}] '{s}'\n", .{ h.level, h.text });
+        debug.print("[H{d}]\n", .{h.level});
     }
 };
 
@@ -98,6 +99,6 @@ pub const Code = struct {
         var text: []const u8 = "";
         if (c.tag) |ctag| tag = ctag;
         if (c.text) |ctext| text = ctext;
-        std.debug.print("tag: '{s}'; body:\n{s}\n", .{ tag, text });
+        debug.print("tag: '{s}'; body:\n{s}\n", .{ tag, text });
     }
 };

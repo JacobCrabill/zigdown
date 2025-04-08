@@ -54,8 +54,11 @@ pub fn build(b: *std.Build) !void {
     const builtin_ts_option_desc = "List of TreeSitter parsers to bake into the build";
     const ts_parser_list = b.option([]const u8, builtin_ts_option, builtin_ts_option_desc) orelse "bash,c,cmake,cpp,json,python,rust,yaml,zig";
 
+    const do_extra_tests = b.option(bool, "extra-tests", "Run extra (non-standard) tests") orelse false;
+
     const options: *Options = b.addOptions();
     options.addOption([]const u8, builtin_ts_option, ts_parser_list);
+    options.addOption(bool, "extra_tests", do_extra_tests);
 
     // Export the zigdown module to downstream consumers
     const mod = b.addModule("zigdown", .{
@@ -235,7 +238,7 @@ pub fn build(b: *std.Build) !void {
     ////////////////////////////////////////////////////////////////////////////
 
     const test_opts = BuildOpts{ .optimize = optimize, .dependencies = deps.items, .options = options };
-    addTest(b, "test-all", "Run all unit tests", "src/test.zig", test_opts);
+    addTest(b, "test", "Run all unit tests", "src/test.zig", test_opts);
 
     // Add custom test executables
     if (build_test_exes) {

@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const debug = @import("debug.zig");
 const utils = @import("utils.zig");
 const toks = @import("tokens.zig");
 const lexer = @import("lexer.zig");
@@ -187,7 +188,7 @@ pub const Container = struct {
     pub fn print(self: Container, depth: u8) void {
         printIndent(depth);
 
-        std.debug.print("Container: open: {any}, type: {s} with {d} children\n", .{
+        debug.print("Container: open: {any}, type: {s} with {d} children\n", .{
             self.open,
             @tagName(self.content),
             self.children.items.len,
@@ -256,7 +257,7 @@ pub const Leaf = struct {
     pub fn print(self: Leaf, depth: u8) void {
         printIndent(depth);
 
-        std.debug.print("Leaf: open: {any}, type: {s}\n", .{
+        debug.print("Leaf: open: {any}, type: {s}\n", .{
             self.open,
             @tagName(self.content),
         });
@@ -390,22 +391,34 @@ fn createTestAst(alloc: Allocator) !Block {
 }
 
 test "Basic AST Construction" {
-    std.debug.print("\n", .{});
-
     const alloc = std.testing.allocator;
-
     var root = try createTestAst(alloc);
     defer root.deinit();
 }
 
 test "Print basic AST" {
-    std.debug.print("\n", .{});
-
     const alloc = std.testing.allocator;
 
     var root = try createTestAst(alloc);
     defer root.deinit();
 
-    std.debug.print("Print basic AST result:\n", .{});
+    var buf = std.ArrayList(u8).init(alloc);
+    defer buf.deinit();
+    debug.setStream(buf.writer().any());
+
+    debug.print("Print basic AST result:\n", .{});
     root.print(1);
+
+    const expected =
+        \\Print basic AST result:
+        \\│ Container: open: true, type: Document with 2 children
+        \\│ │ Container: open: true, type: List with 1 children
+        \\│ │ │ Container: open: true, type: ListItem with 1 children
+        \\│ │ │ │ Leaf: open: true, type: Paragraph
+        \\│ │ Container: open: true, type: Table with 2 children
+        \\│ │ │ Leaf: open: true, type: Paragraph
+        \\│ │ │ Leaf: open: true, type: Paragraph
+        \\
+    ;
+    try std.testing.expectEqualStrings(expected, buf.items);
 }

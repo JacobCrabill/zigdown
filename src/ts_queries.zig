@@ -1,12 +1,14 @@
 /// ts_queries.zig
 /// TreeSitter highlight queries and related functionality
 const std = @import("std");
+const known_folders = @import("known-folders");
+
+const debug = @import("debug.zig");
 const cons = @import("console.zig");
 const utils = @import("utils.zig");
 const treez = @import("treez");
 const config = @import("config");
 const wasm = @import("wasm.zig");
-const known_folders = @import("known-folders");
 
 const TsParserPair = struct {
     name: []const u8,
@@ -42,7 +44,7 @@ const mylanglist = blk: {
 
 pub fn init(alloc: Allocator) void {
     if (initialized) {
-        // std.debug.print("ERROR: TreeSitter queries already initialized - not re-initializing.\n", .{});
+        // debug.print("ERROR: TreeSitter queries already initialized - not re-initializing.\n", .{});
         return;
     }
 
@@ -146,7 +148,7 @@ pub fn getTsConfigDir() ![]const u8 {
             defer allocator.free(home);
             ts_config_dir = try std.fmt.allocPrint(allocator, "{s}/.config/tree-sitter/", .{home});
         } else {
-            std.debug.print("ERROR: Could not get home directory. Defaulting to current directory\n", .{});
+            debug.print("ERROR: Could not get home directory. Defaulting to current directory\n", .{});
             ts_config_dir = try allocator.dupe(u8, "./tree-sitter/");
         }
     }
@@ -382,6 +384,8 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
 }
 
 test "Fetch C parser" {
+    if (!config.extra_tests) return error.SkipZigTest;
+
     Self.init(std.testing.allocator);
     defer Self.deinit();
 

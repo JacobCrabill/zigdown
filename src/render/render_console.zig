@@ -441,7 +441,7 @@ pub const ConsoleRenderer = struct {
     /// Render a Leaf block
     pub fn renderLeaf(self: *Self, block: blocks.Leaf) !void {
         if (self.needs_leaders) {
-            self.writeLeaders(); // HACK - TESTING
+            self.writeLeaders();
             self.needs_leaders = false;
         }
         switch (block.content) {
@@ -645,7 +645,7 @@ pub const ConsoleRenderer = struct {
                     n_lines += 1;
                 }
                 max_rows = @max(max_rows, n_lines);
-                // std.debug.print("{d}\n", .{max_rows});
+                // debug.print("{d}\n", .{max_rows});
             }
 
             // Loop over the # of rows of text in this single row of the table
@@ -662,7 +662,7 @@ pub const ConsoleRenderer = struct {
                     if (cell.idx < cell.text.len) {
                         // Write the next line of text from that cell,
                         // then increment the write head index of that cell
-                        var text = trimLeadingWhitespace(cell.text[cell.idx..]);
+                        var text = utils.trimLeadingWhitespace(cell.text[cell.idx..]);
                         if (std.mem.indexOfAny(u8, text, "\n")) |end_idx| {
                             text = text[0..end_idx];
                         }
@@ -900,7 +900,7 @@ pub const ConsoleRenderer = struct {
         } else |_| {
             // Useful for debugging TreeSitter queries
             // Note: Can do ':TSPlaygroundToggle' then hit 'o' in the tree to enter the live query editor
-            // std.debug.print("TreeSitter error: {any}\n", .{err});
+            // debug.print("TreeSitter error: {any}\n", .{err});
             self.writeLeaders();
             self.startStyle(code_fence_style);
             self.wrapTextRaw(source);
@@ -1038,7 +1038,7 @@ pub const ConsoleRenderer = struct {
         defer self.alloc.free(path);
 
         var img_file: ?stb.Image = stb.load_image(path, 3) catch |err| blk: {
-            std.debug.print("Error loading image: {any}\n", .{err});
+            debug.print("Error loading image: {any}\n", .{err});
             break :blk null;
         };
         defer if (img_file) |*img| img.deinit();
@@ -1083,26 +1083,16 @@ pub const ConsoleRenderer = struct {
                 if (err == error.FileIsNotPNG) {
                     if (img.nchan == 3) {
                         gfx.sendImageRGB2(self.stream, self.alloc, &img, width, height) catch |err2| {
-                            std.debug.print("Error rendering RGB image: {any}\n", .{err2});
+                            debug.print("Error rendering RGB image: {any}\n", .{err2});
                         };
                     } else {
-                        std.debug.print("Invalid # of channels for non-PNG image: {d}\n", .{img.nchan});
+                        debug.print("Invalid # of channels for non-PNG image: {d}\n", .{img.nchan});
                     }
                 } else {
-                    std.debug.print("Error rendering image: {any}\n", .{err});
+                    debug.print("Error rendering image: {any}\n", .{err});
                 }
             };
             self.renderBreak();
         }
     }
 };
-
-fn trimLeadingWhitespace(line: []const u8) []const u8 {
-    for (line, 0..) |c, i| {
-        switch (c) {
-            ' ', '\n' => {},
-            else => return line[i..],
-        }
-    }
-    return line;
-}

@@ -60,8 +60,8 @@ pub const FormatRenderer = struct {
     cur_style: TextStyle = .{},
     root: ?Block = null,
     scratch: ArrayList(u8), // Scratch buffer for pre-rendering (to find length)
-    scratch_stream: ArrayList(u8).Writer = undefined,
     prerender: ArrayList(u8) = undefined,
+    scratch_stream: ArrayList(u8).Writer = undefined,
     prerender_stream: ArrayList(u8).Writer = undefined,
     mode: RenderMode = .prerender,
 
@@ -235,10 +235,11 @@ pub const FormatRenderer = struct {
 
         if (self.prerender.items.len > 0) {
             i = self.prerender.items.len - 1;
-            while (self.prerender.items[i] == ' ' and i >= 0) : (i -= 1) {
+            while ((self.prerender.items[i] == ' ' or self.prerender.items[i] == '\n') and i >= 0) : (i -= 1) {
                 _ = self.prerender.pop();
             }
         }
+        self.prerender.append('\n') catch unreachable;
 
         self.column = 0;
         self.mode = .final;
@@ -364,7 +365,7 @@ pub const FormatRenderer = struct {
     /// Render a Leaf block
     pub fn renderLeaf(self: *Self, block: Leaf) !void {
         if (self.needs_leaders) {
-            self.writeLeaders(); // HACK - TESTING
+            self.writeLeaders();
             self.needs_leaders = false;
         }
         switch (block.content) {
@@ -582,7 +583,7 @@ pub const FormatRenderer = struct {
                     if (cell.idx < cell.text.len) {
                         // Write the next line of text from that cell,
                         // then increment the write head index of that cell
-                        var text = trimLeadingWhitespace(cell.text[cell.idx..]);
+                        var text = utils.trimLeadingWhitespace(cell.text[cell.idx..]);
                         if (std.mem.indexOfAny(u8, text, "\n")) |end_idx| {
                             text = text[0..end_idx];
                         }
@@ -775,12 +776,98 @@ pub const FormatRenderer = struct {
     }
 };
 
-fn trimLeadingWhitespace(line: []const u8) []const u8 {
-    for (line, 0..) |c, i| {
-        switch (c) {
-            ' ', '\n' => {},
-            else => return line[i..],
-        }
+//////////////////////////////////////////////////////////
+// Tests
+//////////////////////////////////////////////////////////
+
+fn testRender(alloc: Allocator, input: []const u8, out_stream: std.io.AnyWriter) !void {
+    var p = @import("../parser.zig").Parser.init(alloc, .{});
+    try p.parseMarkdown(input);
+    var r = FormatRenderer.init(alloc, .{ .out_stream = out_stream });
+    try r.renderBlock(p.document);
+}
+
+test "auto-format" {
+    const TestData = struct {
+        input: []const u8,
+        output: []const u8,
+    };
+
+    const test_data: []const TestData = &.{
+        .{
+            .input = " #   Hello!  ",
+            .output = "# Hello!\n",
+        },
+        .{
+            .input = " # #    Hello!  ",
+            .output = "# # Hello!\n",
+        },
+        .{
+            .input = " ####    Hello!  ",
+            .output = "#### Hello!\n",
+        },
+        .{
+            .input = " *   list item ",
+            .output = "- list item\n",
+        },
+        .{
+            .input = " -   list item ",
+            .output = "- list item\n",
+        },
+        .{
+            .input = "  -   list item ",
+            .output = "- list item\n",
+        },
+        // TODO: Why does this one happen? (Extra indent inside quote -> nested quote)
+        .{
+            .input = ">  list item ",
+            .output = "> > list item\n",
+        },
+        // TODO: Fix this whitespace!
+        .{
+            .input = " [ a link ]( foo.com ) ",
+            .output = "[ a link ]( foo.com )\n",
+        },
+        // TODO: this also needs to be fixed, I think
+        .{
+            .input =
+            \\- one
+            \\ - two
+            \\  - three
+            \\   - four
+            ,
+            .output =
+            \\- one
+            \\- two
+            \\- three
+            \\- four
+            \\
+            ,
+        },
+        .{
+            .input =
+            \\- one
+            \\ - two
+            \\   - three
+            \\   - four
+            ,
+            .output =
+            \\- one
+            \\- two
+            \\  - three
+            \\  - four
+            \\
+            ,
+        },
+    };
+
+    const alloc = std.testing.allocator;
+    for (test_data) |data| {
+        var arena = std.heap.ArenaAllocator.init(alloc);
+        defer arena.deinit();
+        var buf_array = ArrayList(u8).init(arena.allocator());
+
+        try testRender(arena.allocator(), data.input, buf_array.writer().any());
+        try std.testing.expectEqualSlices(u8, data.output, buf_array.items);
     }
-    return line;
 }

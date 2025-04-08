@@ -36,10 +36,9 @@ const FetchArgs = struct {
 /// Used as a one-time setup for installing syntax highlighting capabilities
 /// for a list of languages.
 pub fn main() !void {
-    // var gpa = std.heap.GeneralPurposeAllocator(.{ }){};
-    // defer _ = gpa.deinit();
-    // const alloc = gpa.allocator();
-    const alloc = std.heap.c_allocator;
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const alloc = gpa.allocator();
 
     ts_queries.init(alloc);
     defer ts_queries.deinit();
@@ -61,12 +60,12 @@ pub fn main() !void {
     var qd: std.fs.Dir = undefined;
     if (std.fs.path.isAbsolute(query_dir)) {
         qd = std.fs.openDirAbsolute(query_dir, .{}) catch |err| {
-            std.debug.print("Unable to open absolute directory: {s}\n", .{query_dir});
+            zd.debug.print("Unable to open absolute directory: {s}\n", .{query_dir});
             return err;
         };
     } else {
         qd = std.fs.cwd().openDir(query_dir, .{}) catch |err| {
-            std.debug.print("Unable to open directory: <cwd>/{s}\n", .{query_dir});
+            zd.debug.print("Unable to open directory: <cwd>/{s}\n", .{query_dir});
             return err;
         };
     }
@@ -92,7 +91,7 @@ pub fn main() !void {
 
         const query = ts_queries.fetchStandardQuery(language, user, git_ref) catch |err| {
             cons.printColor(std.io.getStdErr().writer(), .Red, "  Error setting up {s}@{s}/{s}: ", .{ user, git_ref, language });
-            std.debug.print("{any}\n", .{err});
+            zd.debug.print("{any}\n", .{err});
             continue;
         };
         try ts_queries.writeQueryFile(query, qd, lang);

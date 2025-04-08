@@ -8,9 +8,8 @@ const TextStyle = utils.TextStyle;
 const Parser = parser.Parser;
 
 const HtmlRenderer = render.HtmlRenderer;
-
 const ConsoleRenderer = render.ConsoleRenderer;
-const consoleRenderer = render.consoleRenderer;
+const FormatRenderer = render.FormatRenderer;
 
 pub fn main() !void {
     const text1: []const u8 =
@@ -85,7 +84,7 @@ pub fn main() !void {
     p.document.print(0);
     cons.printStyled(stdout, style, "───────────────────────────────────────────────────\n", .{});
 
-    var hrenderer = HtmlRenderer.init(stdout, alloc);
+    var hrenderer = HtmlRenderer.init(stdout.any(), alloc);
     defer hrenderer.deinit();
 
     style.fg_color = .Cyan;
@@ -93,11 +92,19 @@ pub fn main() !void {
     try hrenderer.renderBlock(p.document);
     cons.printStyled(stdout, style, "───────────────────────────────────────────────────\n", .{});
 
-    var crenderer = ConsoleRenderer.init(alloc, .{ .out_stream = stdout, .width = 70 });
+    var crenderer = ConsoleRenderer.init(alloc, .{ .out_stream = stdout.any(), .width = 70 });
     defer crenderer.deinit();
 
     style.fg_color = .Red;
     cons.printStyled(stdout, style, "─────────────────────── Rendered Text ───────────────────────\n", .{});
     try crenderer.renderBlock(p.document);
+    cons.printStyled(stdout, style, "─────────────────────────────────────────────────────────────\n", .{});
+
+    var frenderer = FormatRenderer.init(alloc, .{ .out_stream = stdout.any(), .width = 70 });
+    defer frenderer.deinit();
+
+    style.fg_color = .Green;
+    cons.printStyled(stdout, style, "─────────────────────── Formatted Text ───────────────────────\n", .{});
+    try frenderer.renderBlock(p.document);
     cons.printStyled(stdout, style, "─────────────────────────────────────────────────────────────\n", .{});
 }

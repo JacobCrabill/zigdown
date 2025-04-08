@@ -134,7 +134,7 @@ fn getLanguage(_: Allocator, language: []const u8) ?*const treez.Language {
     if (wasm.is_wasm or builtin.os.tag == .windows) return null;
 
     return treez.Language.loadFromDynLib(language) catch {
-        // std.debug.print("Error loading {s} language: {any}\n", .{ language, err });
+        // debug.print("Error loading {s} language: {any}\n", .{ language, err });
         return null;
     };
 }

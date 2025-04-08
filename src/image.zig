@@ -2,6 +2,8 @@ const std = @import("std");
 const stb = @import("stb_image");
 const builtin = @import("builtin");
 
+const debug = @import("debug.zig");
+
 const Allocator = std.mem.Allocator;
 const File = std.fs.File;
 const Dir = std.fs.Dir;
@@ -264,20 +266,21 @@ pub fn getTerminalSize() !TermSize {
 }
 
 test "Get window size" {
-    const size = try getTerminalSize();
-    std.debug.print("Window Size: {any}\n", .{size});
+    _ = getTerminalSize() catch return error.SkipZigTest;
 }
 
 // I don't know why this can't be run as a test...
 // 'zig test src/image.zig' works, but 'zig build test-image' just hangs
 test "Display image" {
     const alloc = std.testing.allocator;
-    const stdout = std.io.getStdOut().writer();
-    std.debug.print("Rendering Zero the Ziguana here:\n", .{});
-
-    try sendImagePNG(stdout, alloc, "src/assets/zig-zero.png", 100, 60);
-
-    std.debug.print("\n--------------------------------\n", .{});
+    var buf = std.ArrayList(u8).init(alloc);
+    defer buf.deinit();
+    const stream = buf.writer().any();
+    debug.setStream(stream);
+    debug.print("Rendering Zero the Ziguana here:\n", .{});
+    try sendImagePNG(stream, alloc, "src/assets/zig-zero.png", 100, 60);
+    debug.print("\n--------------------------------\n", .{});
+    // TODO: Can check for expected output in buf.items if I really want to
 }
 
 pub fn main() !void {

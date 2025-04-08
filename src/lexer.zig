@@ -3,8 +3,7 @@
 const std = @import("std");
 
 const con = @import("console.zig");
-
-/// Import all Zigdown tyeps
+const debug = @import("debug.zig");
 const toks = @import("tokens.zig");
 const utils = @import("utils.zig");
 
@@ -162,12 +161,12 @@ test "test lexer" {
 /// Compare an expected token to a token from the Lexer
 fn compareTokens(expected: Token, actual: Token) !void {
     std.testing.expectEqual(expected.kind, actual.kind) catch |err| {
-        std.debug.print("Expected {any} ({s}), got {any} ({s})\n", .{ expected.kind, expected.text, actual.kind, actual.text });
+        debug.print("Expected {any} ({s}), got {any} ({s})\n", .{ expected.kind, expected.text, actual.kind, actual.text });
         return err;
     };
 
     std.testing.expect(std.mem.eql(u8, expected.text, actual.text)) catch |err| {
-        std.debug.print("Expected '{s}', got '{s}'\n", .{ expected.text, actual.text });
+        debug.print("Expected '{s}', got '{s}'\n", .{ expected.text, actual.text });
         return err;
     };
 }
