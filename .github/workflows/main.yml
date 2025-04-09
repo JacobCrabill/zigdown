@@ -21,15 +21,13 @@ jobs:
       fail-fast: false
     runs-on: ubuntu-latest
 
+    container:
+      image: ghcr.io/jacobcrabill/alpine-zig:0.14.0
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Change if you need git info
-
-      - name: Setup Zig
-        uses: mlugg/setup-zig@v1
-        with:
-          version: 0.14.0
 
       - name: Build
         run: zig build test
