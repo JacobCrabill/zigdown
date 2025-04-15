@@ -21,10 +21,13 @@ fn printHelpAndExit(diags: *const flags.Diagnostics, colorscheme: *const flags.C
     std.process.exit(1);
 }
 
+/// Command-line flags common to all render-type commands
 pub const RenderCmdOpts = struct {
     stdin: bool = false,
     width: ?usize = null,
     output: ?[]const u8 = null,
+    verbose: bool = false,
+    timeit: bool = false,
     positional: struct {
         file: ?[]const u8,
 
@@ -36,6 +39,8 @@ pub const RenderCmdOpts = struct {
         .stdin = "Read document from stdin (instead of from a file)",
         .width = "Console width to render within (default: 90 chars)",
         .output = "Output to a file, instead of to stdout",
+        .timeit = "Time the parsing & rendering and display the results",
+        .verbose = "Enable verbose output from the parser",
     };
     pub const switches = .{
         .stdin = 'i',
@@ -44,49 +49,74 @@ pub const RenderCmdOpts = struct {
     };
 };
 
+/// Command-line options for the 'serve' command
+pub const ServeCmdOpts = struct {
+    root_file: ?[]const u8 = null,
+    root_directory: ?[]const u8 = null,
+    port: u16 = 8000,
+
+    pub const descriptions = .{
+        .root_file =
+        \\The root file of the documentation.
+        \\If no root file is given, a table of contents of all Markdown files
+        \\found in the root directory will be displayed instead.
+        ,
+        .root_directory =
+        \\The root directory of the documentation.
+        \\All paths will either be relative to this directory, or relative to the
+        \\directory of the current file.
+        ,
+        .port = "Localhost port to serve on",
+    };
+
+    pub const switches = .{
+        .root_file = 'f',
+        .root_directory = 'd',
+        .port = 'p',
+    };
+};
+
+/// Command-line options for the 'present' command
+pub const PresentCmdOpts = struct {
+    slides: ?[]const u8 = null,
+    directory: ?[]const u8 = null,
+    recurse: bool = false,
+    verbose: bool = false,
+
+    pub const descriptions = .{
+        .directory =
+        \\Directory for the slide deck (Present all .md files in the directory).
+        \\Slides will be presented in alphabetical order.
+        ,
+        .slides =
+        \\Path to a text file containing a list of slides for the presentation.
+        \\(Specify the exact files and their ordering, rather than iterating
+        \\all files in the directory in alphabetical order).
+        ,
+        .recurse = "Recursively iterate the directory to find .md files.",
+        .verbose = "Enable verbose output from the Markdown parser.",
+    };
+
+    pub const switches = .{
+        .directory = 'd',
+        .slides = 's',
+        .recurse = 'r',
+        .verbose = 'v',
+    };
+};
+
 /// Command-line arguments definition for the Flags module
 const Flags = struct {
     pub const description = "Markdown parser supporting console and HTML rendering, and auto-formatting";
-
-    pub const descriptions = .{
-        .timeit = "Time the parsing & rendering and display the results",
-        .verbose = "Enable verbose output from the parser",
-    };
-
-    timeit: bool = false,
-    verbose: bool = false,
 
     command: union(enum(u8)) {
         console: RenderCmdOpts,
         html: RenderCmdOpts,
         format: RenderCmdOpts,
 
-        serve: struct {
-            root_file: ?[]const u8 = null,
-            root_directory: ?[]const u8 = null,
-            port: u16 = 8000,
+        serve: ServeCmdOpts,
 
-            pub const descriptions = .{
-                .root_file =
-                \\The root file of the documentation.
-                \\If no root file is given, a table of contents of all Markdown files
-                \\found in the root directory will be displayed instead.
-                ,
-                .root_directory =
-                \\The root directory of the documentation.
-                \\All paths will either be relative to this directory, or relative to the
-                \\directory of the current file.
-                ,
-                .port = "Localhost port to serve on",
-            };
-            pub const switches = .{
-                .root_file = 'f',
-                .root_directory = 'd',
-                .port = 'p',
-            };
-        },
-
-        // help: struct {},
+        present: PresentCmdOpts,
 
         install_parsers: struct {
             positional: struct {
@@ -99,6 +129,7 @@ const Flags = struct {
             .html = "Render a document to HTML",
             .format = "Format the document (to stdout, or to given output file)",
             .serve = "Serve up documents from a directory to a localhost HTTP server",
+            .present = "Present a set of Markdown files as an in-terminal presentation",
             .install_parsers =
             \\Install one or more TreeSitter language parsers from Github.
             \\Comma-separated list of <lang>, <github_user>:<lang>, or <user>:<branch>:<lang>.
@@ -107,11 +138,6 @@ const Flags = struct {
             ,
         };
     },
-
-    pub const switches = .{
-        .timeit = 't',
-        .verbose = 'v',
-    };
 };
 
 pub fn main() !void {
@@ -152,9 +178,6 @@ pub fn main() !void {
     };
 
     // Process the command-line arguments
-    const timeit: bool = result.timeit;
-    const verbose_parsing: bool = result.verbose;
-
     switch (result.command) {
         .console, .html, .format => |r_opts| {
             const method: zd.render.RenderMethod = switch (result.command) {
@@ -163,7 +186,7 @@ pub fn main() !void {
                 .format => .format,
                 else => unreachable,
             };
-            try handleRender(alloc, &diags, &colorscheme, method, r_opts, verbose_parsing, timeit);
+            try handleRender(alloc, &diags, &colorscheme, method, r_opts);
             std.process.exit(0);
         },
         .serve => |s_opts| {
@@ -174,6 +197,10 @@ pub fn main() !void {
                 .port = s_opts.port,
             };
             try serve.serve(alloc, opts);
+            std.process.exit(0);
+        },
+        .present => |p_opts| {
+            try handlePresent(alloc, &diags, &colorscheme, p_opts);
             std.process.exit(0);
         },
         .install_parsers => |ip_opts| {
@@ -235,8 +262,6 @@ fn handleRender(
     colorscheme: *const flags.ColorScheme,
     method: zd.render.RenderMethod,
     r_opts: RenderCmdOpts,
-    verbose_parsing: bool,
-    timeit: bool,
 ) !void {
     const stdout = std.io.getStdOut().writer().any();
     const filename: ?[]const u8 = r_opts.positional.file;
@@ -263,7 +288,7 @@ fn handleRender(
     defer alloc.free(md_text);
 
     // Parse the document
-    var parsed = try parse(alloc, md_text, verbose_parsing);
+    var parsed = try parse(alloc, md_text, r_opts.verbose);
     defer parsed.parser.deinit();
 
     // Get the output stream
@@ -287,8 +312,53 @@ fn handleRender(
     });
     const rtime_s = rtimer.read();
 
-    if (timeit) {
+    if (r_opts.timeit) {
         cons.printColor(stdout, .Green, "  Parsed in:   {d:.3} ms\n", .{parsed.time_s * 1000});
         cons.printColor(stdout, .Green, "  Rendered in: {d:.3} ms\n", .{rtime_s * 1000});
     }
+}
+
+pub fn handlePresent(
+    alloc: std.mem.Allocator,
+    diags: *const flags.Diagnostics,
+    colorscheme: *const flags.ColorScheme,
+    p_opts: PresentCmdOpts,
+) !void {
+    var source: zd.present.Source = .{};
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    var root: ?[]const u8 = null;
+    if (p_opts.slides) |s| {
+        const path = std.fs.realpath(s, &path_buf) catch {
+            printHelpAndExit(diags, colorscheme, error.SlidesFileNotFound);
+            unreachable;
+        };
+        root = std.fs.path.dirname(path) orelse return error.DirectoryNotFound;
+        source.slides = std.fs.openFileAbsolute(path, .{ .mode = .read_only }) catch {
+            printHelpAndExit(diags, colorscheme, error.SlidesFileNotFound);
+            unreachable;
+        };
+    }
+
+    if (p_opts.directory) |deck| {
+        source.root = try std.fs.realpathAlloc(alloc, deck);
+    } else if (root) |r| {
+        source.root = try alloc.dupe(u8, r);
+    } else {
+        source.root = try std.fs.realpathAlloc(alloc, ".");
+    }
+    defer alloc.free(source.root);
+
+    source.dir = try std.fs.openDirAbsolute(source.root, .{ .iterate = true });
+
+    const recurse: bool = p_opts.recurse;
+    const stdout = std.io.getStdOut().writer().any();
+    zd.present.present(alloc, stdout, source, recurse) catch |err| {
+        _ = stdout.write(zd.cons.clear_screen) catch unreachable;
+        std.debug.print("\nError encountered during presentation: {any}\n", .{err});
+        return;
+    };
+
+    // Clear the screen one last time _after_ the RawTTY deinits
+    _ = try stdout.write(zd.cons.clear_screen);
 }
