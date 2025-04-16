@@ -67,7 +67,7 @@ function M.render_file(filename)
   }
 
   local zd_bin = utils.path_append(M.root, "zig-out/bin/zigdown")
-  local zd_cmd = { zd_bin, "-t", "console", filename }
+  local zd_cmd = { zd_bin, "console", "-t", filename }
   if config.win_width ~= nil then
     table.insert(zd_cmd, "-w")
     table.insert(zd_cmd, math.min(config.win_width - 4, 100))

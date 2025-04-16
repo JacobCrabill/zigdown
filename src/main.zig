@@ -46,6 +46,8 @@ pub const RenderCmdOpts = struct {
         .stdin = 'i',
         .width = 'w',
         .output = 'o',
+        .verbose = 'v',
+        .timeit = 't',
     };
 };
 
