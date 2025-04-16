@@ -30,6 +30,8 @@ M.build_dir = ''
 M.root_dir = ''
 M.zig_binary = ''
 M.tarball = ''
+M.load_lib = false
+M.build_jobid = nil
 
 function M.install_zig()
   vim.notify("Extracting archive: " .. table.concat(M.tar_cmd, " "), vim.log.levels.INFO)
@@ -37,20 +39,18 @@ function M.install_zig()
   vim.fn.jobwait({tar_pid})
 end
 
--- Build the Zigdown binary, and optionally the Lua plugin module
----@param load_lib boolean Load the Lua module
-function M.build_zigdown(load_lib)
-  vim.notify("Building zigdown using:" .. table.concat(M.build_cmd, " "), vim.log.levels.INFO)
-  vim.notify("Compiling zigdown - Please wait... (This will block the main NeoVim thread, sorry!)", vim.log.levels.INFO)
-
-  local cmd = { M.zig_binary, "build", "-Doptimize=ReleaseSafe" }
-  if load_lib then
-    table.insert(cmd, "-Dlua")
+-- Callback function for completion of 'zig build'
+function on_build_exit(obj)
+  if obj.code ~= 0 then
+    vim.schedule(function()
+      vim.notify("Error building Zigdown!", vim.log.levels.ERROR)
+      vim.notify("Build log:" .. obj.stdout, vim.log.levels.INFO)
+    end)
+    return
   end
-  local build_jid = vim.fn.jobstart(cmd, { cwd = M.root_dir })
-  vim.fn.jobwait({build_jid})
-
-  vim.notify("Finished building Zigdown", vim.log.levels.INFO)
+  vim.schedule(function()
+    vim.notify("Finished building Zigdown", vim.log.levels.INFO)
+  end)
 
   if load_lib then
     M.zigdown =  M.load_module()
@@ -61,6 +61,27 @@ function M.build_zigdown(load_lib)
     vim.fn.delete(M.tarball)
     M.tarball = ''
   end
+  M.build_jobid = nil
+end
+
+-- Build the Zigdown binary, and optionally the Lua plugin module
+---@param load_lib boolean Load the Lua module
+function M.build_zigdown(load_lib)
+  if M.build_jobid ~= nil then
+    vim.notify("ZigdownRebuild already in progress - Please wait!", vim.log.levels.INFO)
+    return
+  end
+
+  M.load_lib = load_lib
+  vim.notify("Building zigdown using:" .. table.concat(M.build_cmd, " "), vim.log.levels.INFO)
+  vim.notify("Compiling zigdown - Please wait...", vim.log.levels.INFO)
+
+  local cmd = { M.zig_binary, "build", "-Doptimize=ReleaseFast" }
+  if load_lib then
+    table.insert(cmd, "-Dlua")
+  end
+
+  M.build_jobid = vim.system(cmd, { cwd = M.root_dir }, on_build_exit)
 end
 
 -- Attempt to load the zigdown_lua module we just compiled
