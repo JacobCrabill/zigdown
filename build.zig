@@ -4,6 +4,8 @@ const Allocator = std.mem.Allocator;
 
 const fetcher = @import("tools/fetch_queries.zig");
 
+const Target = std.Build.ResolvedTarget;
+const OptimizeMode = std.builtin.OptimizeMode;
 const Options = std.Build.Step.Options;
 
 const Dependency = struct {
@@ -22,15 +24,15 @@ const ExeConfig = struct {
 };
 
 const BuildOpts = struct {
-    optimize: std.builtin.OptimizeMode,
-    target: ?std.Build.ResolvedTarget = null,
+    optimize: OptimizeMode,
+    target: ?Target = null,
     dependencies: ?[]Dependency = null,
     options: *Options,
 };
 
 pub fn build(b: *std.Build) !void {
-    const target = b.standardTargetOptions(.{});
-    var optimize: std.builtin.OptimizeMode = b.standardOptimizeOption(.{});
+    const target: Target = b.standardTargetOptions(.{});
+    var optimize: OptimizeMode = b.standardOptimizeOption(.{});
     if (b.option(bool, "safe", "Build ReleaseSafe mode") != null) {
         optimize = .ReleaseSafe;
     } else if (b.option(bool, "small", "Build ReleaseSmall mode") != null) {
@@ -39,26 +41,30 @@ pub fn build(b: *std.Build) !void {
         optimize = .ReleaseFast;
     }
 
-    const wasm_optimize = b.option(std.builtin.OptimizeMode, "wasm-optimize", "Optimization mode for WASM targets") orelse .ReleaseSmall;
+    const wasm_optimize = b.option(OptimizeMode, "wasm-optimize", "Optimization mode for WASM targets") orelse .ReleaseSmall;
 
     const build_lua = b.option(bool, "lua", "[BROKEN - DON'T USE] Build Zigdown as a Lua module") orelse false;
     const build_query_fetcher = b.option(bool, "build-query-fetcher", "Build the TreeSitter query fetcher") orelse false;
     const build_test_exes = b.option(bool, "build-test-exes", "Build the custom test executables") orelse false;
+    const do_extra_tests = b.option(bool, "extra-tests", "Run extra (non-standard) tests") orelse false;
 
     // Add an option to list the set of TreeSitter parsers to statically link into the build
     // This should match the list of parsers defined below and added to the 'queries' module
-    // TODO:
-    //   This is currently unused b/c I couldn't get the approach to work.
-    //   May need to auto-generate some files here to get it to work properly.
     const builtin_ts_option = "builtin_ts_parsers";
     const builtin_ts_option_desc = "List of TreeSitter parsers to bake into the build";
     const ts_parser_list = b.option([]const u8, builtin_ts_option, builtin_ts_option_desc) orelse "bash,c,cmake,cpp,json,python,rust,yaml,zig";
 
-    const do_extra_tests = b.option(bool, "extra-tests", "Run extra (non-standard) tests") orelse false;
-
+    // Create an options struct that we will add to our root Zigdown module
     const options: *Options = b.addOptions();
-    options.addOption([]const u8, builtin_ts_option, ts_parser_list);
     options.addOption(bool, "extra_tests", do_extra_tests);
+
+    // Split the comma-separated list of builtin languages to a list of languages for our config struct
+    var ts_language_list = std.ArrayList([]const u8).init(b.allocator);
+    var iter = std.mem.tokenizeScalar(u8, ts_parser_list, ',');
+    while (iter.next()) |name| {
+        try ts_language_list.append(name);
+    }
+    options.addOption([]const []const u8, builtin_ts_option, ts_language_list.items);
 
     // Export the zigdown module to downstream consumers
     const mod = b.addModule("zigdown", .{
@@ -71,7 +77,7 @@ pub fn build(b: *std.Build) !void {
     mod.addOptions("config", options);
 
     // Get all of our dependencies, both from build.zig.zon and our TreeSitter module
-    var deps: std.ArrayList(Dependency) = try getDependencies(b, target, optimize);
+    var deps: std.ArrayList(Dependency) = try getDependencies(b, target, optimize, ts_language_list.items);
 
     // Add all dependencies to our "root" Zigdown module, then add that to the dependencies list
     for (deps.items) |dep| {
@@ -187,7 +193,7 @@ pub fn build(b: *std.Build) !void {
         .abi = .musl,
     });
 
-    var wasm_deps: std.ArrayList(Dependency) = try getDependencies(b, wasm_target, wasm_optimize);
+    var wasm_deps: std.ArrayList(Dependency) = try getDependencies(b, wasm_target, wasm_optimize, ts_language_list.items);
 
     const wasm_mod = b.addModule("zigdown_wasm", .{
         .root_source_file = b.path("src/zigdown.zig"),
@@ -196,7 +202,7 @@ pub fn build(b: *std.Build) !void {
     });
     const wasm_mod_dep = Dependency{ .name = "zigdown", .module = wasm_mod };
 
-    wasm_mod.addOptions("config", options);
+    wasm_mod.addOptions("opts", options);
 
     for (wasm_deps.items) |dep| {
         wasm_mod.addImport(dep.name, dep.module);
@@ -346,7 +352,7 @@ fn isWasm(target: std.Build.ResolvedTarget) bool {
     return false;
 }
 
-fn getDependencies(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) !std.ArrayList(Dependency) {
+fn getDependencies(b: *std.Build, target: Target, optimize: OptimizeMode, ts_language_list: []const []const u8) !std.ArrayList(Dependency) {
     var dependencies = std.ArrayList(Dependency).init(b.allocator);
 
     if (!isWasm(target)) {
@@ -359,6 +365,11 @@ fn getDependencies(b: *std.Build, target: std.Build.ResolvedTarget, optimize: st
             .optimize = optimize,
         });
         query_mod.addIncludePath(b.path("data"));
+
+        const options: *Options = b.addOptions();
+        options.addOption([]const []const u8, "builtin_ts_parsers", ts_language_list);
+        query_mod.addOptions("config", options);
+
         const query_dep = Dependency{ .name = "queries", .module = query_mod };
 
         // Baked-In TreeSitter Parser Libraries

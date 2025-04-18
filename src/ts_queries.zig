@@ -10,20 +10,15 @@ const treez = @import("treez");
 const config = @import("config");
 const wasm = @import("wasm.zig");
 
+const Allocator = std.mem.Allocator;
+const Self = @This();
+
 const TsParserPair = struct {
     name: []const u8,
     language: *const treez.Language,
 };
 
-const queries_mod = @import("queries");
-
-const tree_sitter_cpp = queries_mod.tree_sitter_cpp;
-const tree_sitter_bash = queries_mod.tree_sitter_bash;
-
-const builtin_queries = queries_mod.builtin_queries;
-const Allocator = std.mem.Allocator;
-const Self = @This();
-
+const builtin_queries = @import("queries").builtin_queries;
 pub var builtin_languages: std.StringHashMap(TsParserPair) = undefined;
 
 var initialized: bool = false;
@@ -31,20 +26,8 @@ var allocator: Allocator = undefined;
 var queries: std.StringHashMap([]const u8) = undefined;
 var aliases: std.StringHashMap([]const u8) = undefined;
 
-const mylanglist = blk: {
-    var result: []const []const u8 = &.{};
-
-    var iter = std.mem.tokenizeScalar(u8, config.builtin_ts_parsers, ',');
-    while (iter.next()) |name| {
-        result = result ++ [1][]const u8{name};
-    }
-
-    break :blk result;
-};
-
 pub fn init(alloc: Allocator) void {
     if (initialized) {
-        // debug.print("ERROR: TreeSitter queries already initialized - not re-initializing.\n", .{});
         return;
     }
 
@@ -56,30 +39,17 @@ pub fn init(alloc: Allocator) void {
     putAlias("c++", "cpp");
     putAlias("cpp", "cpp");
 
-    for (builtin_queries.keys()) |key| {
+    builtin_languages = std.StringHashMap(TsParserPair).init(alloc);
+
+    inline for (config.builtin_ts_parsers) |key| {
         const query = builtin_queries.get(key).?;
         const k = alloc.dupe(u8, key) catch unreachable;
         const v = alloc.dupe(u8, query) catch unreachable;
         queries.put(k, v) catch @panic("Query insertion error!");
+
+        const language = treez.Language.get(key) catch @panic("Language lookup error!");
+        builtin_languages.put(key, .{ .name = key, .language = language }) catch unreachable;
     }
-
-    // TODO: This is a lot of boilerplate. Cleanup. May require auto-generating this at build time.
-    builtin_languages = std.StringHashMap(TsParserPair).init(alloc);
-    builtin_languages.put("bash", .{ .name = "bash", .language = queries_mod.tree_sitter_bash() }) catch unreachable;
-    builtin_languages.put("c", .{ .name = "c", .language = queries_mod.tree_sitter_c() }) catch unreachable;
-    builtin_languages.put("cmake", .{ .name = "cmake", .language = queries_mod.tree_sitter_cmake() }) catch unreachable;
-    builtin_languages.put("cpp", .{ .name = "cpp", .language = queries_mod.tree_sitter_cpp() }) catch unreachable;
-    builtin_languages.put("json", .{ .name = "json", .language = queries_mod.tree_sitter_json() }) catch unreachable;
-    builtin_languages.put("make", .{ .name = "make", .language = queries_mod.tree_sitter_make() }) catch unreachable;
-    builtin_languages.put("python", .{ .name = "python", .language = queries_mod.tree_sitter_python() }) catch unreachable;
-    builtin_languages.put("rust", .{ .name = "rust", .language = queries_mod.tree_sitter_rust() }) catch unreachable;
-    builtin_languages.put("yaml", .{ .name = "yaml", .language = queries_mod.tree_sitter_yaml() }) catch unreachable;
-    builtin_languages.put("zig", .{ .name = "zig", .language = queries_mod.tree_sitter_zig() }) catch unreachable;
-
-    // inline for (mylanglist) |lang| {
-    //     const language = treez.Language.get(lang) catch unreachable;
-    //     builtin_languages.put(lang, .{ .name = lang, .language = language }) catch unreachable;
-    // }
 }
 
 pub fn deinit() void {
@@ -228,7 +198,7 @@ pub fn get(query_alloc: Allocator, language: []const u8) ?[]const u8 {
 }
 
 /// Fetch a TreeSitter highlights query from Github
-/// This module's 'queries' map owns the returned string; Call Self.deinit() to free
+/// This module's 'highlight_querieshighlight_queries owns the returned string; Call Self.deinit() to free
 ///
 /// @param[in] language: The tree-sitter language name (e.g. "cpp" for C++)
 /// @param[in] github_user: The Github account hosting tree-sitter-{language}

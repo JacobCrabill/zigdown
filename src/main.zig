@@ -326,6 +326,9 @@ pub fn handlePresent(
     colorscheme: *const flags.ColorScheme,
     p_opts: PresentCmdOpts,
 ) !void {
+    if (@import("builtin").target.os.tag == .windows) {
+        @panic("Presentation mode not supported on Windows!");
+    }
     var source: zd.present.Source = .{};
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;

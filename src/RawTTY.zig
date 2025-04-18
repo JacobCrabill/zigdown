@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
@@ -13,8 +14,6 @@ orig_termios: std.c.termios = undefined,
 writer: std.io.Writer(File, File.WriteError, File.write) = undefined,
 
 pub fn init() !Self {
-    const linux = os.linux;
-
     // Store the original terminal settings for later
     // Apply the settings to enable raw TTY ('uncooked' terminal input)
     const tty = std.io.getStdIn();
@@ -23,14 +22,14 @@ pub fn init() !Self {
     _ = std.c.tcgetattr(tty.handle, &orig_termios);
     var raw = orig_termios;
 
-    raw.lflag = linux.tc_lflag_t{
+    raw.lflag = std.c.tc_lflag_t{
         .ECHO = false,
         .ICANON = false,
         .ISIG = false,
         .IEXTEN = false,
     };
 
-    raw.iflag = linux.tc_iflag_t{
+    raw.iflag = std.c.tc_iflag_t{
         .IXON = false,
         .ICRNL = false,
         .BRKINT = false,
@@ -38,8 +37,8 @@ pub fn init() !Self {
         .ISTRIP = false,
     };
 
-    raw.cc[@intFromEnum(linux.V.TIME)] = 0;
-    raw.cc[@intFromEnum(linux.V.MIN)] = 1;
+    raw.cc[@intFromEnum(std.c.V.TIME)] = 0;
+    raw.cc[@intFromEnum(std.c.V.MIN)] = 1;
     _ = std.c.tcsetattr(tty.handle, .FLUSH, &raw);
 
     const writer = std.io.getStdOut().writer(); // tty.writer();
