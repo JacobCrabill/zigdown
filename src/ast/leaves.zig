@@ -2,10 +2,10 @@
 /// Leaf Block type implementations
 const std = @import("std");
 
-const tokens = @import("tokens.zig");
+const tokens = @import("../tokens.zig");
+const utils = @import("../utils.zig");
+const debug = @import("../debug.zig");
 const inlines = @import("inlines.zig");
-const utils = @import("utils.zig");
-const debug = @import("debug.zig");
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;

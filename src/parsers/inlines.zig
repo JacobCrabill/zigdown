@@ -10,7 +10,7 @@ const errorMsg = debug.errorMsg;
 const Logger = debug.Logger;
 
 const toks = @import("../tokens.zig");
-const inls = @import("../inlines.zig");
+const inls = @import("../ast/inlines.zig");
 const utils = @import("utils.zig");
 
 const TokenType = toks.TokenType;

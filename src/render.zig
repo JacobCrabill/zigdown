@@ -1,5 +1,5 @@
 const std = @import("std");
-const blocks = @import("blocks.zig");
+const blocks = @import("ast/blocks.zig");
 const gfx = @import("image.zig");
 
 const Allocator = std.mem.Allocator;

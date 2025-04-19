@@ -13,10 +13,10 @@ const Logger = debug.Logger;
 const common_utils = @import("../utils.zig");
 const toks = @import("../tokens.zig");
 const lexer = @import("../lexer.zig");
-const inls = @import("../inlines.zig");
-const leaves = @import("../leaves.zig");
-const containers = @import("../containers.zig");
-const blocks = @import("../blocks.zig");
+const inls = @import("../ast/inlines.zig");
+const leaves = @import("../ast/leaves.zig");
+const containers = @import("../ast/containers.zig");
+const blocks = @import("../ast/blocks.zig");
 const inline_parser = @import("inlines.zig");
 
 /// Parser utilities

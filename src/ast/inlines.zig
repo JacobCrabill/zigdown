@@ -1,12 +1,13 @@
 const std = @import("std");
-const utils = @import("utils.zig");
-const debug = @import("debug.zig");
+const utils = @import("../utils.zig");
+const debug = @import("../debug.zig");
+const tokens = @import("../tokens.zig");
 
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 
 const TextStyle = utils.TextStyle;
-const Token = @import("tokens.zig").Token;
+const Token = tokens.Token;
 const printIndent = utils.printIndent;
 
 /// Inlines are considered Phrasing content

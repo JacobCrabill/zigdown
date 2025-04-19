@@ -1,9 +1,9 @@
 const std = @import("std");
 
-const debug = @import("debug.zig");
-const utils = @import("utils.zig");
-const toks = @import("tokens.zig");
-const lexer = @import("lexer.zig");
+const debug = @import("../debug.zig");
+const utils = @import("../utils.zig");
+const toks = @import("../tokens.zig");
+const lexer = @import("../lexer.zig");
 const inls = @import("inlines.zig");
 const leaves = @import("leaves.zig");
 const containers = @import("containers.zig");

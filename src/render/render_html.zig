@@ -1,10 +1,10 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const blocks = @import("../blocks.zig");
-const inls = @import("../inlines.zig");
-const leaves = @import("../leaves.zig");
-const containers = @import("../containers.zig");
+const blocks = @import("../ast/blocks.zig");
+const inls = @import("../ast/inlines.zig");
+const leaves = @import("../ast/leaves.zig");
+const containers = @import("../ast/containers.zig");
 
 const debug = @import("../debug.zig");
 const utils = @import("../utils.zig");
