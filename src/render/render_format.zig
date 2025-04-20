@@ -737,6 +737,7 @@ pub const FormatRenderer = struct {
         for (link.text.items) |text| {
             self.renderText(text);
         }
+
         self.write("](");
         self.write(link.url);
         self.write(")");
@@ -754,7 +755,10 @@ pub const FormatRenderer = struct {
         for (image.alt.items) |text| {
             self.renderText(text);
         }
-        self.print("]({s})", .{image.src});
+
+        self.write("](");
+        self.write(image.src);
+        self.write(")");
 
         if (self.mode == .scratch) {
             self.dumpScratchBuffer();
@@ -823,10 +827,21 @@ test "auto-format" {
             .input = ">  list item ",
             .output = "> > list item\n",
         },
-        // TODO: Fix this whitespace!
         .{
             .input = " [ a link ]( foo.com ) ",
-            .output = "[ a link ]( foo.com )\n",
+            .output = "[a link](foo.com)\n",
+        },
+        .{
+            .input = " ![  an img  ](  foo.com  ) ",
+            .output = "![an img](foo.com)\n",
+        },
+        .{
+            .input = " ![ an img ]( foo.com ) ",
+            .output = "![an img](foo.com)\n",
+        },
+        .{
+            .input = " ![  an img  ](  foo.com  ) ",
+            .output = "![an img](foo.com)\n",
         },
         // TODO: this also needs to be fixed, I think
         .{

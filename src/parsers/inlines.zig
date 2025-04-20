@@ -294,8 +294,8 @@ pub const InlineParser = struct {
         const rb_idx: usize = utils.findFirstOf(line, 0, &.{.RBRACK}).?;
         const lp_idx: usize = rb_idx + 2;
         const rp_idx: usize = utils.findFirstOf(line, lp_idx, &.{.RPAREN}).?;
-        const alt_text: []const Token = line[alt_start..rb_idx];
-        const uri_text: []const Token = line[lp_idx..rp_idx];
+        const alt_text: []const Token = utils.trimTrailingWhitespace(utils.trimLeadingWhitespace(line[alt_start..rb_idx]));
+        const uri_text: []const Token = utils.trimTrailingWhitespace(utils.trimLeadingWhitespace(line[lp_idx..rp_idx]));
 
         // Create a text block with position information
         var link_text_block = ArrayList(inls.Text).init(self.alloc);

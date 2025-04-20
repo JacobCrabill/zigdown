@@ -59,7 +59,7 @@ pub fn countLeadingWhitespace(line: []const Token) usize {
 
 /// Remove all leading whitespace (spaces or indents) from the start of a line
 pub fn trimLeadingWhitespace(line: []const Token) []const Token {
-    var start: usize = 0;
+    var start: usize = line.len - 1;
     for (line, 0..) |tok, i| {
         if (!(tok.kind == .SPACE or tok.kind == .INDENT)) {
             start = i;
@@ -67,6 +67,20 @@ pub fn trimLeadingWhitespace(line: []const Token) []const Token {
         }
     }
     return line[start..];
+}
+
+/// Remove all trailing whitespace (spaces or indents) from the end of a line
+pub fn trimTrailingWhitespace(line: []const Token) []const Token {
+    var i: usize = line.len;
+    var end: usize = 0;
+    while (i > 0) : (i -= 1) {
+        const tok = line[i - 1];
+        if (!(tok.kind == .SPACE or tok.kind == .INDENT)) {
+            end = i;
+            break;
+        }
+    }
+    return line[0..end];
 }
 
 /// Remove up to max_ws leading whitespace characters from the start of the line

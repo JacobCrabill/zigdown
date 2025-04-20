@@ -325,7 +325,40 @@ pub fn trimLeadingWhitespace(line: []const u8) []const u8 {
             else => return line[i..],
         }
     }
+    // If the line is ALL whitespace, leave a single space
+    if (line.len > 0) return line[0..1];
     return line;
+}
+
+test "trimLeadingWhitespace" {
+    try std.testing.expectEqualStrings("1234", trimLeadingWhitespace("   1234"));
+    try std.testing.expectEqualStrings("1234", trimLeadingWhitespace("1234"));
+    try std.testing.expectEqualStrings("", trimLeadingWhitespace(""));
+    try std.testing.expectEqualStrings(" ", trimLeadingWhitespace(" "));
+    try std.testing.expectEqualStrings(" ", trimLeadingWhitespace("  "));
+}
+
+/// Given a string, return the substring up to any trailing whitespace
+pub fn trimTrailingWhitespace(line: []const u8) []const u8 {
+    var i: usize = line.len;
+    while (i > 0) : (i -= 1) {
+        const c = line[i - 1];
+        switch (c) {
+            ' ', '\n' => {},
+            else => return line[0..i],
+        }
+    }
+    // If the line is ALL whitespace, leave a single space
+    if (line.len > 0) return line[0..1];
+    return line;
+}
+
+test "trimTrailingWhitespace" {
+    try std.testing.expectEqualStrings("1234", trimTrailingWhitespace("1234   "));
+    try std.testing.expectEqualStrings("1234", trimTrailingWhitespace("1234"));
+    try std.testing.expectEqualStrings("", trimTrailingWhitespace(""));
+    try std.testing.expectEqualStrings(" ", trimTrailingWhitespace(" "));
+    try std.testing.expectEqualStrings(" ", trimTrailingWhitespace("  "));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
