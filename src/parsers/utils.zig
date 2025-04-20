@@ -452,7 +452,7 @@ pub fn appendSingleToken(alloc: Allocator, inlines: *ArrayList(Inline), token: T
     const text = Text{
         .alloc = alloc,
         .style = style,
-        .text = try alloc.dupe(u8, token.text),
+        .text = try alloc.dupe(u8, utils.trimLeadingWhitespace(token.text)),
         .line = token.src.row,
         .col = token.src.col,
     };

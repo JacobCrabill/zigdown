@@ -725,7 +725,7 @@ pub const FormatRenderer = struct {
 
     fn renderText(self: *Self, text: Text) void {
         self.startStyle(text.style);
-        self.write(text.text);
+        self.write(utils.trimLeadingWhitespace(text.text));
     }
 
     fn renderLink(self: *Self, link: inls.Link) void {

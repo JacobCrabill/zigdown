@@ -112,23 +112,23 @@ pub const Text = struct {
     pub fn print(self: Text, depth: u8) void {
         printIndent(depth);
         debug.print("Text: '{s}' [line: {d}, col: {d}]\n", .{ self.text, self.line, self.col });
-        printIndent(depth);
-        debug.print("Style: ", .{});
-        if (self.style.fg_color) |fg| {
-            debug.print("fg: {s}", .{@tagName(fg)});
-        }
-        if (self.style.bg_color) |bg| {
-            debug.print("bg: {s},", .{@tagName(bg)});
-        }
-        inline for (@typeInfo(TextStyle).@"struct".fields) |field| {
-            const T: type = @TypeOf(@field(self.style, field.name));
-            if (T == bool) {
-                if (@field(self.style, field.name)) {
-                    debug.print("{s}", .{field.name});
-                }
-            }
-        }
-        debug.print("\n", .{});
+        // printIndent(depth);
+        // debug.print("Style: ", .{});
+        // if (self.style.fg_color) |fg| {
+        //     debug.print("fg: {s}", .{@tagName(fg)});
+        // }
+        // if (self.style.bg_color) |bg| {
+        //     debug.print("bg: {s},", .{@tagName(bg)});
+        // }
+        // inline for (@typeInfo(TextStyle).@"struct".fields) |field| {
+        //     const T: type = @TypeOf(@field(self.style, field.name));
+        //     if (T == bool) {
+        //         if (@field(self.style, field.name)) {
+        //             debug.print("{s}", .{field.name});
+        //         }
+        //     }
+        // }
+        // debug.print("\n", .{});
     }
 
     pub fn deinit(self: *Text) void {

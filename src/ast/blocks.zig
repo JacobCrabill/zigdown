@@ -435,9 +435,19 @@ test "Print basic AST" {
         \\│ │ Container: open: true, type: List with 1 children
         \\│ │ │ Container: open: true, type: ListItem with 1 children
         \\│ │ │ │ Leaf: open: true, type: Paragraph
+        \\│ │ │ │ │ Inline content:
+        \\│ │ │ │ │ │ Text: 'Hello, ' [line: 0, col: 0]
+        \\│ │ │ │ │ │ Text: 'World' [line: 0, col: 0]
+        \\│ │ │ │ │ │ Text: '!' [line: 0, col: 0]
+        \\│ │ │ │ │ │ Link:
+        \\│ │ │ │ │ │ │ Text: 'Google' [line: 0, col: 0]
         \\│ │ Container: open: true, type: Table with 2 children
         \\│ │ │ Leaf: open: true, type: Paragraph
+        \\│ │ │ │ Inline content:
+        \\│ │ │ │ │ Text: 'Hello, ' [line: 0, col: 0]
         \\│ │ │ Leaf: open: true, type: Paragraph
+        \\│ │ │ │ Inline content:
+        \\│ │ │ │ │ Text: 'World' [line: 0, col: 0]
         \\
     ;
     try std.testing.expectEqualStrings(expected, buf.items);

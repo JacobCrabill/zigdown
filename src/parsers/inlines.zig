@@ -254,10 +254,15 @@ pub const InlineParser = struct {
                     }
                 },
                 .BREAK => {
+                    if (prev_type == .SPACE) continue;
                     // Treat line breaks as spaces; Don't clear the style (The renderer deals with wrapping)
                     var space_token = tok;
                     space_token.text = " ";
                     try utils.appendSingleToken(self.alloc, &inlines, space_token, style);
+                },
+                .SPACE => {
+                    if (prev_type == .SPACE) continue;
+                    try utils.appendSingleToken(self.alloc, &inlines, tok, style);
                 },
                 else => {
                     try utils.appendSingleToken(self.alloc, &inlines, tok, style);
@@ -269,68 +274,6 @@ pub const InlineParser = struct {
         //try appendWords(self.alloc, &inlines, &words, style);
 
         return inlines;
-    }
-
-    /// Parse tokens as basic (formatted) text
-    fn parseInlineText(self: *Self, tokens: []const Token) !ArrayList(inls.Text) {
-        var style = TextStyle{};
-        var words = ArrayList([]const u8).init(self.alloc);
-        defer words.deinit();
-
-        var prev_type: TokenType = .BREAK;
-        var next_type: TokenType = .BREAK;
-
-        var text_parts = ArrayList(inls.Text).init(self.alloc);
-
-        var i: usize = 0;
-        while (i < tokens.len) : (i += 1) {
-            const tok = tokens[i];
-            if (i + 1 < tokens.len) {
-                next_type = tokens[i + 1].kind;
-            } else {
-                next_type = .BREAK;
-            }
-
-            switch (tok.kind) {
-                .EMBOLD => {
-                    try appendText(self.alloc, &text_parts, &words, style);
-                    style.bold = !style.bold;
-                    style.italic = !style.italic;
-                },
-                .STAR, .BOLD => {
-                    // TODO: Properly handle emphasis between *, **, ***, * word ** word***, etc.
-                    try appendText(self.alloc, &text_parts, &words, style);
-                    style.bold = !style.bold;
-                },
-                .USCORE => {
-                    // If it's an underscore in the middle of a word, don't toggle style with it
-                    if (prev_type == .WORD and next_type == .WORD) {
-                        try words.append(tok.text);
-                    } else {
-                        try appendText(self.alloc, &text_parts, &words, style);
-                        style.italic = !style.italic;
-                    }
-                },
-                .TILDE => {
-                    try appendText(self.alloc, &text_parts, &words, style);
-                    style.underline = !style.underline;
-                },
-                .BREAK => {
-                    // Treat line breaks as spaces; Don't clear the style (The renderer deals with wrapping)
-                    try words.append(" ");
-                },
-                else => {
-                    try words.append(tok.text);
-                },
-            }
-
-            prev_type = tok.kind;
-        }
-
-        // Add any last parsed words
-        try appendText(self.alloc, &text_parts, &words, style);
-
-        return text_parts;
     }
 
     /// Parse a Hyperlink (Image or normal Link)
