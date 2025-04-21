@@ -402,6 +402,7 @@ pub const FormatRenderer = struct {
             self.resetStyle();
         } else {
             self.writeLeaders();
+            self.needs_leaders = false;
         }
 
         for (block.children.items, 0..) |child, i| {
@@ -822,10 +823,13 @@ test "auto-format" {
             .input = "  -   list item ",
             .output = "- list item\n",
         },
-        // TODO: Why does this one happen? (Extra indent inside quote -> nested quote)
         .{
-            .input = ">  list item ",
-            .output = "> > list item\n",
+            .input = ">  quote ",
+            .output = "> quote\n",
+        },
+        .{
+            .input = ">  >  quote  ",
+            .output = "> > quote\n",
         },
         .{
             .input = " [ a link ]( foo.com ) ",
@@ -843,27 +847,11 @@ test "auto-format" {
             .input = " ![  an img  ](  foo.com  ) ",
             .output = "![an img](foo.com)\n",
         },
-        // TODO: this also needs to be fixed, I think
         .{
             .input =
             \\- one
             \\ - two
             \\  - three
-            \\   - four
-            ,
-            .output =
-            \\- one
-            \\- two
-            \\- three
-            \\- four
-            \\
-            ,
-        },
-        .{
-            .input =
-            \\- one
-            \\ - two
-            \\   - three
             \\   - four
             ,
             .output =
@@ -873,6 +861,29 @@ test "auto-format" {
             \\  - four
             \\
             ,
+        },
+        .{
+            .input =
+            \\- one
+            \\ - two
+            \\   - three
+            \\     - five
+            \\      - six
+            \\    - four
+            ,
+            .output =
+            \\- one
+            \\- two
+            \\  - three
+            \\    - five
+            \\    - six
+            \\  - four
+            \\
+            ,
+        },
+        .{
+            .input = "* foo",
+            .output = "- foo\n",
         },
     };
 

@@ -497,7 +497,7 @@ pub const Parser = struct {
                 } else {
                     self.logger.log("Adding new ListItem child\n", .{});
                     self.closeBlock(child);
-                    block.addChild(Block.initContainer(block.allocator(), .ListItem, tline[0].src.col)) catch unreachable;
+                    block.addChild(Block.initContainer(block.allocator(), .ListItem, block.start_col())) catch unreachable;
                 }
             }
         }

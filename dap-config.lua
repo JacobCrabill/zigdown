@@ -3,12 +3,12 @@ return {
     zig = {
       {
         name = "Render README to stdout",
-        type = 'lldb',
+        type = 'gdb',
         request = 'launch',
         cwd = '${workspaceFolder}',
         stopOnEntry = false,
         program = 'zig-out/bin/zigdown',
-        args = '-c README.md'
+        args = 'format test/quote.md -v'
       },
       {
         name = "Render README to HTML",
