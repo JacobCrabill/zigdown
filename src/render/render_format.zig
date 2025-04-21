@@ -711,9 +711,15 @@ pub const FormatRenderer = struct {
     }
 
     fn renderInlineCode(self: *Self, code: inls.Codespan) void {
+        if (self.mode == .scratch) {
+            self.dumpScratchBuffer();
+        }
         self.write("`");
         self.write(code.text);
         self.write("`");
+        if (self.mode == .scratch) {
+            self.dumpScratchBuffer();
+        }
     }
 
     fn renderText(self: *Self, text: Text) void {
@@ -777,10 +783,10 @@ pub const FormatRenderer = struct {
 // Tests
 //////////////////////////////////////////////////////////
 
-fn testRender(alloc: Allocator, input: []const u8, out_stream: std.io.AnyWriter) !void {
+fn testRender(alloc: Allocator, input: []const u8, out_stream: std.io.AnyWriter, width: usize) !void {
     var p = @import("../parser.zig").Parser.init(alloc, .{});
     try p.parseMarkdown(input);
-    var r = FormatRenderer.init(alloc, .{ .out_stream = out_stream });
+    var r = FormatRenderer.init(alloc, .{ .out_stream = out_stream, .width = width });
     try r.renderBlock(p.document);
 }
 
@@ -788,6 +794,7 @@ test "auto-format" {
     const TestData = struct {
         input: []const u8,
         output: []const u8,
+        width: usize = 90,
     };
 
     const test_data: []const TestData = &.{
@@ -890,6 +897,11 @@ test "auto-format" {
             \\
             ,
         },
+        .{
+            .input = "`a realllllllly long inline code span that overflows a single line of text`",
+            .output = "`a realllllllly long inline code span that overflows a single line of text`\n",
+            .width = 40,
+        },
     };
 
     const alloc = std.testing.allocator;
@@ -898,7 +910,7 @@ test "auto-format" {
         defer arena.deinit();
         var buf_array = ArrayList(u8).init(arena.allocator());
 
-        try testRender(arena.allocator(), data.input, buf_array.writer().any());
+        try testRender(arena.allocator(), data.input, buf_array.writer().any(), data.width);
         try std.testing.expectEqualSlices(u8, data.output, buf_array.items);
     }
 }
