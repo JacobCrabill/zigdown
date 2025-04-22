@@ -341,9 +341,8 @@ pub const FormatRenderer = struct {
     /// Render a generic Block (may be a Container or a Leaf)
     pub fn renderBlock(self: *Self, block: Block) RenderError!void {
         if (self.root == null) {
-            std.debug.assert(block.isContainer());
-            std.debug.assert(block.Container.content == .Document);
             self.root = block;
+            self.prerender_stream = self.prerender.writer();
         }
         switch (block) {
             .Container => |c| try self.renderContainer(c),
@@ -380,7 +379,6 @@ pub const FormatRenderer = struct {
 
     /// Render a Document block (contains only other blocks)
     fn renderDocument(self: *Self, doc: Container) !void {
-        self.prerender_stream = self.prerender.writer();
         self.renderBegin();
         for (doc.children.items, 0..) |block, i| {
             try self.renderBlock(block);
@@ -520,7 +518,6 @@ pub const FormatRenderer = struct {
             self.renderBreak();
 
         const ncol = table.content.Table.ncol;
-        const col_w = @divFloor(self.opts.width - (2 * self.opts.indent) - (ncol + 1), ncol);
 
         // Create a new renderer to render into a buffer for each cell
         // Use an arena to simplify memory management here
@@ -530,7 +527,6 @@ pub const FormatRenderer = struct {
 
         const Cell = struct {
             text: []const u8 = undefined,
-            idx: usize = 0, // The current index into 'text'
         };
         var cells = ArrayList(Cell).init(alloc);
 
@@ -540,16 +536,21 @@ pub const FormatRenderer = struct {
             const stream = buf_writer.writer().any();
             const sub_opts = RenderOpts{
                 .out_stream = stream,
-                .width = col_w,
+                .width = 256, // col_w,
                 .indent = 1,
                 .root_dir = self.opts.root_dir,
                 .rendering_to_buffer = true,
             };
 
-            var sub_renderer = FormatRenderer.init(alloc, sub_opts);
-            try sub_renderer.renderBlock(item);
+            // Create a new Document with our single item
+            var root = Block.initContainer(alloc, .Document, 0);
+            try root.addChild(item);
 
-            try cells.append(.{ .text = buf_writer.items });
+            var sub_renderer = FormatRenderer.init(alloc, sub_opts);
+            try sub_renderer.renderDocument(root.container().*);
+
+            const text = utils.trimTrailingWhitespace(utils.trimLeadingWhitespace(buf_writer.items));
+            try cells.append(.{ .text = text });
         }
 
         // Demultiplex the rendered text for every cell into
@@ -557,63 +558,54 @@ pub const FormatRenderer = struct {
         const nrow: usize = @divFloor(cells.items.len, ncol);
         std.debug.assert(cells.items.len == ncol * nrow);
 
-        for (0..nrow) |i| {
-            // Get the max number of rows of text for any cell in the table row
-            var max_rows: usize = 0; // Track max # of rows of text for cells in each row
-            for (0..ncol) |j| {
+        // Find the widest single cell in each column of the table
+        var max_cols = try ArrayList(usize).initCapacity(alloc, ncol);
+        for (0..ncol) |j| {
+            max_cols.appendAssumeCapacity(0);
+            for (0..nrow) |i| {
                 const cell_idx: usize = i * ncol + j;
                 const cell = cells.items[cell_idx];
-                var iter = std.mem.tokenizeScalar(u8, cell.text, '\n');
-                var n_lines: usize = 0;
-                while (iter.next()) |_| {
-                    n_lines += 1;
-                }
-                max_rows = @max(max_rows, n_lines);
+                max_cols.items[j] = @max(max_cols.items[j], cell.text.len);
             }
+        }
 
-            // Loop over the # of rows of text in this single row of the table
-            for (0..max_rows) |_| {
-                self.writeLeaders();
-                for (0..ncol) |j| {
-                    const cell_idx: usize = i * ncol + j;
-                    const cell: *Cell = &cells.items[cell_idx];
+        // Render the table row by row, cell by cell
+        for (0..nrow) |i| {
+            self.writeLeaders();
+            for (0..ncol) |j| {
+                const cell_idx: usize = i * ncol + j;
+                const cell: *Cell = &cells.items[cell_idx];
 
-                    // For each cell in the row...
-                    self.write("| ");
+                self.write("| ");
 
-                    if (cell.idx < cell.text.len) {
-                        // Write the next line of text from that cell,
-                        // then increment the write head index of that cell
-                        var text = utils.trimLeadingWhitespace(cell.text[cell.idx..]);
-                        if (std.mem.indexOfAny(u8, text, "\n")) |end_idx| {
-                            text = text[0..end_idx];
-                        }
-                        self.write(text);
-                        cell.idx += text.len + 1;
-
-                        // Move the cursor to the start of the next cell
-                        // TODO: Need to render to a raw buffer to avoid control codes
-                        // Our output is the plain text, not ANSI terminal output
-                        self.printno(cons.set_col, .{self.opts.indent + (j + 2) + (j + 1) * col_w});
-                    } else {
-                        self.writeNTimes(" ", col_w - 1);
+                if (cell.text.len > 0) {
+                    var text = cell.text;
+                    if (std.mem.indexOfAny(u8, text, "\n")) |end_idx| {
+                        text = text[0..end_idx];
                     }
+                    self.write(text);
+                    self.writeNTimes(" ", max_cols.items[j] - text.len + 1);
+                } else {
+                    self.writeNTimes(" ", max_cols.items[j] + 1);
                 }
-                self.write("|");
-                self.renderBreak();
             }
+            self.write("|");
+            self.renderBreak();
 
             // End the current row
             self.writeLeaders();
 
-            self.writeTableBorderMiddle(ncol, col_w);
+            if (i == 0) {
+                // TODO: left/center/right alignment
+                self.writeTableBorderMiddle(ncol, max_cols.items);
+            }
         }
     }
 
-    fn writeTableBorderMiddle(self: *Self, ncol: usize, col_w: usize) void {
+    fn writeTableBorderMiddle(self: *Self, ncol: usize, cols_w: []const usize) void {
         self.write("| ");
         for (0..ncol) |i| {
-            for (1..col_w - 1) |_| {
+            for (0..cols_w[i]) |_| {
                 self.write("-");
             }
             if (i == ncol - 1) {
@@ -824,7 +816,7 @@ test "auto-format" {
             .output = "- list item\n",
         },
         .{
-            .input = ">  quote ",
+            .input = " >  quote ",
             .output = "> quote\n",
         },
         .{
@@ -884,6 +876,19 @@ test "auto-format" {
         .{
             .input = "* foo",
             .output = "- foo\n",
+        },
+        .{
+            .input =
+            \\| h1 | h2 | h3 | h4 |
+            \\| :-- |---|----| :----- |
+            \\| lorem ipsum dolor | sit  amet, consectetur | adipiscing   elit.   |   Ut sit amet luctus felis. |
+            ,
+            .output =
+            \\| h1                | h2                    | h3               | h4                        |
+            \\| ----------------- | --------------------- | ---------------- | ------------------------- |
+            \\| lorem ipsum dolor | sit amet, consectetur | adipiscing elit. | Ut sit amet luctus felis. |
+            \\
+            ,
         },
     };
 
