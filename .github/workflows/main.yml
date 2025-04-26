@@ -30,4 +30,4 @@ jobs:
           fetch-depth: 0  # Change if you need git info
 
       - name: Build
-        run: zig build test
+        run: zig build test -Dtarget=x86_64-linux-musl
