@@ -104,14 +104,30 @@ pub const FormatRenderer = struct {
     /// Attempts to be 'minimally invasive' by monitoring current style and
     /// changing only what is necessary
     fn startStyleImpl(self: *Self, style: TextStyle) void {
-        if (style.bold != self.cur_style.bold) {
+        // This is annoying:
+        // We want to be consistent about the order, and apply the styles
+        // in reverse order when ending vs starting (xml style)
+
+        // -- Starting Styles
+        if (!style.bold and self.cur_style.bold) {
             self.write("**");
         }
-        if (style.italic != self.cur_style.italic) {
+        if (!style.italic and self.cur_style.italic) {
             self.write("_");
         }
-        if (style.underline != self.cur_style.underline) {
+        if (!style.underline and self.cur_style.underline) {
             self.write("~");
+        }
+
+        // -- Ending Styles
+        if (style.underline and !self.cur_style.underline) {
+            self.write("~");
+        }
+        if (style.italic and !self.cur_style.italic) {
+            self.write("_");
+        }
+        if (style.bold and !self.cur_style.bold) {
+            self.write("**");
         }
 
         self.cur_style = style;
@@ -119,9 +135,9 @@ pub const FormatRenderer = struct {
 
     /// Reset all active style flags
     fn endStyle(self: *Self, style: TextStyle) void {
-        if (style.bold) self.write("**");
-        if (style.italic) self.write("_");
         if (style.underline) self.write("~");
+        if (style.italic) self.write("_");
+        if (style.bold) self.write("**");
     }
 
     /// Configure the terminal to start printing with the given style,
@@ -821,6 +837,18 @@ test "auto-format" {
         .{
             .input = "  -   list item ",
             .output = "- list item\n",
+        },
+        .{
+            .input = "  *   *list* item ",
+            .output = "- _list_ item\n",
+        },
+        .{
+            .input = "  *   **list** item ",
+            .output = "- **list** item\n",
+        },
+        .{
+            .input = "  *   ***list*** item ",
+            .output = "- _**list**_ item\n",
         },
         .{
             .input = " >  quote ",

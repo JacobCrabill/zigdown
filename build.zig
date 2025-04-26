@@ -327,6 +327,7 @@ fn addTest(b: *std.Build, cmd: []const u8, description: []const u8, path: []cons
         .optimize = opts.optimize,
         .target = opts.target,
         .test_runner = .{ .path = b.path("tools/test_runner.zig"), .mode = .simple },
+        .use_llvm = false,
     });
 
     if (opts.dependencies) |deps| {

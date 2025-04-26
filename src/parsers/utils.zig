@@ -202,9 +202,8 @@ pub fn isUnorderedListItem(line: []const Token) bool {
                 if (have_bullet) return true;
                 return false;
             },
-            .PLUS, .MINUS => {
-                // Note that a '*' can refer to formatting, so ignore it here
-                if (have_bullet) return false; // Can only have one bullet character
+            .PLUS, .MINUS, .STAR => {
+                if (have_bullet and tok.kind != .STAR) return false; // Can only have one bullet character
                 have_bullet = true;
             },
             else => return false,

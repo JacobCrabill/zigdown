@@ -151,7 +151,14 @@ pub const InlineParser = struct {
                     style.bold = !style.bold;
                     style.italic = !style.italic;
                 },
-                .STAR, .BOLD => {
+                .STAR => {
+                    if (style.italic and style.bold) {
+                        style.bold = false;
+                    } else {
+                        style.italic = !style.italic;
+                    }
+                },
+                .BOLD => {
                     // TODO: Properly handle emphasis between *, **, ***, * word ** word***, etc.
                     //try appendWords(self.alloc, &inlines, &words, style);
                     style.bold = !style.bold;

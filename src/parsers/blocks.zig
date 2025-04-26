@@ -798,12 +798,17 @@ pub const Parser = struct {
                 }
             },
             .STAR => {
-                if (line.len > 1 and line[1].kind == .SPACE) {
+                if (utils.isListItem(line)) {
                     // Parse unorderd list block
                     b = Block.initContainer(self.alloc, .List, col);
                     b.Container.content.List = containers.List{ .kind = .unordered };
                     if (!self.handleLineList(&b, line))
                         return error.ParseError;
+                } else {
+                    // Fallback - parse paragraph
+                    b = Block.initLeaf(self.alloc, .Paragraph, col);
+                    if (!self.handleLineParagraph(&b, line))
+                        try errorReturn(@src(), "Cannot parse line as paragraph: {any}", .{line});
                 }
             },
             .DIGIT => {
