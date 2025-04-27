@@ -73,6 +73,8 @@ pub const ConsoleRenderer = struct {
         termsize: gfx.TermSize = .{},
     };
     stream: AnyWriter,
+    prerender: ArrayList(u8) = undefined,
+    prerender_stream: ArrayList(u8).Writer = undefined,
     column: usize = 0,
     alloc: std.mem.Allocator,
     leader_stack: ArrayList(Text),
@@ -91,6 +93,7 @@ pub const ConsoleRenderer = struct {
             .alloc = alloc,
             .leader_stack = ArrayList(Text).init(alloc),
             .opts = opts,
+            .prerender = ArrayList(u8).initCapacity(alloc, 1024) catch @panic("OOM"),
         };
     }
 
@@ -109,6 +112,7 @@ pub const ConsoleRenderer = struct {
     pub fn deinit(self: *Self) void {
         self.leader_stack.deinit();
         ts_queries.deinit();
+        self.prerender.deinit();
     }
 
     pub fn typeErasedDeinit(ctx: *anyopaque) void {
@@ -215,7 +219,7 @@ pub const ConsoleRenderer = struct {
 
     /// Write an array of bytes to the underlying writer, and update the current column
     fn write(self: *Self, bytes: []const u8) void {
-        self.stream.writeAll(bytes) catch |err| {
+        self.prerender_stream.writeAll(bytes) catch |err| {
             errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
         };
         self.column += std.unicode.utf8CountCodepoints(bytes) catch bytes.len;
@@ -223,7 +227,7 @@ pub const ConsoleRenderer = struct {
 
     /// Write an array of bytes to the underlying writer, without updating the current column
     fn writeno(self: Self, bytes: []const u8) void {
-        self.stream.writeAll(bytes) catch |err| {
+        self.prerender_stream.writeAll(bytes) catch |err| {
             errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
         };
     }
@@ -240,7 +244,7 @@ pub const ConsoleRenderer = struct {
 
     /// Print the format and args to the output stream, without updating the current column
     fn printno(self: *Self, comptime fmt: []const u8, args: anytype) void {
-        self.stream.print(fmt, args) catch |err| {
+        self.prerender_stream.print(fmt, args) catch |err| {
             errorMsg(@src(), "Unable to print! {s}\n", .{@errorName(err)});
         };
     }
@@ -260,6 +264,8 @@ pub const ConsoleRenderer = struct {
             self.printno(cons.move_left, .{1000});
             self.writeno(cons.clear_line);
         }
+        self.stream.writeAll(self.prerender.items) catch unreachable;
+        self.prerender.clearRetainingCapacity();
         self.column = 0;
     }
 
@@ -420,6 +426,7 @@ pub const ConsoleRenderer = struct {
     pub fn renderBlock(self: *Self, block: Block) RenderError!void {
         if (self.root == null) {
             self.root = block;
+            self.prerender_stream = self.prerender.writer();
         }
         switch (block) {
             .Container => |c| try self.renderContainer(c),
@@ -622,6 +629,7 @@ pub const ConsoleRenderer = struct {
 
             var sub_renderer = ConsoleRenderer.init(alloc, sub_opts);
             try sub_renderer.renderBlock(item);
+            sub_renderer.renderEnd();
 
             try cells.append(.{ .text = buf_writer.items });
         }
@@ -1079,10 +1087,10 @@ pub const ConsoleRenderer = struct {
             self.writeNTimes(" ", (self.opts.width - width) / 2);
 
             // const raw_data: []const u8 = img.data[0..@intCast(img.width * img.height * img.nchan)];
-            gfx.sendImagePNG(self.stream, self.alloc, path, width, height) catch |err| {
+            gfx.sendImagePNG(self.prerender_stream, self.alloc, path, width, height) catch |err| {
                 if (err == error.FileIsNotPNG) {
                     if (img.nchan == 3) {
-                        gfx.sendImageRGB2(self.stream, self.alloc, &img, width, height) catch |err2| {
+                        gfx.sendImageRGB2(self.prerender_stream, self.alloc, &img, width, height) catch |err2| {
                             debug.print("Error rendering RGB image: {any}\n", .{err2});
                         };
                     } else {

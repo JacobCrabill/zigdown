@@ -260,6 +260,7 @@ pub const FormatRenderer = struct {
         self.column = 0;
         self.mode = .final;
         self.write(self.prerender.items);
+        self.prerender.clearRetainingCapacity();
     }
 
     /// Write the given text 'count' times

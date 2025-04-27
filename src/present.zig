@@ -12,6 +12,7 @@ const File = std.fs.File;
 
 /// Where the files to render come from
 pub const Source = struct {
+    /// The directory which 'dirname' is relative to
     dir: Dir = undefined,
     slides: ?File = null,
     root: []const u8 = undefined,
@@ -20,8 +21,7 @@ pub const Source = struct {
 /// Begin the slideshow using all slides within 'dir' at the sub-path 'dirname'
 ///
 /// alloc:   The allocator to use for all file reading, parsing, and rendering
-/// dirname: The directory containing the slides (.md files) (relative path)
-/// dir:     The directory which 'dirname' is relative to
+/// source:  Struct specifying the location of the slides (.md files) to render
 /// recurse: If true, all *.md files in all child directories of {dir}/{dirname} will be used
 pub fn present(alloc: Allocator, writer: std.io.AnyWriter, source: Source, recurse: bool) !void {
     const raw_tty = try RawTTY.init();
