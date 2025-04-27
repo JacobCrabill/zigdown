@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const assets = @import("assets");
 
 const blocks = @import("../ast/blocks.zig");
 const inls = @import("../ast/inlines.zig");
@@ -22,7 +23,7 @@ const Container = blocks.Container;
 const Leaf = blocks.Leaf;
 const Inline = inls.Inline;
 
-const css = @embedFile("../assets/style.css");
+const css = assets.html.style_css;
 
 const google_fonts =
     \\ <link href="https://fonts.googleapis.com/css2?family=Ubuntu+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">

@@ -68,7 +68,7 @@ pub fn build(b: *std.Build) !void {
 
     // Export the zigdown module to downstream consumers
     const mod = b.addModule("zigdown", .{
-        .root_source_file = b.path("src/zigdown.zig"),
+        .root_source_file = b.path("src/lib/zigdown.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -100,7 +100,7 @@ pub fn build(b: *std.Build) !void {
         .build_description = "Build the Zigdown executable",
         .run_cmd = "run",
         .run_description = "Run the Zigdown executable (use `-- <args>` to supply arguments)",
-        .root_path = "src/main.zig",
+        .root_path = "src/app/main.zig",
     };
     addExecutable(b, exe_config, exe_opts);
 
@@ -118,7 +118,7 @@ pub fn build(b: *std.Build) !void {
         // Requires LuaJIT 2.1 headers & Lua 5.1 library
         const lua_mod = b.addSharedLibrary(.{
             .name = "zigdown_lua",
-            .root_source_file = b.path("src/lua_api.zig"),
+            .root_source_file = b.path("src/app/lua_api.zig"),
             .target = target,
             .optimize = optimize,
             .pic = true,
@@ -162,7 +162,7 @@ pub fn build(b: *std.Build) !void {
     // Build HTML library documentation
     const lib = b.addSharedLibrary(.{
         .name = "zigdown",
-        .root_source_file = b.path("src/zigdown.zig"),
+        .root_source_file = b.path("src/lib/zigdown.zig"),
         .optimize = optimize,
         .target = target,
     });
@@ -196,7 +196,7 @@ pub fn build(b: *std.Build) !void {
     var wasm_deps: std.ArrayList(Dependency) = try getDependencies(b, wasm_target, wasm_optimize, ts_language_list.items);
 
     const wasm_mod = b.addModule("zigdown_wasm", .{
-        .root_source_file = b.path("src/zigdown.zig"),
+        .root_source_file = b.path("src/lib/zigdown.zig"),
         .target = wasm_target,
         .optimize = wasm_optimize,
     });
@@ -211,7 +211,7 @@ pub fn build(b: *std.Build) !void {
 
     const wasm = b.addExecutable(.{
         .name = "zigdown-wasm",
-        .root_source_file = b.path("src/wasm_main.zig"),
+        .root_source_file = b.path("src/app/wasm_main.zig"),
         .optimize = .ReleaseSmall,
         .target = wasm_target,
         .link_libc = true,
@@ -244,20 +244,10 @@ pub fn build(b: *std.Build) !void {
     ////////////////////////////////////////////////////////////////////////////
 
     const test_opts = BuildOpts{ .optimize = optimize, .dependencies = deps.items, .options = options };
-    addTest(b, "test", "Run all unit tests", "src/test.zig", test_opts);
+    addTest(b, "test", "Run all unit tests", "src/lib/test.zig", test_opts);
 
     // Add custom test executables
     if (build_test_exes) {
-        const parser_test_config = ExeConfig{
-            .name = "parser_test",
-            .build_cmd = "build-parser-test",
-            .build_description = "Build (don't run) the parser test executable",
-            .run_cmd = "parser-test",
-            .run_description = "Run the standalone parser test",
-            .root_path = "src/test_parser.zig",
-        };
-        addExecutable(b, parser_test_config, exe_opts);
-
         const image_test_config = ExeConfig{
             .name = "image_test",
             .build_cmd = "build-image-test",
@@ -357,23 +347,21 @@ fn isWasm(target: std.Build.ResolvedTarget) bool {
 fn getDependencies(b: *std.Build, target: Target, optimize: OptimizeMode, ts_language_list: []const []const u8) !std.ArrayList(Dependency) {
     var dependencies = std.ArrayList(Dependency).init(b.allocator);
 
+    // Module for baked-in data and files
+    const asset_mod = b.addModule("assets", .{
+        .root_source_file = b.path("src/assets/assets.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    asset_mod.addIncludePath(b.path("assets"));
+
+    const options: *Options = b.addOptions();
+    options.addOption([]const []const u8, "builtin_ts_parsers", ts_language_list);
+    asset_mod.addOptions("config", options);
+
+    const asset_dep = Dependency{ .name = "assets", .module = asset_mod };
+
     if (!isWasm(target)) {
-        ///////////////////////////////////////////////////////////////////////////
-        // Module for our built-in TreeSitter queries
-        // ------------------------------------------------------------------------
-        const query_mod = b.addModule("queries", .{
-            .root_source_file = b.path("data/queries.zig"),
-            .target = target,
-            .optimize = optimize,
-        });
-        query_mod.addIncludePath(b.path("data"));
-
-        const options: *Options = b.addOptions();
-        options.addOption([]const []const u8, "builtin_ts_parsers", ts_language_list);
-        query_mod.addOptions("config", options);
-
-        const query_dep = Dependency{ .name = "queries", .module = query_mod };
-
         // Baked-In TreeSitter Parser Libraries
         const TsParserConfig = struct {
             name: []const u8,
@@ -394,15 +382,17 @@ fn getDependencies(b: *std.Build, target: Target, optimize: OptimizeMode, ts_lan
         for (parsers) |parser| {
             const dep_name = try std.fmt.allocPrint(b.allocator, "tree_sitter_{s}", .{parser.name});
             const ts = b.dependency(dep_name, .{ .optimize = optimize, .target = target });
-            query_mod.addCSourceFile(.{ .file = ts.path("src/parser.c") });
+            asset_mod.addCSourceFile(.{ .file = ts.path("src/parser.c") });
             if (parser.scanner) |scanner| {
-                query_mod.addCSourceFile(.{ .file = ts.path(scanner) });
+                asset_mod.addCSourceFile(.{ .file = ts.path(scanner) });
             }
-            query_mod.addIncludePath(ts.path("src"));
+            asset_mod.addIncludePath(ts.path("src"));
         }
+    }
 
-        try dependencies.append(query_dep);
+    try dependencies.append(asset_dep);
 
+    if (!isWasm(target)) {
         ///////////////////////////////////////////////////////////////////////////
         // Dependencies from build.zig.zon
         // ------------------------------------------------------------------------
@@ -420,7 +410,7 @@ fn getDependencies(b: *std.Build, target: Target, optimize: OptimizeMode, ts_lan
         const treez = b.dependency("treez", .{ .optimize = optimize, .target = target });
         const treez_dep = Dependency{ .name = "treez", .module = treez.module("treez") };
         try dependencies.append(treez_dep);
-        query_mod.addImport(treez_dep.name, treez_dep.module);
+        asset_mod.addImport(treez_dep.name, treez_dep.module);
 
         const known_folders = b.dependency("known_folders", .{ .optimize = optimize, .target = target });
         const known_folders_dep = Dependency{ .name = "known-folders", .module = known_folders.module("known-folders") };

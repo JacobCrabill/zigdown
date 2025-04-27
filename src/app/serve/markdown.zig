@@ -1,7 +1,7 @@
 const std = @import("std");
 const zap = @import("zap");
 const zd = @import("zigdown");
-const html = @import("html.zig");
+const html = @import("assets").html;
 
 const Allocator = std.mem.Allocator;
 

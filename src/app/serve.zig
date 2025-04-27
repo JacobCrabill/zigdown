@@ -2,7 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const zd = @import("zigdown");
 const md = @import("serve/markdown.zig");
-const html = @import("serve/html.zig");
+const html = @import("assets").html;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;

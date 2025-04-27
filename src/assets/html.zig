@@ -1,4 +1,4 @@
-pub const style_css = @embedFile("../assets/style.css");
+pub const style_css = @embedFile("html/style.css");
 
 pub const error_page =
     \\<html><body>
@@ -7,4 +7,4 @@ pub const error_page =
     \\</body></html>
 ;
 
-pub const favicon = @embedFile("../assets/zig-zero.png");
+pub const favicon = @embedFile("img/zig-zero.png");

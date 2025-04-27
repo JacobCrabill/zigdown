@@ -4,7 +4,7 @@
 <This block will be rendered as a Table of Contents>
 ```
 
-![Zig is Awesome!](src/assets/zig-zero.png)
+![Zig is Awesome!](src/assets/img/zig-zero.png)
 
 Zigdown, inspired by [Glow](https://github.com/charmbracelet/glow) and
 [mdcat](https://github.com/swsnr/mdcat), is a tool to parse and render Markdown-like content to the
@@ -33,7 +33,6 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 - [x] Task lists
 - [x] Tables
 - [x] Autolinks
-- [ ] References
 
 ### Renderer Features
 
@@ -45,9 +44,21 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 - [x] Automatic Table of Contents creation
 - [x] Neovim integration (Lua)
   - Optional: If you have Lua 5.1 system libraries, can build as a Lua plugin module
-- [ ] Markdown formatter (Almost complete!)
+- [x] Markdown formatter
+
+### Future Work / Missing Pieces
+
+- [ ] Enabling TreeSitter parsers to be used in WASM modules
+  - Requires filling in some libC stub functions (the TS parsers use quite a few functions from the
+    C standard library that are not available in WASM)
+- [ ] Better handling of inline code spans & backtick strings
+- [ ] Character escaping
+- [ ] Web-based images (fetch from URL & display in-terminal)
 - [ ] Complete NeoVim integration (w/ image rendering and auto-scrolling)
-- [ ] Web-based images (fetch & display in-terminal)
+  - Requires writing a renderer in Lua using NeoVim APIs
+- [ ] [Link References](https://spec.commonmark.org/0.31.2/#link-reference-definition)
+- [ ] GitHub-flavored note/info boxes? (not a fan of the syntax, but such is life)
+- [ ] Color schemes for syntax highlighting
 
 ## Caveats
 
@@ -56,6 +67,16 @@ Markdown support by any definition. Rather, the goal is to support "nicely forma
 making some simplifying assumptions about what constitutes a paragraph vs. a code block, for
 example. The "nicely formatted" caveat simplifies the parser somewhat, enabling easier extension for
 new features like special warnings, note boxes, and other custom directives.
+
+In addition to my "nicely formatted" caveat, I am also only interested in supporting a very common
+subset of all Markdown syntax, and ignoring anything I personally find useless or annoying to parse.
+
+### Things I Will Not Support
+
+- Setext headings
+- Thematic breaks
+- Embedded HTML
+- Indent-based code blocks (as opposed to fenced code blocks)
 
 ## Usage
 
@@ -111,9 +132,6 @@ zigdown install-parsers c,cpp # Assumes both exist at github.com/tree-sitter on 
 zigdown install-parsers maxxnino:zig  # Specify the Github user; still assumes the 'master' branch
 zigdown install-parsers tree-sitter:master:rust # Specify Github user, branch, and language
 ```
-
-**TODO:** Load a color scheme and a capture name -> color mapping at runtime (from file) instead of
-a short hard-coded mapping.
 
 ### Installing Parsers Manually
 

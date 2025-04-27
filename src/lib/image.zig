@@ -278,7 +278,7 @@ test "Display image" {
     const stream = buf.writer().any();
     debug.setStream(stream);
     debug.print("Rendering Zero the Ziguana here:\n", .{});
-    try sendImagePNG(stream, alloc, "src/assets/zig-zero.png", 100, 60);
+    try sendImagePNG(stream, alloc, "src/assets/img/zig-zero.png", 100, 60);
     debug.print("\n--------------------------------\n", .{});
     // TODO: Can check for expected output in buf.items if I really want to
 }

@@ -5,6 +5,7 @@ pub const stbi = @import("stb_image");
 pub const flags = @import("flags");
 
 // Expose public namespaces for building docs
+pub const assets = @import("assets");
 pub const cons = @import("console.zig");
 pub const debug = @import("debug.zig");
 pub const lexer = @import("lexer.zig");
@@ -16,7 +17,6 @@ pub const blocks = @import("ast/blocks.zig");
 pub const gfx = @import("image.zig");
 pub const ts_queries = @import("ts_queries.zig");
 pub const wasm = @import("wasm.zig");
-pub const present = @import("present.zig");
 
 // Global public Zigdown types
 // pub const Markdown = markdown.Markdown;

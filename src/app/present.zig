@@ -1,14 +1,16 @@
 const std = @import("std");
-const gfx = @import("image.zig");
-const cons = @import("console.zig");
+const zd = @import("zigdown");
 const RawTTY = @import("RawTTY.zig");
-const Parser = @import("parser.zig").Parser;
-const ConsoleRenderer = @import("render.zig").ConsoleRenderer;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const Dir = std.fs.Dir;
 const File = std.fs.File;
+
+const gfx = zd.gfx;
+const cons = zd.cons;
+const Parser = zd.Parser;
+const ConsoleRenderer = zd.ConsoleRenderer;
 
 /// Where the files to render come from
 pub const Source = struct {

@@ -326,10 +326,11 @@ pub fn handlePresent(
     colorscheme: *const flags.ColorScheme,
     p_opts: PresentCmdOpts,
 ) !void {
+    const present = @import("present.zig");
     if (@import("builtin").target.os.tag == .windows) {
         @panic("Presentation mode not supported on Windows!");
     }
-    var source: zd.present.Source = .{};
+    var source: present.Source = .{};
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     var root: ?[]const u8 = null;
@@ -358,7 +359,7 @@ pub fn handlePresent(
 
     const recurse: bool = p_opts.recurse;
     const stdout = std.io.getStdOut().writer().any();
-    zd.present.present(alloc, stdout, source, recurse) catch |err| {
+    present.present(alloc, stdout, source, recurse) catch |err| {
         _ = stdout.write(zd.cons.clear_screen) catch unreachable;
         std.debug.print("\nError encountered during presentation: {any}\n", .{err});
         return;

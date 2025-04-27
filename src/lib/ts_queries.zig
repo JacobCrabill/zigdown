@@ -18,7 +18,7 @@ const TsParserPair = struct {
     language: *const treez.Language,
 };
 
-const builtin_queries = @import("queries").builtin_queries;
+const builtin_queries = @import("assets").queries.builtin_queries;
 pub var builtin_languages: std.StringHashMap(TsParserPair) = undefined;
 
 var initialized: bool = false;
