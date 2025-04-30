@@ -2,8 +2,6 @@ const std = @import("std");
 const Build = std.Build;
 const Allocator = std.mem.Allocator;
 
-const fetcher = @import("tools/fetch_queries.zig");
-
 const Target = std.Build.ResolvedTarget;
 const OptimizeMode = std.builtin.OptimizeMode;
 const Options = std.Build.Step.Options;
