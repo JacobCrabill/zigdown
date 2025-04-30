@@ -43,8 +43,7 @@ pub fn build(b: *std.Build) !void {
 
     const wasm_optimize = b.option(OptimizeMode, "wasm-optimize", "Optimization mode for WASM targets") orelse .ReleaseSmall;
 
-    const build_lua = b.option(bool, "lua", "[BROKEN - DON'T USE] Build Zigdown as a Lua module") orelse false;
-    const build_query_fetcher = b.option(bool, "build-query-fetcher", "Build the TreeSitter query fetcher") orelse false;
+    const build_lua = b.option(bool, "lua", "[WIP] Build Zigdown as a Lua module") orelse false;
     const build_test_exes = b.option(bool, "build-test-exes", "Build the custom test executables") orelse false;
     const do_extra_tests = b.option(bool, "extra-tests", "Run extra (non-standard) tests") orelse false;
 
@@ -105,17 +104,10 @@ pub fn build(b: *std.Build) !void {
     addExecutable(b, exe_config, exe_opts);
 
     if (build_lua) {
-        // NOTE - This is currently broken! I may fix this later but for now, don't use.
-        // TODO
-        // const luajit = b.dependency("luajit", .{ .optimize = optimize, .target = target });
-        // const luajit_dep = Dependency{ .name = "luajit", .module = luajit.module("luajit") };
-        // const lua51 = b.dependency("lua51", .{ .optimize = optimize, .target = target });
-        // const lua51_dep = Dependency{ .name = "lua51", .module = lua51.module("lua51") };
-        // var lua_deps_array = [_]Dependency{ luajit_dep, lua51_dep };
-        // const lua_deps: []Dependency = &lua_deps_array;
+        const ziglua = b.lazyDependency("ziglua", .{ .optimize = optimize, .target = target, .shared = false, .lang = .luajit }).?;
+        const ziglua_dep = Dependency{ .name = "luajit", .module = ziglua.module("zlua") };
 
         // Compile Zigdown as a Lua module compatible with Neovim / LuaJIT 5.1
-        // Requires LuaJIT 2.1 headers & Lua 5.1 library
         const lua_mod = b.addSharedLibrary(.{
             .name = "zigdown_lua",
             .root_source_file = b.path("src/app/lua_api.zig"),
@@ -128,14 +120,10 @@ pub fn build(b: *std.Build) !void {
                 lua_mod.root_module.addImport(dep.name, dep.module);
             }
         }
+        lua_mod.root_module.addImport(ziglua_dep.name, ziglua_dep.module);
 
-        // Point the compiler to the location of the Lua headers (lua.h and friends)
-        // Note that we require Lua 5.1, specifically
-        // This is compatible with the version of LuaJIT built into NeoVim
-        lua_mod.addIncludePath(.{ .cwd_relative = "/usr/include/luajit-2.1" });
-        lua_mod.addIncludePath(.{ .cwd_relative = "/usr/include/x86_64-linux-gnu/" });
-        lua_mod.addLibraryPath(.{ .cwd_relative = "/usr/lib/x86_64-linux-gnu/" });
-        lua_mod.linkSystemLibrary("lua5.1");
+        const luajit_lib = ziglua.artifact("lua");
+        lua_mod.linkLibrary(luajit_lib);
 
         // "Install" to the output dir using the correct naming convention to load with lua
         const copy_step = b.addInstallFileWithDir(lua_mod.getEmittedBin(), .{ .custom = "../lua/" }, "zigdown_lua.so");
@@ -143,20 +131,6 @@ pub fn build(b: *std.Build) !void {
         b.getInstallStep().dependOn(&copy_step.step);
         const step = b.step("zigdown-lua", "Build Zigdown as a Lua module");
         step.dependOn(&copy_step.step);
-    }
-
-    if (build_query_fetcher) {
-        // Compile the TreeSitter query-fetcher executable
-        const query_fetcher = ExeConfig{
-            .version = .{ .major = 0, .minor = 1, .patch = 0 },
-            .name = "fetch_ts_queries",
-            .build_cmd = "query-fetcher",
-            .build_description = "TODO",
-            .run_cmd = "fetch-queries",
-            .run_description = "Fetch a list of TreeSitter highlights queries",
-            .root_path = "tools/fetch_queries.zig",
-        };
-        addExecutable(b, query_fetcher, exe_opts);
     }
 
     // Build HTML library documentation

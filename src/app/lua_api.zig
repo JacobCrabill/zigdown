@@ -38,14 +38,15 @@ export fn render_markdown(lua: ?*LuaState) callconv(.C) c_int {
     const alloc = std.heap.page_allocator;
 
     // Number of columns to render (output width)
-    const cols: c_long = c.lua_tointeger(lua, 2);
+    //const cols: usize = @intCast(c.lua_tointeger(lua, 2));
+    const cols: usize = 90;
 
     // Parse the input text
     const opts = zd.parser.ParserOpts{ .copy_input = false, .verbose = false };
     var parser = zd.Parser.init(alloc, opts);
     defer parser.deinit();
 
-    parser.parseMarkdown(input) catch unreachable; // TODO: better error handling?
+    parser.parseMarkdown(input) catch @panic("Parse error!"); // TODO: better error handling?
     const md: zd.Block = parser.document;
 
     // Create a buffer to render into - Note that Lua creates its own copy internally
@@ -55,14 +56,14 @@ export fn render_markdown(lua: ?*LuaState) callconv(.C) c_int {
     // Render the AST to the buffer
     // TODO: Configure the cwd for the renderer (For use with evaluating links/paths)
     // TODO: Configure the render width
-    const render_opts = zd.render.render_console.RenderOpts{
-        .root_dir = null, // TODO
-        .indent = 2,
-        .width = @intCast(cols),
-    };
-    var c_renderer = zd.consoleRenderer(buffer.writer(), md.allocator(), render_opts);
-    defer c_renderer.deinit();
-    c_renderer.renderBlock(md) catch unreachable;
+    zd.render.render(.{
+        .alloc = alloc,
+        .document = md,
+        .document_dir = null,
+        .out_stream = buffer.writer().any(),
+        .width = @max(@min(cols, 120), 40),
+        .method = .console,
+    }) catch @panic("Render error!");
 
     // Push the rendered string to the Lua stack
     c.lua_pushlstring(lua, @ptrCast(buffer.items), buffer.items.len);
@@ -73,7 +74,7 @@ export fn render_markdown(lua: ?*LuaState) callconv(.C) c_int {
 /// I recommend using ZLS (the Zig language server) for autocompletion to help
 /// find relevant Lua function calls like pushstring, tostring, etc.
 export fn hello(lua: ?*LuaState) callconv(.C) c_int {
-    c.lua_pushstring(lua, "Hello, World!");
+    c.lua_pushstring(lua, "Hello, LuaJIT!");
     return 1;
 }
 
