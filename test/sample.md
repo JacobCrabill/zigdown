@@ -55,7 +55,9 @@ root:
 
 # Images
 
-![Image Alt](../src/assets/zig-zero.png) [Click Me!](https://google.com)
+![Image Alt](../src/assets/img/zig-zero.png) [Click Me!](https://google.com)
+
+![Sample](https://flow-state.photos/wp-content/uploads/2024/05/DSC07974-export-400x284.jpg)
 
 Rendered to the console using the
 [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/).

@@ -296,7 +296,7 @@ pub const InlineParser = struct {
         // Find the separating characters: '[', ']', '(', ')'
         // We already know the 1st token is '[' and that the '(' lies immediately after the '['
         // The Alt text lies between '[' and ']'
-        // The URI liex between '(' and ')'
+        // The URI lies between '(' and ')'
         const alt_start: usize = 1;
         const rb_idx: usize = utils.findFirstOf(line, 0, &.{.RBRACK}).?;
         const lp_idx: usize = rb_idx + 2;
@@ -382,6 +382,9 @@ pub const InlineParser = struct {
             var img = inls.Image.init(self.alloc);
             img.heap_src = true;
             img.src = try std.mem.concat(self.alloc, u8, uri_words.items);
+            if (std.mem.startsWith(u8, img.src, "http") or std.mem.startsWith(u8, img.src, "www.")) {
+                img.kind = .web;
+            }
             img.alt = link_text_block;
             inl = Inline.initWithContent(self.alloc, .{ .image = img });
         } else {

@@ -361,6 +361,47 @@ test "trimTrailingWhitespace" {
     try std.testing.expectEqualStrings(" ", trimTrailingWhitespace("  "));
 }
 
+/// Helper function to read the contents of a file given a relative path.
+/// Caller owns the returned memory.
+pub fn readFile(alloc: Allocator, file_path: []const u8) ![]u8 {
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const realpath = try std.fs.realpath(file_path, &path_buf);
+    var file: std.fs.File = try std.fs.openFileAbsolute(realpath, .{});
+    defer file.close();
+    return try file.readToEndAlloc(alloc, 1e9);
+}
+
+/// Fetch a remote file from an HTTP server at the given URL.
+/// Caller owns the returned memory.
+pub fn fetchFile(alloc: Allocator, url_s: []const u8, storage: *std.ArrayList(u8)) !void {
+    var client = std.http.Client{ .allocator = alloc };
+    defer client.deinit();
+
+    // Perform a one-off request and wait for the response.
+    // Returns an http.Status.
+    const status = client.fetch(.{
+        .location = .{ .url = url_s },
+        .method = .GET,
+        .headers = .{ .authorization = .omit },
+        .response_storage = .{ .dynamic = storage },
+    }) catch |err| {
+        std.debug.print("Error fetching {s}: {any}\n", .{ url_s, err });
+        return err;
+    };
+
+    if (status.status != .ok or storage.items.len == 0) {
+        std.debug.print("Error fetching {s} (!ok)\n", .{url_s});
+        return error.NoReply;
+    }
+}
+
+test "fetchFile" {
+    const url = "https://picsum.photos/id/237/200/300";
+    var buffer = ArrayList(u8).init(std.testing.allocator);
+    defer buffer.deinit();
+    try fetchFile(std.testing.allocator, url, &buffer);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Unit Tests
 ////////////////////////////////////////////////////////////////////////////////

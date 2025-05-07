@@ -1040,18 +1040,41 @@ pub const ConsoleRenderer = struct {
         self.write(image.src);
         self.startStyle(cur_style);
 
-        // Assume the image path is relative to the Markdown file path
-        const root_dir = if (self.opts.root_dir) |rd| rd else "./";
-        const path = try std.fs.path.joinZ(self.alloc, &.{ root_dir, image.src });
-        defer self.alloc.free(path);
+        var img_bytes: ?[]u8 = null;
+        defer if (img_bytes) |bytes| self.alloc.free(bytes);
 
-        var img_file: ?stb.Image = stb.load_image(path, 3) catch |err| blk: {
-            debug.print("Error loading image: {any}\n", .{err});
-            break :blk null;
-        };
-        defer if (img_file) |*img| img.deinit();
+        if (image.kind == .local) blk: {
+            // Assume the image path is relative to the Markdown file path
+            const root_dir = if (self.opts.root_dir) |rd| rd else "./";
+            const path = try std.fs.path.joinZ(self.alloc, &.{ root_dir, image.src });
+            defer self.alloc.free(path);
+            var img: std.fs.File = std.fs.openFileAbsolute(path, .{}) catch |err| {
+                debug.print("Error loading image {s}: {any}\n", .{ path, err });
+                break :blk;
+            };
+            defer img.close();
+            img_bytes = try img.readToEndAlloc(self.alloc, 1e9);
+        } else blk: {
+            // Assume the image src is a remote file to be downloaded
+            var buffer = ArrayList(u8).init(self.alloc);
+            defer buffer.deinit();
 
-        if (img_file) |img| {
+            utils.fetchFile(self.alloc, image.src, &buffer) catch |err| {
+                debug.print("Error fetching '{s}': {any}\n", .{ image.src, err });
+                break :blk;
+            };
+
+            img_bytes = try buffer.toOwnedSlice();
+        }
+
+        if (img_bytes) |bytes| blk: {
+            var img: stb.Image = stb.load_image_from_memory(bytes) catch |err| {
+                debug.print("Error loading image: {any}\n", .{err});
+                break :blk;
+            };
+            defer img.deinit();
+
+            // Place one blank line before the image
             self.renderBreak();
             self.renderBreak();
 
@@ -1087,7 +1110,7 @@ pub const ConsoleRenderer = struct {
             self.writeNTimes(" ", (self.opts.width - width) / 2);
 
             // const raw_data: []const u8 = img.data[0..@intCast(img.width * img.height * img.nchan)];
-            gfx.sendImagePNG(self.prerender_stream, self.alloc, path, width, height) catch |err| {
+            gfx.sendImagePNG(self.prerender_stream, self.alloc, bytes, width, height) catch |err| {
                 if (err == error.FileIsNotPNG) {
                     if (img.nchan == 3) {
                         gfx.sendImageRGB2(self.prerender_stream, self.alloc, &img, width, height) catch |err2| {

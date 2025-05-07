@@ -10,6 +10,7 @@ const treez = @import("treez");
 const config = @import("config");
 const wasm = @import("wasm.zig");
 
+const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 const Self = @This();
 
@@ -284,34 +285,16 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
         lang_alias,
         git_ref,
     });
-    const uri = try std.Uri.parse(url_s);
 
-    std.debug.print("Fetching repo for {s} from {s}\n", .{ language, url_s });
-
-    var client = std.http.Client{ .allocator = allocator };
-    defer client.deinit();
-
-    // Perform a one-off request and wait for the response
-    // Returns an http.Status
-    var response_storage = std.ArrayList(u8).init(allocator);
+    var response_storage = ArrayList(u8).init(allocator);
     defer response_storage.deinit();
-    const status = client.fetch(.{
-        .location = .{ .uri = uri },
-        .method = .GET,
-        .headers = .{ .authorization = .omit },
-        .response_storage = .{ .dynamic = &response_storage },
-    }) catch |err| {
+    utils.fetchFile(allocator, url_s, &response_storage) catch |err| {
         std.debug.print("Error fetching {s} at {s}: {any}\n", .{ lang_alias, url_s, err });
-        return;
+        return err;
     };
 
     // The response is the *.tar.gz file stream
-    const body = response_storage.items;
-
-    if (status.status != .ok or body.len == 0) {
-        std.debug.print("Error fetching {s} (!ok)\n", .{lang_alias});
-        return error.NoReply;
-    }
+    const body: []const u8 = response_storage.items;
 
     // Ensure we start with an empty directory for the parser we downloaded
     try configd.deleteTree(parser_subdir);

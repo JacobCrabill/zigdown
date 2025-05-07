@@ -192,7 +192,13 @@ pub const Image = struct {
     alloc: Allocator,
     src: []const u8,
     alt: ArrayList(Text),
+    kind: Kind = .local, // Local file, or web URL
     heap_src: bool = false, // Whether the src string has been heap-allocated
+
+    pub const Kind = enum(u8) {
+        local,
+        web,
+    };
 
     pub fn init(alloc: Allocator) Image {
         return .{
@@ -214,8 +220,7 @@ pub const Image = struct {
 
     pub fn print(self: Image, depth: u8) void {
         printIndent(depth);
-        //debug.print("Image: {s}\n", .{self.src});
-        debug.print("Image:\n", .{});
+        debug.print("Image: {s}\n", .{self.src});
         for (self.alt.items) |text| {
             text.print(depth + 1);
         }

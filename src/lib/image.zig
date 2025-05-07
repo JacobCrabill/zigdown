@@ -3,6 +3,7 @@ const stb = @import("stb_image");
 const builtin = @import("builtin");
 
 const debug = @import("debug.zig");
+const utils = @import("utils.zig");
 
 const Allocator = std.mem.Allocator;
 const File = std.fs.File;
@@ -46,25 +47,19 @@ pub fn isPNG(data: []const u8) bool {
 
 /// Send a PNG image file to the terminal using the Kitty terminal graphics protocol
 /// 'width' and 'height' are in terms of terminal cells, not pixels!
-pub fn sendImagePNG(stream: anytype, alloc: Allocator, file: []const u8, width: ?usize, height: ?usize) !void {
+pub fn sendImagePNG(stream: anytype, alloc: Allocator, bytes: []const u8, width: ?usize, height: ?usize) !void {
     // Read the image into memory
-    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const realpath = try std.fs.realpath(file, &path_buf);
-    var img: File = try std.fs.openFileAbsolute(realpath, .{});
-    const buffer = try img.readToEndAlloc(alloc, 1e9);
-    defer alloc.free(buffer);
-
     // Check that the image is a PNG file
-    if (!isPNG(buffer)) {
+    if (!isPNG(bytes)) {
         return error.FileIsNotPNG;
     }
 
     // Encode the image data as base64
-    const blen = Base64Encoder.calcSize(buffer.len);
+    const blen = Base64Encoder.calcSize(bytes.len);
     const b64buf = try alloc.alloc(u8, blen);
     defer alloc.free(b64buf);
 
-    const data = Base64Encoder.encode(b64buf, buffer);
+    const data = Base64Encoder.encode(b64buf, bytes);
 
     // Send the image data in 4kB chunks
     var pos: usize = 0;
@@ -80,15 +75,9 @@ pub fn sendImagePNG(stream: anytype, alloc: Allocator, file: []const u8, width: 
 }
 
 /// Send an image file to the terminal as raw RGB pixel data using the Kitty terminal graphics protocol
-pub fn sendImageRGB(stream: anytype, alloc: Allocator, file: []const u8, width: ?usize, height: ?usize) !void {
+pub fn sendImageRGB(stream: anytype, alloc: Allocator, bytes: []const u8, width: ?usize, height: ?usize) !void {
     // Read the image into memory
-    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const realpath = try std.fs.realpath(file, &path_buf);
-    var img_file: File = try std.fs.openFileAbsolute(realpath, .{});
-    const buffer = try img_file.readToEndAlloc(alloc, 1e9);
-    defer alloc.free(buffer);
-
-    var img: stb.Image = try stb.load_image_from_memory(buffer);
+    var img: stb.Image = try stb.load_image_from_memory(bytes);
     defer img.deinit();
 
     if (img.nchan != 3)
@@ -278,7 +267,9 @@ test "Display image" {
     const stream = buf.writer().any();
     debug.setStream(stream);
     debug.print("Rendering Zero the Ziguana here:\n", .{});
-    try sendImagePNG(stream, alloc, "src/assets/img/zig-zero.png", 100, 60);
+    const bytes = try utils.readFile(alloc, "src/assets/img/zig-zero.png");
+    defer alloc.free(bytes);
+    try sendImagePNG(stream, alloc, bytes, 100, 60);
     debug.print("\n--------------------------------\n", .{});
     // TODO: Can check for expected output in buf.items if I really want to
 }
@@ -304,9 +295,10 @@ pub fn main() !void {
     // The image can be shifted right by padding spaces
     // (The image is drawn from the top-left starting at the current cursor location)
     //try stdout.print("        ", .{});
+    const bytes = try utils.readFile(alloc, args[1]);
     if (std.mem.endsWith(u8, args[1], ".png")) {
-        try sendImagePNG(stdout, alloc, args[1], width, height);
+        try sendImagePNG(stdout, alloc, bytes, width, height);
     } else {
-        try sendImageRGB(stdout, alloc, args[1], width, height);
+        try sendImageRGB(stdout, alloc, bytes, width, height);
     }
 }

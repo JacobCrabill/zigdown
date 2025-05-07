@@ -5,4 +5,5 @@
 *.a
 zig-out/
 .zig-cache/
+.ccls-cache/
 docs/
