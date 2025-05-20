@@ -1,5 +1,7 @@
 # Zigdown: Markdown toolset in Zig
 
+![CI Status](https://github.com/JacobCrabill/zigdown/actions/workflows/main.yml/badge.svg)
+
 ```{toctree}
 <This block will be rendered as a Table of Contents>
 ```
@@ -39,6 +41,7 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 - [x] Console and HTML rendering
 - [x] Images (rendered to the console using the
   [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/))
+- [x] Web-based images (fetch from URL & display in-terminal)
 - [x] (Clickable) Links
 - [x] Tables
 - [x] Automatic Table of Contents creation
@@ -53,7 +56,6 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
     C standard library that are not available in WASM)
 - [ ] Better handling of inline code spans & backtick strings
 - [ ] Character escaping
-- [ ] Web-based images (fetch from URL & display in-terminal)
 - [ ] Complete NeoVim integration (w/ image rendering and auto-scrolling)
   - Requires writing a renderer in Lua using NeoVim APIs
 - [ ] [Link References](https://spec.commonmark.org/0.31.2/#link-reference-definition)

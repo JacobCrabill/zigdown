@@ -373,6 +373,11 @@ fn getDependencies(b: *std.Build, target: Target, optimize: OptimizeMode, ts_lan
         const stbi_dep = Dependency{ .name = "stb_image", .module = stbi.module("stb_image") };
         try dependencies.append(stbi_dep);
 
+        // PlutoSVG
+        const plutosvg = b.dependency("plutosvg", .{ .optimize = optimize, .target = target });
+        const plutosvg_dep = Dependency{ .name = "plutosvg", .module = plutosvg.module("plutosvg") };
+        try dependencies.append(plutosvg_dep);
+
         // Flags
         const flags = b.dependency("flags", .{ .optimize = optimize, .target = target });
         const flags_dep = Dependency{ .name = "flags", .module = flags.module("flags") };

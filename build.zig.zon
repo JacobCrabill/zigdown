@@ -16,6 +16,10 @@
             .url = "https://github.com/JacobCrabill/zig-stb-image/archive/5a650f9439b2b2d8ca5e498b349e25bb7308f7bb.tar.gz",
             .hash = "zig_stb_image-2.28.0-9dD1dTgdBQBDRqd8_8qNHlT62Ox8Gfh3qbbBtvbufjom",
         },
+        .plutosvg = .{
+            .url = "https://github.com/JacobCrabill/zig-plutosvg/archive/518e00df9412df30eea6a1934a7edd2658cdd2d9.tar.gz",
+            .hash = "plutosvg-0.0.6-LyMxgbMuAADqe6_HVbOOBTtsmMVlb-ar-iOc7pRrPQYc",
+        },
         .flags = .{
             .url = "https://github.com/n0s4/flags/archive/0e2491d8e6d2be38dc0c2ce8e103469886e468bb.tar.gz",
             .hash = "flags-0.10.0-a_9h3kR2AABNAfaPGRyOOGmWsfv12Hk6JQPTX4MM446s",

@@ -385,6 +385,25 @@ pub const InlineParser = struct {
             if (std.mem.startsWith(u8, img.src, "http") or std.mem.startsWith(u8, img.src, "www.")) {
                 img.kind = .web;
             }
+
+            // Attempt to infer the image type from the extension
+            if (std.mem.lastIndexOf(u8, img.src, ".")) |ext_idx| blk: {
+                const src_ext = img.src[ext_idx..];
+                if (src_ext.len > 4) break :blk;
+
+                var extension_buffer: [4]u8 = undefined;
+                const extension = std.ascii.lowerString(&extension_buffer, img.src[ext_idx..]);
+                if (std.mem.endsWith(u8, extension, "png")) {
+                    img.format = .png;
+                } else if (std.mem.endsWith(u8, extension, "jpg")) {
+                    img.format = .jpeg;
+                } else if (std.mem.endsWith(u8, extension, "jpeg")) {
+                    img.format = .jpeg;
+                } else if (std.mem.endsWith(u8, extension, "svg")) {
+                    img.format = .svg;
+                }
+            }
+
             img.alt = link_text_block;
             inl = Inline.initWithContent(self.alloc, .{ .image = img });
         } else {

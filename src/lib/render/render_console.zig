@@ -1,5 +1,6 @@
 const std = @import("std");
 const stb = @import("stb_image");
+const plutosvg = @import("plutosvg");
 
 const blocks = @import("../ast/blocks.zig");
 const containers = @import("../ast/containers.zig");
@@ -1067,63 +1068,125 @@ pub const ConsoleRenderer = struct {
             img_bytes = try buffer.toOwnedSlice();
         }
 
-        if (img_bytes) |bytes| blk: {
-            var img: stb.Image = stb.load_image_from_memory(bytes) catch |err| {
-                debug.print("Error loading image: {any}\n", .{err});
-                break :blk;
-            };
-            defer img.deinit();
-
-            // Place one blank line before the image
-            self.renderBreak();
-            self.renderBreak();
-
-            const twidth_px: f32 = @floatFromInt(self.opts.termsize.width);
-            const theight_px: f32 = @floatFromInt(self.opts.termsize.height);
-            const tcols: f32 = @floatFromInt(self.opts.termsize.cols);
-            const trows: f32 = @floatFromInt(self.opts.termsize.rows);
-            const max_cols: f32 = @floatFromInt(self.opts.max_image_cols);
-
-            // Get the size of a single cell of the terminal in pixels
-            const x_px: f32 = twidth_px / tcols;
-            const y_px: f32 = theight_px / trows;
-
-            const org_width: f32 = @floatFromInt(img.width);
-            const org_height: f32 = @floatFromInt(img.height);
-
-            // Cap the image width at the given max # of cells
-            // We'll just ignore the max height, since terminals can scroll :D
-            var fwidth: f32 = org_width;
-            var fheight: f32 = org_height;
-            const aspect_ratio: f32 = fheight / fwidth;
-            const max_width_pixels: f32 = max_cols * x_px;
-            if (org_width > (x_px * max_cols)) {
-                fwidth = max_width_pixels;
-                fheight = aspect_ratio * fwidth;
+        if (img_bytes) |bytes| {
+            switch (image.format) {
+                .png => {
+                    try self.renderImagePng(bytes);
+                },
+                .jpeg, .other => {
+                    try self.renderImageRgb(bytes);
+                },
+                .svg => {
+                    try self.renderImageSvg(bytes);
+                },
             }
+        }
+    }
 
-            // The final width and height to render at (in terms of columns and rows of the terminal)
-            const width: usize = @intFromFloat(fwidth / x_px);
-            const height: usize = @intFromFloat(fheight / y_px);
+    fn renderImagePng(self: *Self, bytes: []const u8) !void {
+        var img: stb.Image = stb.load_image_from_memory(bytes) catch |err| {
+            debug.print("Error loading image: {any}\n", .{err});
+            return;
+        };
+        defer img.deinit();
 
-            // Center the image by setting the cursor appropriately
-            self.writeNTimes(" ", (self.opts.width - width) / 2);
+        // Place one blank line before the image
+        self.renderBreak();
+        self.renderBreak();
 
-            // const raw_data: []const u8 = img.data[0..@intCast(img.width * img.height * img.nchan)];
-            gfx.sendImagePNG(self.prerender_stream, self.alloc, bytes, width, height) catch |err| {
-                if (err == error.FileIsNotPNG) {
-                    if (img.nchan == 3) {
-                        gfx.sendImageRGB2(self.prerender_stream, self.alloc, &img, width, height) catch |err2| {
-                            debug.print("Error rendering RGB image: {any}\n", .{err2});
-                        };
-                    } else {
-                        debug.print("Invalid # of channels for non-PNG image: {d}\n", .{img.nchan});
-                    }
-                } else {
-                    debug.print("Error rendering image: {any}\n", .{err});
-                }
+        const twidth_px: f32 = @floatFromInt(self.opts.termsize.width);
+        const theight_px: f32 = @floatFromInt(self.opts.termsize.height);
+        const tcols: f32 = @floatFromInt(self.opts.termsize.cols);
+        const trows: f32 = @floatFromInt(self.opts.termsize.rows);
+        const max_cols: f32 = @floatFromInt(self.opts.max_image_cols);
+
+        // Get the size of a single cell of the terminal in pixels
+        const x_px: f32 = twidth_px / tcols;
+        const y_px: f32 = theight_px / trows;
+
+        const org_width: f32 = @floatFromInt(img.width);
+        const org_height: f32 = @floatFromInt(img.height);
+
+        // Cap the image width at the given max # of cells
+        // We'll just ignore the max height, since terminals can scroll :D
+        var fwidth: f32 = org_width;
+        var fheight: f32 = org_height;
+        const aspect_ratio: f32 = fheight / fwidth;
+        const max_width_pixels: f32 = max_cols * x_px;
+        if (org_width > (x_px * max_cols)) {
+            fwidth = max_width_pixels;
+            fheight = aspect_ratio * fwidth;
+        }
+
+        // The final width and height to render at (in terms of columns and rows of the terminal)
+        const width: usize = @intFromFloat(fwidth / x_px);
+        const height: usize = @intFromFloat(fheight / y_px);
+
+        // Center the image by setting the cursor appropriately
+        self.writeNTimes(" ", (self.opts.width - width) / 2);
+
+        gfx.sendImagePNG(self.prerender_stream, self.alloc, bytes, width, height) catch |err| {
+            debug.print("Error rendering PNG image: {any}\n", .{err});
+        };
+        self.renderBreak();
+    }
+
+    fn renderImageRgb(self: *Self, bytes: []const u8) !void {
+        var img: stb.Image = stb.load_image_from_memory(bytes) catch |err| {
+            debug.print("Error loading image: {any}\n", .{err});
+            return;
+        };
+        defer img.deinit();
+
+        // Place one blank line before the image
+        self.renderBreak();
+        self.renderBreak();
+
+        const twidth_px: f32 = @floatFromInt(self.opts.termsize.width);
+        const theight_px: f32 = @floatFromInt(self.opts.termsize.height);
+        const tcols: f32 = @floatFromInt(self.opts.termsize.cols);
+        const trows: f32 = @floatFromInt(self.opts.termsize.rows);
+        const max_cols: f32 = @floatFromInt(self.opts.max_image_cols);
+
+        // Get the size of a single cell of the terminal in pixels
+        const x_px: f32 = twidth_px / tcols;
+        const y_px: f32 = theight_px / trows;
+
+        const org_width: f32 = @floatFromInt(img.width);
+        const org_height: f32 = @floatFromInt(img.height);
+
+        // Cap the image width at the given max # of cells
+        // We'll just ignore the max height, since terminals can scroll :D
+        var fwidth: f32 = org_width;
+        var fheight: f32 = org_height;
+        const aspect_ratio: f32 = fheight / fwidth;
+        const max_width_pixels: f32 = max_cols * x_px;
+        if (org_width > (x_px * max_cols)) {
+            fwidth = max_width_pixels;
+            fheight = aspect_ratio * fwidth;
+        }
+
+        // The final width and height to render at (in terms of columns and rows of the terminal)
+        const width: usize = @intFromFloat(fwidth / x_px);
+        const height: usize = @intFromFloat(fheight / y_px);
+
+        // Center the image by setting the cursor appropriately
+        self.writeNTimes(" ", (self.opts.width - width) / 2);
+
+        if (img.nchan == 3) {
+            gfx.sendImageRGB2(self.prerender_stream, self.alloc, &img, width, height) catch |err2| {
+                debug.print("Error rendering RGB image: {any}\n", .{err2});
             };
-            self.renderBreak();
+        } else {
+            debug.print("Invalid # of channels for non-PNG image: {d}\n", .{img.nchan});
+        }
+        self.renderBreak();
+    }
+
+    fn renderImageSvg(self: *Self, bytes: []const u8) !void {
+        if (plutosvg.convertSvgToPng(self.alloc, bytes)) |png_bytes| {
+            defer self.alloc.free(png_bytes);
+            try self.renderImagePng(png_bytes);
         }
     }
 };

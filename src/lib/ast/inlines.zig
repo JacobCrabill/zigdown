@@ -193,7 +193,19 @@ pub const Image = struct {
     src: []const u8,
     alt: ArrayList(Text),
     kind: Kind = .local, // Local file, or web URL
+    format: Format = .other,
     heap_src: bool = false, // Whether the src string has been heap-allocated
+
+    pub const Format = enum(u8) {
+        /// PNG file that can be directly sent to the terminal with the Kitty Graphics Protocol
+        png,
+        /// JPEG file that can be loaded with stb_image and sent to the terminal as raw RGB pixels
+        jpeg,
+        /// SVG file that can be converted to a PNG
+        svg,
+        /// Some other image type we will attempt to load using stb_image
+        other,
+    };
 
     pub const Kind = enum(u8) {
         local,

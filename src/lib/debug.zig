@@ -23,7 +23,11 @@ pub fn setStream(out_stream: std.io.AnyWriter) void {
 pub fn getStream() std.io.AnyWriter {
     if (stream == null) {
         @branchHint(.cold);
-        stream = std.io.getStdErr().writer().any();
+        if (!wasm.is_wasm) {
+            stream = std.io.getStdErr().writer().any();
+        } else {
+            @panic("Unable to debug.print in WASM!");
+        }
     }
     return stream.?;
 }
