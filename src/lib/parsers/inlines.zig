@@ -311,7 +311,7 @@ pub const InlineParser = struct {
         var style = TextStyle{};
 
         var i: usize = 0;
-        while (i < alt_text.len) {
+        while (i < alt_text.len) : (i += 1) {
             const tok = alt_text[i];
 
             // Handle formatting tokens
@@ -367,7 +367,6 @@ pub const InlineParser = struct {
                     try link_text_block.append(text);
                 },
             }
-            i += 1;
         }
 
         // Process URI text

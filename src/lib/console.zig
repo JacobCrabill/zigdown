@@ -54,7 +54,7 @@ pub const bg_default = ansi ++ "[49m";
 
 // Extended Background Colors
 pub const bg_dark_yellow = ansi ++ "[48;5;178m";
-pub const bg_purple_grey = ansi ++ "[48;2;170;130;250m"; // #aa82fa
+pub const bg_purple_grey = ansi ++ "[48;5;99m"; // "[48;2;170;130;250m"; // #aa82fa
 pub const bg_dark_grey = ansi ++ "[48;2;64;64;64m"; // #404040
 pub const bg_dark_red = ansi ++ "[48;2;128;32;32m"; // #802020
 pub const bg_rgb_blue = ansi ++ "[48;2;120;141;216m"; // #788dd8
@@ -76,7 +76,7 @@ pub const fg_default = ansi ++ "[39m";
 
 // Extended Foreground Colors
 pub const fg_dark_yellow = ansi ++ "[38;5;178m";
-pub const fg_purple_grey = ansi ++ "[38;2;170;130;250m"; // #aa82fa
+pub const fg_purple_grey = ansi ++ "[38;5;99m"; //ansi ++ "[38;2;170;130;250m"; // #aa82fa
 pub const fg_dark_grey = ansi ++ "[38;2;112;112;112m"; // #707070
 pub const fg_dark_red = ansi ++ "[38;2;128;32;32m"; // #802020
 pub const fg_rgb_blue = ansi ++ "[38;2;120;141;216m"; // #788dd8

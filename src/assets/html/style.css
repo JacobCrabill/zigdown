@@ -69,7 +69,8 @@ body {
   background-color: var(--color-base);
 
   text-align: left;
-  font-family: "Ubuntu Mono";
+  font-family: "Nova Flat";
+  // font-family: "Ubuntu Mono";
   // font-family: mononoki;
   font-size: 20px;
   color: var(--color-text);

@@ -16,7 +16,7 @@ local config = {
   win_width = nil,
 }
 
--- Render the file using a system command ('/path/to/zigdown -c filename')
+-- Render the file using a system command ('/path/to/zigdown console filename')
 ---@param filename string The absolute path to the file to render
 function M.render_file(filename)
   -- If we don't already have a preview window open, open one
