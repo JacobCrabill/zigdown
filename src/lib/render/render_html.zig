@@ -26,7 +26,7 @@ const Inline = inls.Inline;
 const css = assets.html.style_css;
 
 const google_fonts =
-    \\ <link href="https://fonts.googleapis.com/css2?family=Ubuntu+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    \\ <link href="https://fonts.googleapis.com/css2?family=Nova+Flat:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
 ;
 
 // Render a Markdown document to HTML to the given output stream
