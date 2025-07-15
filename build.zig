@@ -102,7 +102,15 @@ pub fn build(b: *std.Build) !void {
     addExecutable(b, exe_config, exe_opts);
 
     if (build_lua) {
-        const ziglua = b.lazyDependency("ziglua", .{ .optimize = optimize, .target = target, .shared = false, .lang = .luajit }).?;
+        const ziglua_opt: ?*std.Build.Dependency = b.lazyDependency("ziglua", .{
+            .optimize = optimize,
+            .target = target,
+            .shared = false,
+            .lang = .luajit,
+        });
+        if (ziglua_opt == null) return; // This will then go and fetch the dependency
+
+        const ziglua = ziglua_opt.?;
         const ziglua_dep = Dependency{ .name = "luajit", .module = ziglua.module("zlua") };
 
         // Compile Zigdown as a Lua module compatible with Neovim / LuaJIT 5.1

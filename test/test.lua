@@ -6,8 +6,44 @@
 package.cpath = package.cpath .. ';./lua/?.so'
 local mylib = require('zigdown_lua')
 
-print(mylib.adder(40, 2))
-print(mylib.hello())
+-- print(mylib.adder(40, 2))
+-- print(mylib.hello())
 
-local test_md = "# Hello, World!\n\nTest line\n\n- Test List\n"
-print(mylib.render_markdown(test_md))
+-- Test Functions (used to learn the Lua C APIs)
+-- local o = mylib.table_test()
+--
+-- print(o)
+-- print(o["name"])
+-- print(o["meaning"])
+-- print(o["subkey"])
+-- print(o.subkey.subvalue)
+-- print(o.data)
+-- print(o.data[0])
+-- print(o.data[1])
+-- print(o.data[2])
+
+-- Try rendering a file
+local f = io.open("test/mini.md")
+if f == nil then
+  print("error: could not open file")
+  return
+end
+
+-- local test_md = "# Hello, World!\n\nTest line\n\n- Test List\n"
+local md = f:read("a")
+local txt, ranges = mylib.render_markdown(md)
+
+print(txt)
+for i, range in ipairs(ranges) do
+  print("Range " .. i .. ":")
+  for k, v in pairs(range) do
+    if k == "style" then
+      print("  Style:")
+      for k2, v2 in pairs(v) do
+        print("    " .. k2 .. ": " .. v2)
+      end
+    else
+      print("  " .. k .. ": " .. v)
+    end
+  end
+end

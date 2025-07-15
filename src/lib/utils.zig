@@ -60,11 +60,11 @@ pub const TextStyle = struct {
 pub fn colorHex(color: Color) usize {
     return switch (color) {
         .Black => 0x000000,
-        .Red => 0xff0000,
-        .Green => 0x00ff00,
-        .Blue => 0x00ff00,
+        .Red => 0xEF6487,
+        .Green => 0x5ECA89,
+        .Blue => 0x65AEF7,
         .Yellow => 0xffff00,
-        .Cyan => 0x00ffff,
+        .Cyan => 0x43C1BE,
         .White => 0xffffff,
         .Magenta => 0xff00ff,
         .DarkYellow => 0xaeac30,
@@ -80,11 +80,11 @@ pub fn colorHex(color: Color) usize {
 pub fn colorHexStr(color: Color) []const u8 {
     return switch (color) {
         .Black => "#000000",
-        .Red => "#ff0000",
-        .Green => "#00ff00",
-        .Blue => "#00ff00",
+        .Red => "#EF6487",
+        .Green => "#5ECA89",
+        .Blue => "#65AEF7",
         .Yellow => "#ffff00",
-        .Cyan => "#00ffff",
+        .Cyan => "#43C1BE",
         .White => "#ffffff",
         .Magenta => "#ff00ff",
         .DarkYellow => "#aeac30",

@@ -74,10 +74,9 @@
             .url = "https://github.com/tree-sitter-grammars/tree-sitter-zig/archive/b670c8df85a1568f498aa5c8cae42f51a90473c0.tar.gz",
             .hash = "N-V-__8AAN6NXgCZxLUnqe4620P_FqHrEY8PHTA1-VlOn4yX",
         },
-
         .ziglua = .{
-            .url = "https://github.com/natecraddock/ziglua/archive/5f19274632c94fc9c6ed6ab8506ac903d25c8303.tar.gz",
-            .hash = "zlua-0.1.0-hGRpCxsXBQD2CZVDwzHsRkyMrydDpxADn0px0x1IraT8",
+            .url = "https://github.com/JacobCrabill/ziglua/archive/f273f4ff8cd58ca238896b61aa8348dd67b74c7d.tar.gz",
+            .hash = "zlua-0.1.0-hGRpCzDfBADxeCzhxWsbcatYQnS5FeXWUsZdkWBZoANl",
             .lazy = true,
         },
     },

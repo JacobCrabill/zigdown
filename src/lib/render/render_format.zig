@@ -560,10 +560,10 @@ pub const FormatRenderer = struct {
             };
 
             // Create a new Document with our single item
-            var root = Block.initContainer(alloc, .Document, 0);
+            var root: Block = .initContainer(alloc, .Document, 0);
             try root.addChild(item);
 
-            var sub_renderer = FormatRenderer.init(alloc, sub_opts);
+            var sub_renderer: FormatRenderer = .init(alloc, sub_opts);
             try sub_renderer.renderDocument(root.container().*);
 
             const text = utils.trimTrailingWhitespace(utils.trimLeadingWhitespace(buf_writer.items));

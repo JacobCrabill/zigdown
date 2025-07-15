@@ -18,7 +18,7 @@ local config = {
 
 -- Render the file using a system command ('/path/to/zigdown console filename')
 ---@param filename string The absolute path to the file to render
-function M.render_file(filename)
+function M.render_file_terminal(filename)
   -- If we don't already have a preview window open, open one
   config.src_win = vim.fn.win_getid()
   config.src_buf = vim.fn.bufnr()
@@ -76,25 +76,15 @@ function M.render_file(filename)
 end
 
 
--- Create a temporary file containing the given contents
--- 'contents' must be a list containing the lines of the file
-local function create_tmp_file(contents)
-  -- Dump the output to a tmp file
-  local tmp = vim.fn.tempname() .. ".md"
-  vim.fn.writefile(contents, tmp)
-  return tmp
-end
-
 -- Get the contents of the given buffer as a single string with unix line endings
 local function buffer_to_string(bufnr)
   local content = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  table.insert(content, "\n")
   return table.concat(content, "\n")
 end
 
--- Display the rendered 'content' to the terminal buffer in 'wins.dest'
-function M.display_content(content)
-  utils.stop_job(job_id)
-
+-- Take the rendered output and apply it to a neovim buffer with highlighting
+function M.output_to_buffer(content, style_ranges)
   -- Create an autocmd group to automatically re-render the buffer upon save
   -- (Effectively a live preview pane)
   vim.api.nvim_create_augroup("ZigdownGrp", { clear = true })
@@ -106,44 +96,49 @@ function M.display_content(content)
 
   -- Create a fresh buffer (delete existing if needed)
   if config.dest_buf ~= nil then
-    vim.api.nvim_win_set_buf(config.dest_win, config.dest_buf)
-    vim.cmd("Kwbd")
+    vim.api.nvim_buf_delete(config.dest_buf, { unload = true })
   end
+
   vim.api.nvim_set_current_win(config.dest_win)
   config.dest_buf = vim.api.nvim_create_buf(true, true)
   vim.api.nvim_win_set_buf(config.dest_win, config.dest_buf)
   vim.api.nvim_buf_attach(config.dest_buf, false, {
     on_detach = function()
       config.dest_buf = nil
+      vim.api.nvim_win_set_hl_ns(config.dest_win, 0)
     end,
   })
 
-  -- Place the rendered output in a temp file so we can 'cat' it in a terminal buffer
-  -- (We need the terminal buffer to do the ANSI rendering for us)
-  local tmp_file = create_tmp_file(content)
-  local cmd_args = { "cat", tmp_file }
-  local cmd = table.concat(cmd_args, " ")
+  -- Fill the buffer with the "rendered" content (minus the highlighting)
+  vim.api.nvim_set_current_buf(config.dest_buf)
+  vim.api.nvim_buf_set_lines(config.dest_buf, 0, -1, true, content)
 
-  -- Keep the render window open with a fixed name, delete the temp file,
-  -- and switch back to the Markdown source window upon finishing the rendering
-  local cbs = {
-    on_exit = function()
-      vim.api.nvim_set_current_win(config.dest_win)
-      vim.api.nvim_set_current_buf(config.dest_buf)
-      vim.cmd("keepalt file zd-render")
-      if tmp_file ~= nil then
-        vim.fn.delete(tmp_file)
-      end
-      -- Why does this not work?
-      vim.print("Resetting to original window and buffer")
-      vim.api.nvim_set_current_win(config.src_win)
-      vim.api.nvim_set_current_buf(config.src_buf)
-    end,
-  }
+  -- Apply the highlight ranges to the buffer
+  -- We'll use a temporary highlight namespace ID to store our highlights
+  local ns_id = vim.api.nvim_create_namespace("zigdown")
+  vim.api.nvim_win_set_hl_ns(config.dest_win, ns_id)
+  for i, range in ipairs(style_ranges) do
+    local hl_group = "zd_" .. i
+    vim.api.nvim_set_hl(ns_id, hl_group, range.style)
+    vim.api.nvim_buf_add_highlight(
+        config.dest_buf,
+        ns_id,
+        hl_group,
+        range.line,
+        range.start_col,
+        range.end_col
+    )
+  end
 
-  -- Execute the job
-  job_id = vim.fn.termopen(cmd, cbs)
+  -- Make the render window unmodifiable with no line numbers or listchars
+  vim.api.nvim_buf_set_option(config.dest_buf, 'buftype', 'nofile')
+  vim.api.nvim_buf_set_option(config.dest_buf, 'buftype', 'nowrite')
+  vim.api.nvim_buf_set_option(config.dest_buf, 'modifiable', false)
+  vim.api.nvim_buf_set_name(config.dest_buf, 'zd-render')
+  vim.cmd("keepalt file zd-render")
+  vim.cmd("setlocal nonumber norelativenumber nolist")
 
+  -- Switch back to the Markdown source window upon finishing the rendering
   vim.api.nvim_set_current_win(config.src_win)
   vim.api.nvim_set_current_buf(config.src_buf)
 end
@@ -153,6 +148,7 @@ end
 ---@param bufnr integer Source buffer index
 function M.render_buffer(bufnr)
   config.src_buf = bufnr
+  config.src_win = vim.fn.win_getid()
   if zigdown == nil then
     zigdown = build.load_module()
   end
@@ -163,9 +159,14 @@ function M.render_buffer(bufnr)
   local cols = vim.api.nvim_win_get_width(config.src_win) - 6
 
   local content = buffer_to_string(0)
-  local output = zigdown.render_markdown(content, cols)
+  local output, ranges = zigdown.render_markdown(content, cols)
 
-  M.display_content(vim.split(output, "\n"))
+  local dest_buf = "nil"
+  if config.dest_buf ~= nil then
+    dest_buf = config.dest_buf
+  end
+
+  M.output_to_buffer(vim.split(output, "\n"), ranges)
 end
 
 -- Clear the Zigdown autocommand group

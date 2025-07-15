@@ -30,3 +30,4 @@ pub const Lexer = lexer.Lexer;
 pub const ConsoleRenderer = render.ConsoleRenderer;
 pub const HtmlRenderer = render.HtmlRenderer;
 pub const FormatRenderer = render.FormatRenderer;
+pub const RangeRenderer = render.RangeRenderer;

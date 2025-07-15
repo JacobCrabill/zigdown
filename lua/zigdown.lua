@@ -13,7 +13,7 @@ M.opts = {}
 M.root = plugin_root
 M.lua_module = M.root .. "/lua/zigdown_lua.so"
 M.zigdown_bin = M.root .. "/zig-out/bin/zigdown"
-M.use_lua_module = false
+M.use_lua_module = true
 
 -- Required version of the Zig compiler
 local zig_ver = "0.14.0"
@@ -38,17 +38,12 @@ function M.render_current_buffer()
   end
 
   if M.use_lua_module then
-    -- Render the Markdown in-process using the Lua module
-    -- Still a WIP to use the Lua module effectively
-    -- Problem is not the rendering, but the dumping of the rendered output
-    -- to a terminal to have the terminal render the ANSI escape sequences
-    -- Building the Lua module also currently requires system libraries to
-    -- be installed
+    -- Render the Markdown in-process using the Lua module and nvim APIs.
     render.render_buffer(0)
   else
-    -- Render the Markdown using an external process
-    -- Runs the prebuilt 'zigdown' binary in a subshell to a new terminal
-    render.render_file(vim.api.nvim_buf_get_name(0))
+    -- Render the Markdown using an external process in a terminal.
+    -- Runs the prebuilt 'zigdown' binary in a subshell to a new nvim terminal.
+    render.render_file_terminal(vim.api.nvim_buf_get_name(0))
   end
 end
 

@@ -70,19 +70,22 @@ end
 
 -- Create a vertical split if we don't already have one
 ---@return table: The source and destination windows of the new split view
-function M.setup_window_spilt(dest_win, dest_buf)
+function M.setup_window_spilt(dest_win)
+  -- If there's already a preview window open, close it
   if dest_win ~= nil then
     vim.api.nvim_win_close(dest_win, false)
   end
+
   -- If we don't already have a preview window open, open one
-  local src_win = vim.api.nvim_get_current_win()
+  local src_win = vim.fn.win_getid()
   local wins = vim.api.nvim_list_wins()
   if #wins < 2 then
     vim.cmd('vsplit')
     wins = vim.api.nvim_list_wins()
+    -- Reset the source window to the left-most window (first entry)
+    src_win = wins[1]
   end
   dest_win = wins[#wins]
-  vim.api.nvim_set_current_win(dest_win)
 
   return { source = src_win, dest = dest_win }
 end
