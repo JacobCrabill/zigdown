@@ -31,14 +31,6 @@ function M.render_file_terminal(filename)
   config.dest_win = wins[#wins]
   vim.api.nvim_set_current_win(config.dest_win)
 
-  -- Create an autocmd group for the auto-update (live preview)
-  vim.api.nvim_create_augroup("ZigdownGrp", { clear = true })
-  vim.api.nvim_create_autocmd("BufWritePost", {
-    pattern = "*.md",
-    command = ":Zigdown",
-    group = "ZigdownGrp",
-  })
-
   -- Create a fresh buffer (delete existing if needed)
   if config.dest_buf ~= nil then
     vim.api.nvim_win_set_buf(config.dest_win, config.dest_buf)
@@ -85,15 +77,6 @@ end
 
 -- Take the rendered output and apply it to a neovim buffer with highlighting
 function M.output_to_buffer(content, style_ranges)
-  -- Create an autocmd group to automatically re-render the buffer upon save
-  -- (Effectively a live preview pane)
-  vim.api.nvim_create_augroup("ZigdownGrp", { clear = true })
-  vim.api.nvim_create_autocmd("BufWritePost", {
-    pattern = "*.md",
-    command = ":Zigdown",
-    group = "ZigdownGrp",
-  })
-
   -- Create a fresh buffer (delete existing if needed)
   if config.dest_buf ~= nil then
     vim.api.nvim_buf_delete(config.dest_buf, { unload = true })
@@ -143,34 +126,33 @@ function M.output_to_buffer(content, style_ranges)
   vim.api.nvim_set_current_buf(config.src_buf)
 end
 
--- Render the given buffer using Zigdown as a Lua plugin
--- The final "render" step cats the output to a terminal
+-- Render the given buffer using Zigdown as a Lua plugin.
+-- This uses the Neovim APIs to apply highlighting to ranges within the render buffer.
 ---@param bufnr integer Source buffer index
-function M.render_buffer(bufnr)
+function M.render_buffer_lua(bufnr)
+  -- Get the source buffer to render, and ensure the plugin is loaded
   config.src_buf = bufnr
   config.src_win = vim.fn.win_getid()
   if zigdown == nil then
     zigdown = build.load_module()
   end
 
+  -- Setup the window split: The right-most split will contain the rendered output
   local wins = utils.setup_window_spilt(config.dest_win)
   config.src_win = wins.source
   config.dest_win = wins.dest
-  local cols = vim.api.nvim_win_get_width(config.src_win) - 6
 
+  -- Get the raw Markdown text and render it to raw output with highlight metadata
   local content = buffer_to_string(0)
+  local cols = vim.api.nvim_win_get_width(config.src_win) - 6
   local output, ranges = zigdown.render_markdown(content, cols)
 
-  local dest_buf = "nil"
-  if config.dest_buf ~= nil then
-    dest_buf = config.dest_buf
-  end
-
+  -- Render the document by applying the highlight ranges to the raw output
   M.output_to_buffer(vim.split(output, "\n"), ranges)
 end
 
--- Clear the Zigdown autocommand group
--- This cancels the automatic render-on-save
+-- Clear the Zigdown autocommand group.
+-- This cancels the automatic render-on-save.
 function M.clear_autogroup()
   vim.api.nvim_create_augroup("ZigdownGrp", { clear = true })
 end
