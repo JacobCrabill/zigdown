@@ -128,10 +128,8 @@ pub const InlineParser = struct {
     pub fn parseInlines(self: *Self, tokens: []const Token) !ArrayList(Inline) {
         var inlines = ArrayList(Inline).init(self.alloc);
         var style = TextStyle{};
-        // // TODO: make this 'scratch workspace' part of the Parser struct
-        // // to avoid constant re-init (use clearRetainingCapacity() instead of deinit())
-        // var words = ArrayList([]const u8).init(self.alloc);
-        // defer words.deinit();
+        // TODO: make this 'scratch workspace' part of the Parser struct
+        // to avoid constant re-init (use clearRetainingCapacity() instead of deinit())
 
         var prev_type: TokenType = .BREAK;
         var next_type: TokenType = .BREAK;
@@ -147,7 +145,6 @@ pub const InlineParser = struct {
 
             switch (tok.kind) {
                 .EMBOLD => {
-                    //try appendWords(self.alloc, &inlines, &words, style);
                     style.bold = !style.bold;
                     style.italic = !style.italic;
                 },
@@ -160,7 +157,6 @@ pub const InlineParser = struct {
                 },
                 .BOLD => {
                     // TODO: Properly handle emphasis between *, **, ***, * word ** word***, etc.
-                    //try appendWords(self.alloc, &inlines, &words, style);
                     style.bold = !style.bold;
                 },
                 .USCORE => {
@@ -168,19 +164,16 @@ pub const InlineParser = struct {
                     if (prev_type == .WORD and next_type == .WORD) {
                         try utils.appendSingleToken(self.alloc, &inlines, tok, style);
                     } else {
-                        //try appendWords(self.alloc, &inlines, &words, style);
                         style.italic = !style.italic;
                     }
                 },
                 .TILDE => {
-                    //try appendWords(self.alloc, &inlines, &words, style);
-                    style.underline = !style.underline;
+                    style.strike = !style.strike;
                 },
                 .BANG, .LBRACK => {
                     const bang: bool = tok.kind == .BANG;
                     const start: usize = if (bang) i + 1 else i;
                     if (utils.validateLink(tokens[start..])) {
-                        //try appendWords(self.alloc, &inlines, &words, style);
                         const n: usize = try self.parseLinkOrImage(&inlines, tokens[i..], bang);
                         i += n - 1;
                     } else {
@@ -188,7 +181,6 @@ pub const InlineParser = struct {
                     }
                 },
                 .CODE_INLINE => {
-                    //try appendWords(self.alloc, &inlines, &words, style);
                     if (utils.findFirstOf(tokens, i + 1, &.{.CODE_INLINE})) |end| {
                         // Create a codespan with position information
                         const code_start = i + 1;
@@ -225,10 +217,6 @@ pub const InlineParser = struct {
                 .LT => {
                     // Autolink
                     if (utils.findFirstOf(tokens, i + 1, &.{.GT})) |end| {
-                        // try appendWords(self.alloc, &inlines, &words, style);
-                        // for (tokens[i + 1 .. end]) |ctok| {
-                        //     try words.append(ctok.text);
-                        // }
                         const link_start = i + 1;
                         const link_end = end;
 
@@ -278,7 +266,6 @@ pub const InlineParser = struct {
 
             prev_type = tok.kind;
         }
-        //try appendWords(self.alloc, &inlines, &words, style);
 
         return inlines;
     }
@@ -342,7 +329,7 @@ pub const InlineParser = struct {
                     }
                 },
                 .TILDE => {
-                    style.underline = !style.underline;
+                    style.strike = !style.strike;
                 },
                 .BREAK => {
                     // Treat line breaks as spaces; Don't clear the style
