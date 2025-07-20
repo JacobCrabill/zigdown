@@ -20,6 +20,14 @@ Markdown files.
 This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 ```
 
+## Tools
+
+- **Console Renderer:** `zigdown console <file>`
+- **HTML Renderer:** `zigdown html <file>`
+- **Markdown Formatter:** `zigdown format <file>`
+- **In-Terminal Slide Shows:** `zigdown present -d <directory`
+- **HTTP Document Server:** `zigdown serve -f <file>`
+
 ## Features & Future Work
 
 ### Parser Features
@@ -46,7 +54,6 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 - [x] Tables
 - [x] Automatic Table of Contents creation
 - [x] Neovim integration (Lua)
-  - Optional: If you have Lua 5.1 system libraries, can build as a Lua plugin module
 - [x] Markdown formatter
 
 ### Future Work / Missing Pieces
@@ -54,10 +61,8 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 - [ ] Enabling TreeSitter parsers to be used in WASM modules
   - Requires filling in some libC stub functions (the TS parsers use quite a few functions from the
     C standard library that are not available in WASM)
-- [ ] Better handling of inline code spans & backtick strings
 - [ ] Character escaping
-- [ ] Complete NeoVim integration (w/ image rendering and auto-scrolling)
-  - Requires writing a renderer in Lua using NeoVim APIs
+- [ ] Deeper NeoVim integration: image rendering and auto-scrolling
 - [ ] [Link References](https://spec.commonmark.org/0.31.2/#link-reference-definition)
 - [ ] GitHub-flavored note/info boxes? (not a fan of the syntax, but such is life)
 - [ ] Color schemes for syntax highlighting
@@ -109,7 +114,7 @@ variable.
 
 Zigdown comes with a number of TreeSitter parsers and highlight queries built-in:
 
-- bash
+- Bash
 - C
 - C++
 - CMake
@@ -171,3 +176,7 @@ queries to `$TS_CONFIG_DIR/queries`, which defaults to `$HOME/.config/tree-sitte
 ### HTML
 
 ![Sample HTML Render](sample-render-html.png)
+
+### Presentations
+
+[![asciicast](https://asciinema.org/a/667398.png)](https://asciinema.org/a/667398)
