@@ -114,7 +114,7 @@ function M.install(zig_ver, root, load_lib)
   -- Pattern is "zig-<os>-<arch>-<version>" for the final directory
   -- Plus <ext> for the archive being downloaded
   local base_url = "https://ziglang.org/download/" .. zig_ver .. "/"
-  local target_triple = os .. "-" .. arch .. "-" .. zig_ver
+  local target_triple = arch .. "-" .. os .. "-" .. zig_ver
   local output_dir = "zig-" .. target_triple
   M.tarball = output_dir .. ext
   local download_url = base_url .. M.tarball
