@@ -165,6 +165,8 @@ pub const FormatRenderer = struct {
                 self.scratch_stream.writeAll(bytes) catch |err| {
                     errorMsg(@src(), "Unable to write to scratch! {s}\n", .{@errorName(err)});
                 };
+                // don't increment the column here; we may write to the scratch buffer at
+                // any time, and it gets wrapped later.
             },
             .final => {
                 self.stream.writeAll(bytes) catch |err| {
@@ -564,7 +566,7 @@ pub const FormatRenderer = struct {
             try root.addChild(item);
 
             var sub_renderer: FormatRenderer = .init(alloc, sub_opts);
-            try sub_renderer.renderDocument(root.container().*);
+            try sub_renderer.renderBlock(root);
 
             const text = utils.trimTrailingWhitespace(utils.trimLeadingWhitespace(buf_writer.items));
             try cells.append(.{ .text = text });
@@ -728,15 +730,30 @@ pub const FormatRenderer = struct {
     }
 
     fn renderInlineCode(self: *Self, code: inls.Codespan) void {
-        if (self.mode == .scratch) {
+        // We don't want to wrap the text within an inline code span,
+        // so we must first dump the scratch buffer and then render
+        // the codespan independently to the prerender buffer.
+        const cur_mode = self.mode;
+        if (cur_mode == .scratch) {
             self.dumpScratchBuffer();
         }
+        self.mode = .prerender;
+
+        if (self.column > self.opts.indent) {
+            // The 3 is for one " " + two "`"
+            if (self.column + code.text.len + 3 + self.opts.indent > self.opts.width) {
+                self.renderBreak();
+                self.writeLeaders();
+            } else if (self.prerender.getLast() != ' ') {
+                self.write(" ");
+            }
+        }
+
         self.write("`");
         self.write(code.text);
         self.write("`");
-        if (self.mode == .scratch) {
-            self.dumpScratchBuffer();
-        }
+
+        self.mode = cur_mode;
     }
 
     fn renderText(self: *Self, text: Text) void {
@@ -745,9 +762,13 @@ pub const FormatRenderer = struct {
     }
 
     fn renderLink(self: *Self, link: inls.Link) void {
-        if (self.mode == .scratch) {
+        const cur_mode = self.mode;
+        if (cur_mode == .scratch) {
             self.dumpScratchBuffer();
         }
+
+        // First, render to the scratch buffer so we know how long the whole link is
+        self.mode = .scratch;
 
         self.write("[");
         for (link.text.items) |text| {
@@ -758,9 +779,23 @@ pub const FormatRenderer = struct {
         self.write(link.url);
         self.write(")");
 
-        if (self.mode == .scratch) {
-            self.dumpScratchBuffer();
+        // Next, write the link all at once to the prerender buffer
+        self.mode = .prerender;
+
+        if (self.column > self.opts.indent) {
+            if (self.column + self.scratch.items.len + 1 + self.opts.indent > self.opts.width) {
+                self.renderBreak();
+                self.writeLeaders();
+            } else if (self.prerender.getLast() != ' ') {
+                self.write(" ");
+            }
         }
+
+        self.write(self.scratch.items);
+
+        // Reset
+        self.scratch.clearRetainingCapacity();
+        self.mode = cur_mode;
     }
 
     fn renderImage(self: *Self, image: inls.Image) void {
@@ -785,11 +820,7 @@ pub const FormatRenderer = struct {
         if (self.scratch.items.len == 0) return;
         self.mode = .prerender;
 
-        if (self.column > self.opts.indent and self.column + self.scratch.items.len + self.opts.indent > self.opts.width) {
-            self.renderBreak();
-            self.writeLeaders();
-        }
-        self.write(self.scratch.items);
+        self.wrapText(self.scratch.items);
 
         self.scratch.clearRetainingCapacity();
         self.mode = .scratch;

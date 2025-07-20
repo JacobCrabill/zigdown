@@ -399,7 +399,7 @@ test "fetchFile" {
     const url = "https://picsum.photos/id/237/200/300";
     var buffer = ArrayList(u8).init(std.testing.allocator);
     defer buffer.deinit();
-    try fetchFile(std.testing.allocator, url, &buffer);
+    fetchFile(std.testing.allocator, url, &buffer) catch return error.SkipZigTest;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

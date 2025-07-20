@@ -89,6 +89,7 @@ pub fn render(opts: RenderOptions) !void {
             try r_renderer.renderBlock(opts.document);
 
             // TODO: What to do, if anything, with the range data here?
+            // This API isn't meant for this particular renderer.
         },
         .format => {
             const render_opts = FormatRenderer.RenderOpts{
