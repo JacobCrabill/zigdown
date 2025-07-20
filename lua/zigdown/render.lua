@@ -71,7 +71,6 @@ end
 -- Get the contents of the given buffer as a single string with unix line endings
 local function buffer_to_string(bufnr)
   local content = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  table.insert(content, "\n")
   return table.concat(content, "\n")
 end
 
@@ -149,8 +148,15 @@ function M.render_buffer_lua(bufnr)
   local cols = vim.api.nvim_win_get_width(config.src_win) - 6
   local output, ranges = zigdown.render_markdown(content, cols)
 
+  -- Remove all trailing empty lines, except for one
+  local lines = vim.split(output, "\n")
+  while lines[#lines]:match("^%s*$") ~= nil do
+    table.remove(lines, #lines)
+  end
+  table.insert(lines, "")
+
   -- Render the document by applying the highlight ranges to the raw output
-  M.output_to_buffer(vim.split(output, "\n"), ranges)
+  M.output_to_buffer(lines, ranges)
 end
 
 -- Clear the Zigdown autocommand group.
