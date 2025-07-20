@@ -25,6 +25,7 @@ pub const Color = enum(u8) {
     // Colors from the RGB range
     DarkYellow,
     PurpleGrey,
+    MediumGrey,
     DarkGrey,
     DarkRed,
     Orange,
@@ -59,41 +60,43 @@ pub const TextStyle = struct {
 
 pub fn colorHex(color: Color) usize {
     return switch (color) {
-        .Black => 0x000000,
+        .Black => 0x29283B,
         .Red => 0xEF6487,
         .Green => 0x5ECA89,
         .Blue => 0x65AEF7,
-        .Yellow => 0xffff00,
+        .Yellow => 0xFFFF00,
         .Cyan => 0x43C1BE,
-        .White => 0xffffff,
-        .Magenta => 0xff00ff,
-        .DarkYellow => 0xaeac30,
-        .PurpleGrey => 0xaa82fa,
-        .DarkGrey => 0x707070,
+        .White => 0xFFFFFF,
+        .Magenta => 0xFF00FF,
+        .DarkYellow => 0xAEAC30,
+        .PurpleGrey => 0xAA82FA,
+        .MediumGrey => 0x707070,
+        .DarkGrey => 0x404040,
         .DarkRed => 0x802020,
-        .Orange => 0xff9700,
-        .Coral => 0xd7649b,
-        .Default => 0xffffff,
+        .Orange => 0xFF9700,
+        .Coral => 0xD7649B,
+        .Default => 0xFFFFFF,
     };
 }
 
 pub fn colorHexStr(color: Color) []const u8 {
     return switch (color) {
-        .Black => "#000000",
+        .Black => "#29283B",
         .Red => "#EF6487",
         .Green => "#5ECA89",
         .Blue => "#65AEF7",
-        .Yellow => "#ffff00",
+        .Yellow => "#FFFF00",
         .Cyan => "#43C1BE",
-        .White => "#ffffff",
-        .Magenta => "#ff00ff",
-        .DarkYellow => "#aeac30",
-        .PurpleGrey => "#aa82fa",
+        .White => "#FFFFFF",
+        .Magenta => "#FF00FF",
+        .DarkYellow => "#AEAC30",
+        .PurpleGrey => "#AA82FA",
+        .MediumGrey => "#707070",
         .DarkGrey => "#404040",
         .DarkRed => "#802020",
-        .Orange => "#ff9700",
-        .Coral => "#d7649b",
-        .Default => "#ffffff",
+        .Orange => "#FF9700",
+        .Coral => "#D7649B",
+        .Default => "#FFFFFF",
     };
 }
 
@@ -164,6 +167,7 @@ pub fn colorToCss(color: Color) []const u8 {
         .Red => "var(--color-mauve)",
         .White => "var(--color-text)",
         .Coral => "var(--color-peach)",
+        .MediumGrey => "var(--color-overlay2)",
         .DarkGrey => "var(--color-overlay0)",
         else => "var(--color-text)",
     };

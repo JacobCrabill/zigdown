@@ -50,7 +50,7 @@ const highlights_map = std.StaticStringMap(utils.Color).initComptime(.{
     .{ "type.definition", .Yellow }, // identifiers in type definitions (e.g. `typedef <type> <identifier>` in C)
     .{ "attribute", .Magenta }, // attribute annotations (e.g. Python decorators, Rust lifetimes)
     .{ "attribute.builtin", .Blue }, // builtin annotations (e.g. `@property` in Python)
-    .{ "property", .DarkGrey }, // the key in key/value pairs
+    .{ "property", .MediumGrey }, // the key in key/value pairs
     .{ "function", .Blue }, // function definitions
     .{ "function.builtin", .Yellow }, // built-in functions
     .{ "function.call", .Blue }, // function calls
@@ -113,7 +113,7 @@ const highlights_map = std.StaticStringMap(utils.Color).initComptime(.{
     .{ "diff.delta", .Cyan }, // changed text (for diff files)
     .{ "tag", .Red }, // XML-style tag names (e.g. in XML, HTML, etc.)
     .{ "tag.builtin", .Blue }, // XML-style tag names (e.g. HTML5 tags)
-    .{ "tag.attribute", .DarkGrey }, // XML-style tag attributes
+    .{ "tag.attribute", .MediumGrey }, // XML-style tag attributes
     .{ "tag.delimiter", .White }, // XML-style tag delimiters
 });
 

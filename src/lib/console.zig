@@ -53,13 +53,14 @@ pub const bg_white = ansi ++ "[47m";
 pub const bg_default = ansi ++ "[49m";
 
 // Extended Background Colors
-pub const bg_dark_yellow = ansi ++ "[48;5;178m";
-pub const bg_purple_grey = ansi ++ "[48;5;99m"; // "[48;2;170;130;250m"; // #aa82fa
+pub const bg_dark_yellow = ansi ++ "[48;5;178m"; // #AEAC30
+pub const bg_purple_grey = ansi ++ "[48;5;99m"; // #AA82FA
+pub const bg_medium_grey = ansi ++ "[48;2;112;112;112m"; // #707070
 pub const bg_dark_grey = ansi ++ "[48;2;64;64;64m"; // #404040
 pub const bg_dark_red = ansi ++ "[48;2;128;32;32m"; // #802020
-pub const bg_rgb_blue = ansi ++ "[48;2;120;141;216m"; // #788dd8
-pub const bg_rgb_orange = ansi ++ "[48;2;255;151;0m"; // #ff9700
-pub const bg_rgb_coral = ansi ++ "[48;2;215;100;155m"; // #d7649b
+pub const bg_rgb_blue = ansi ++ "[48;2;120;141;216m"; // #788DD8
+pub const bg_rgb_orange = ansi ++ "[48;2;255;151;0m"; // #FF9700
+pub const bg_rgb_coral = ansi ++ "[48;2;215;100;155m"; // #D7649B
 
 pub const bg_rgb_fmt = ansi ++ "[48;{d};{d};{d}m";
 
@@ -75,13 +76,14 @@ pub const fg_white = ansi ++ "[37m";
 pub const fg_default = ansi ++ "[39m";
 
 // Extended Foreground Colors
-pub const fg_dark_yellow = ansi ++ "[38;5;178m";
-pub const fg_purple_grey = ansi ++ "[38;5;99m"; //ansi ++ "[38;2;170;130;250m"; // #aa82fa
-pub const fg_dark_grey = ansi ++ "[38;2;112;112;112m"; // #707070
+pub const fg_dark_yellow = ansi ++ "[38;5;178m"; // #AEAC30
+pub const fg_purple_grey = ansi ++ "[38;5;99m"; // #AA82FA
+pub const fg_medium_grey = ansi ++ "[38;2;112;112;112m"; // #707070
+pub const fg_dark_grey = ansi ++ "[38;2;64;64;64m"; // #404040
 pub const fg_dark_red = ansi ++ "[38;2;128;32;32m"; // #802020
-pub const fg_rgb_blue = ansi ++ "[38;2;120;141;216m"; // #788dd8
-pub const fg_rgb_orange = ansi ++ "[38;2;255;151;0m"; // #ff9700
-pub const fg_rgb_coral = ansi ++ "[38;2;215;100;155m"; // #d7649b
+pub const fg_rgb_blue = ansi ++ "[38;2;120;141;216m"; // #788DD8
+pub const fg_rgb_orange = ansi ++ "[38;2;255;151;0m"; // #FF9700
+pub const fg_rgb_coral = ansi ++ "[38;2;215;100;155m"; // #D7649B
 
 pub const fg_rgb_fmt = ansi ++ "[38;{d};{d};{d}m";
 
@@ -123,6 +125,7 @@ pub fn getFgColor(color: Color) []const u8 {
         .Magenta => fg_magenta,
         .DarkYellow => fg_dark_yellow,
         .PurpleGrey => fg_purple_grey,
+        .MediumGrey => fg_medium_grey,
         .DarkGrey => fg_dark_grey,
         .DarkRed => fg_dark_red,
         .Orange => fg_rgb_orange,
@@ -143,6 +146,7 @@ pub fn getBgColor(color: Color) []const u8 {
         .Magenta => bg_magenta,
         .DarkYellow => bg_dark_yellow,
         .PurpleGrey => bg_purple_grey,
+        .MediumGrey => bg_medium_grey,
         .DarkGrey => bg_dark_grey,
         .DarkRed => bg_dark_red,
         .Orange => bg_rgb_orange,
