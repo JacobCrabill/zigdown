@@ -76,7 +76,7 @@ function M.build_zigdown(load_lib)
   vim.notify("Building zigdown using:" .. table.concat(M.build_cmd, " "), vim.log.levels.INFO)
   vim.notify("Compiling zigdown - Please wait...", vim.log.levels.INFO)
 
-  local cmd = { M.zig_binary, "build", "-Doptimize=ReleaseFast" }
+  local cmd = { M.zig_binary, "build", "-Doptimize=ReleaseSmall" }
   if load_lib then
     table.insert(cmd, "-Dlua")
   end

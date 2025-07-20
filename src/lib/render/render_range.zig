@@ -175,7 +175,7 @@ pub const RangeRenderer = struct {
 
         if (self.cur_range) |cur_range| {
             // Check if the style is the same - do nothing; keep current range
-            if (compareStyles(cur_range.style, self.cur_style))
+            if (cur_range.line == self.line and compareStyles(cur_range.style, self.cur_style))
                 return;
 
             // Otherwise, we really are starting a new range, so be sure to save the current one
@@ -199,7 +199,7 @@ pub const RangeRenderer = struct {
         if (self.cur_range) |cur_range| {
             if (self.col_byte > cur_range.start) {
                 var range = cur_range;
-                range.end = self.col_byte; // right?
+                range.end = self.col_byte;
                 self.style_ranges.append(range) catch unreachable;
             }
         }
@@ -249,6 +249,7 @@ pub const RangeRenderer = struct {
         self.line = 0;
         self.column = 0;
         self.col_byte = 0;
+        self.renderBreak();
     }
 
     /// Complete the rendering

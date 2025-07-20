@@ -11,7 +11,6 @@ vim.opt.runtimepath:append(plugin_root)
 local M = {}
 M.opts = {}
 M.root = plugin_root
-M.lua_module = M.root .. "/lua/zigdown_lua.so"
 M.zigdown_bin = M.root .. "/zig-out/bin/zigdown"
 M.use_lua_module = true
 

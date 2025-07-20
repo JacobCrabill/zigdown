@@ -96,21 +96,23 @@ function M.output_to_buffer(content, style_ranges)
   vim.api.nvim_set_current_buf(config.dest_buf)
   vim.api.nvim_buf_set_lines(config.dest_buf, 0, -1, true, content)
 
-  -- Apply the highlight ranges to the buffer
-  -- We'll use a temporary highlight namespace ID to store our highlights
-  local ns_id = vim.api.nvim_create_namespace("zigdown")
-  vim.api.nvim_win_set_hl_ns(config.dest_win, ns_id)
-  for i, range in ipairs(style_ranges) do
-    local hl_group = "zd_" .. i
-    vim.api.nvim_set_hl(ns_id, hl_group, range.style)
-    vim.api.nvim_buf_add_highlight(
-        config.dest_buf,
-        ns_id,
-        hl_group,
-        range.line,
-        range.start_col,
-        range.end_col
-    )
+  if style_ranges ~= nil then
+    -- Apply the highlight ranges to the buffer
+    -- We'll use a temporary highlight namespace ID to store our highlights
+    local ns_id = vim.api.nvim_create_namespace("zigdown")
+    vim.api.nvim_win_set_hl_ns(config.dest_win, ns_id)
+    for i, range in ipairs(style_ranges) do
+      local hl_group = "zd_" .. i
+      vim.api.nvim_set_hl(ns_id, hl_group, range.style)
+      vim.api.nvim_buf_add_highlight(
+          config.dest_buf,
+          ns_id,
+          hl_group,
+          range.line,
+          range.start_col,
+          range.end_col
+      )
+    end
   end
 
   -- Make the render window unmodifiable with no line numbers or listchars

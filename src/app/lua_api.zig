@@ -48,18 +48,6 @@ export fn render_markdown(lua: ?*LuaState) callconv(.C) c_int {
     parser.parseMarkdown(input) catch @panic("Parse error!"); // TODO: better error handling?
     const md: zd.Block = parser.document;
 
-    // TODO: In order to render via Lua using direct neovim API calls:
-    // - Convert the AST to a Lua structure
-    //   - Lua is just tables, so not *too* hard
-    //   - Create a standard AST "node" type with metadata
-    //   - Same for inlines
-    // - Write a Renderer in Lua equivalent to the existing renderers
-    // TODO: Actually, BETTER idea:
-    // Do something like what my 'format' renderer does:
-    // - Return the plaintext version of the document (no style applied)
-    // - Return a list of style ranges to apply
-    //   - Each range is (style name, line, start col, length)
-
     // Create a buffer to render into - Note that Lua creates its own copy internally
     var buffer = std.ArrayList(u8).init(alloc);
     defer buffer.deinit();
