@@ -145,7 +145,7 @@ function M.render_buffer_lua(bufnr)
 
   -- Get the raw Markdown text and render it to raw output with highlight metadata
   local content = buffer_to_string(0)
-  local cols = vim.api.nvim_win_get_width(config.src_win) - 6
+  local cols = vim.api.nvim_win_get_width(config.src_win) - 2
   local output, ranges = zigdown.render_markdown(content, cols)
 
   -- Remove all trailing empty lines, except for one

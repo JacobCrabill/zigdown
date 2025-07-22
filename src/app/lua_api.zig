@@ -38,7 +38,8 @@ export fn render_markdown(lua: ?*LuaState) callconv(.C) c_int {
     const alloc = std.heap.page_allocator;
 
     // Number of columns to render (output width)
-    //const cols: usize = @intCast(c.lua_tointeger(lua, 2));
+    // TODO: luaL_checkinteger(), check for nil / nan
+    const columns: usize = @intCast(c.lua_tointeger(lua, 2));
 
     // Parse the input text
     const opts = zd.parser.ParserOpts{ .copy_input = false, .verbose = false };
@@ -54,11 +55,7 @@ export fn render_markdown(lua: ?*LuaState) callconv(.C) c_int {
 
     // Still need the terminal size; TODO: fix this...
     // (Needed for "printing" images with the Kitty graphics protocol)
-    var columns: usize = 90;
     const tsize = zd.gfx.getTerminalSize() catch zd.gfx.TermSize{};
-    if (tsize.cols > 0) {
-        columns = @min(tsize.cols, columns);
-    }
 
     // Render the document
     // TODO: Configure the cwd for the renderer (For use with evaluating links/paths)
