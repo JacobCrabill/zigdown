@@ -629,7 +629,7 @@ pub const RangeRenderer = struct {
             const stream = buf_writer.writer().any();
             const sub_opts = RenderOpts{
                 .out_stream = stream,
-                .width = col_w,
+                .width = col_w - 1,
                 .indent = 1,
                 .max_image_rows = self.opts.max_image_rows,
                 .max_image_cols = col_w - 2 * self.opts.indent,
@@ -679,14 +679,17 @@ pub const RangeRenderer = struct {
                     if (cell.idx < cell.text.len) {
                         // Write the next line of text from that cell,
                         // then increment the write head index of that cell
-                        var text = utils.trimLeadingWhitespace(cell.text[cell.idx..]);
-                        if (std.mem.indexOfAny(u8, text, "\n")) |end_idx| {
+                        // Skip any spaces if they occur at the start of a new line.
+                        const orig_text = cell.text[cell.idx..];
+                        var text = utils.trimLeadingWhitespace(orig_text);
+                        cell.idx += orig_text.len - text.len;
+                        if (std.mem.indexOfScalar(u8, text, '\n')) |end_idx| {
                             text = text[0..end_idx];
                         }
                         self.write(text);
                         cell.idx += text.len + 1;
 
-                        // Move the cursor to the start of the next cell
+                        // Advance to the start of the next cell
                         const new_col: usize = self.opts.indent + (j + 2) + (j + 1) * col_w;
                         if (new_col > self.column)
                             self.writeNTimes(" ", new_col - self.column - 1);
