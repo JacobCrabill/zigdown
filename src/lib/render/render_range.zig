@@ -609,6 +609,7 @@ pub const RangeRenderer = struct {
             self.renderBreak();
 
         const ncol = table.content.Table.ncol;
+        const col_w = @divFloor(self.opts.width - (2 * self.opts.indent) - (ncol + 1), ncol);
 
         // Create a new renderer to render into a buffer for each cell
         // Use an arena to simplify memory management here
@@ -618,31 +619,29 @@ pub const RangeRenderer = struct {
 
         const Cell = struct {
             text: []const u8 = undefined,
+            idx: usize = 0, // The current index into 'text'
         };
         var cells = ArrayList(Cell).init(alloc);
 
         for (table.children.items) |item| {
             // Render the table cell into a new buffer
-            var buf_writer = ArrayList(u8).init(alloc);
+            var buf_writer = ArrayList(u8).init(self.alloc);
             const stream = buf_writer.writer().any();
             const sub_opts = RenderOpts{
                 .out_stream = stream,
-                .width = 1024, // TODO: Ensure we warp text to some reasonable value...
+                .width = col_w,
                 .indent = 1,
                 .max_image_rows = self.opts.max_image_rows,
-                .max_image_cols = 80, // TODO
+                .max_image_cols = col_w - 2 * self.opts.indent,
                 .box_style = self.opts.box_style,
                 .root_dir = self.opts.root_dir,
             };
 
-            var doc: Block = .initContainer(alloc, .Document, 0);
-            try doc.addChild(item);
+            var sub_renderer = RangeRenderer.init(alloc, sub_opts);
+            try sub_renderer.renderBlock(item);
+            sub_renderer.renderEnd();
 
-            var sub_renderer: RangeRenderer = .init(alloc, sub_opts);
-            try sub_renderer.renderDocument(doc.container().*);
-
-            const text = utils.trimTrailingWhitespace(utils.trimLeadingWhitespace(buf_writer.items));
-            try cells.append(.{ .text = text });
+            try cells.append(.{ .text = buf_writer.items });
         }
 
         // Demultiplex the rendered text for every cell into
@@ -650,58 +649,70 @@ pub const RangeRenderer = struct {
         const nrow: usize = @divFloor(cells.items.len, ncol);
         std.debug.assert(cells.items.len == ncol * nrow);
 
-        // Find the widest single cell in each column of the table
-        var max_cols = try ArrayList(usize).initCapacity(alloc, ncol);
-        for (0..ncol) |j| {
-            max_cols.appendAssumeCapacity(0);
-            for (0..nrow) |i| {
-                const cell_idx: usize = i * ncol + j;
-                const cell = cells.items[cell_idx];
-                max_cols.items[j] = @max(max_cols.items[j], cell.text.len);
-            }
-        }
+        self.writeTableBorderTop(ncol, col_w);
 
-        self.writeTableBorderTop(ncol, max_cols.items);
-
-        // Render the table row by row, cell by cell
         for (0..nrow) |i| {
-            self.writeLeaders();
+            // Get the max number of rows of text for any cell in the table row
+            var max_rows: usize = 0; // Track max # of rows of text for cells in each row
             for (0..ncol) |j| {
                 const cell_idx: usize = i * ncol + j;
-                const cell: *Cell = &cells.items[cell_idx];
-
-                self.write(self.opts.box_style.vb);
-                self.write(" ");
-
-                if (cell.text.len > 0) {
-                    var text = cell.text;
-                    if (std.mem.indexOfAny(u8, text, "\n")) |end_idx| {
-                        text = text[0..end_idx];
-                    }
-                    self.write(text);
-                    self.writeNTimes(" ", max_cols.items[j] - text.len + 1);
-                } else {
-                    self.writeNTimes(" ", max_cols.items[j] + 1);
+                const cell = cells.items[cell_idx];
+                var iter = std.mem.tokenizeScalar(u8, cell.text, '\n');
+                var n_lines: usize = 0;
+                while (iter.next()) |_| {
+                    n_lines += 1;
                 }
+                max_rows = @max(max_rows, n_lines);
             }
-            self.write(self.opts.box_style.vb);
-            self.renderBreak();
+
+            // Loop over the # of rows of text in this single row of the table
+            for (0..max_rows) |_| {
+                self.writeLeaders();
+                for (0..ncol) |j| {
+                    const cell_idx: usize = i * ncol + j;
+                    const cell: *Cell = &cells.items[cell_idx];
+
+                    // For each cell in the row...
+                    self.write(self.opts.box_style.vb);
+                    self.write(" ");
+
+                    if (cell.idx < cell.text.len) {
+                        // Write the next line of text from that cell,
+                        // then increment the write head index of that cell
+                        var text = utils.trimLeadingWhitespace(cell.text[cell.idx..]);
+                        if (std.mem.indexOfAny(u8, text, "\n")) |end_idx| {
+                            text = text[0..end_idx];
+                        }
+                        self.write(text);
+                        cell.idx += text.len + 1;
+
+                        // Move the cursor to the start of the next cell
+                        const new_col: usize = self.opts.indent + (j + 2) + (j + 1) * col_w;
+                        if (new_col > self.column)
+                            self.writeNTimes(" ", new_col - self.column - 1);
+                    } else {
+                        self.writeNTimes(" ", col_w - 1);
+                    }
+                }
+                self.write(self.opts.box_style.vb);
+                self.renderBreak();
+            }
 
             // End the current row
             self.writeLeaders();
 
             if (i == nrow - 1) {
-                self.writeTableBorderBottom(ncol, max_cols.items);
+                self.writeTableBorderBottom(ncol, col_w);
             } else {
-                self.writeTableBorderMiddle(ncol, max_cols.items);
+                self.writeTableBorderMiddle(ncol, col_w);
             }
         }
     }
 
-    fn writeTableBorderTop(self: *Self, ncol: usize, cols_w: []const usize) void {
+    fn writeTableBorderTop(self: *Self, ncol: usize, col_w: usize) void {
         self.write(self.opts.box_style.tl);
         for (0..ncol) |i| {
-            for (0..cols_w[i] + 2) |_| {
+            for (0..col_w) |_| {
                 self.write(self.opts.box_style.hb);
             }
             if (i < ncol - 1) {
@@ -714,10 +725,10 @@ pub const RangeRenderer = struct {
         self.writeLeaders();
     }
 
-    fn writeTableBorderMiddle(self: *Self, ncol: usize, cols_w: []const usize) void {
+    fn writeTableBorderMiddle(self: *Self, ncol: usize, col_w: usize) void {
         self.write(self.opts.box_style.lj);
         for (0..ncol) |i| {
-            for (0..cols_w[i] + 2) |_| {
+            for (0..col_w) |_| {
                 self.write(self.opts.box_style.hb);
             }
             if (i < ncol - 1) {
@@ -730,10 +741,10 @@ pub const RangeRenderer = struct {
         self.writeLeaders();
     }
 
-    fn writeTableBorderBottom(self: *Self, ncol: usize, cols_w: []const usize) void {
+    fn writeTableBorderBottom(self: *Self, ncol: usize, col_w: usize) void {
         self.write(self.opts.box_style.bl);
         for (0..ncol) |i| {
-            for (0..cols_w[i] + 2) |_| {
+            for (0..col_w) |_| {
                 self.write(self.opts.box_style.hb);
             }
             if (i < ncol - 1) {

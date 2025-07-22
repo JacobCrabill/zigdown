@@ -678,7 +678,9 @@ pub const ConsoleRenderer = struct {
                         cell.idx += text.len + 1;
 
                         // Move the cursor to the start of the next cell
-                        self.printno(cons.set_col, .{self.opts.indent + (j + 2) + (j + 1) * col_w});
+                        const new_col: usize = self.opts.indent + (j + 2) + (j + 1) * col_w;
+                        self.printno(cons.set_col, .{new_col});
+                        self.column = new_col;
                     } else {
                         self.writeNTimes(" ", col_w - 1);
                     }
