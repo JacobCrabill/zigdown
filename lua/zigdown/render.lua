@@ -76,20 +76,23 @@ end
 
 -- Take the rendered output and apply it to a neovim buffer with highlighting
 function M.output_to_buffer(content, style_ranges)
-  -- Create a fresh buffer (delete existing if needed)
-  if config.dest_buf ~= nil then
-    vim.api.nvim_buf_delete(config.dest_buf, { unload = true })
-  end
-
+  -- Switch to the destination window and setup a fresh render buffer
+  -- NOTE: Order of operation matters here!!
   vim.api.nvim_set_current_win(config.dest_win)
+  local old_buf = config.dest_buf
   config.dest_buf = vim.api.nvim_create_buf(true, true)
   vim.api.nvim_win_set_buf(config.dest_win, config.dest_buf)
   vim.api.nvim_buf_attach(config.dest_buf, false, {
     on_detach = function()
       config.dest_buf = nil
-      vim.api.nvim_win_set_hl_ns(config.dest_win, 0)
     end,
   })
+
+  -- If an old destination buffer existed, it's safe to remove now that
+  -- it's not the active buffer in our destination window
+  if old_buf ~= nil then
+    vim.api.nvim_buf_delete(old_buf, { unload = true })
+  end
 
   -- Fill the buffer with the "rendered" content (minus the highlighting)
   vim.api.nvim_set_current_buf(config.dest_buf)
@@ -133,13 +136,12 @@ end
 function M.render_buffer_lua(bufnr)
   -- Get the source buffer to render, and ensure the plugin is loaded
   config.src_buf = bufnr
-  config.src_win = vim.fn.win_getid()
   if zigdown == nil then
     zigdown = build.load_module()
   end
 
   -- Setup the window split: The right-most split will contain the rendered output
-  local wins = utils.setup_window_spilt(config.dest_win)
+  local wins = utils.setup_window_spilt()
   config.src_win = wins.source
   config.dest_win = wins.dest
 

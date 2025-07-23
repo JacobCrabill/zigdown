@@ -70,22 +70,36 @@ end
 
 -- Create a vertical split if we don't already have one
 ---@return table: The source and destination windows of the new split view
-function M.setup_window_spilt(dest_win)
-  -- If there's already a preview window open, close it
-  if dest_win ~= nil then
-    vim.api.nvim_win_close(dest_win, false)
-  end
-
+function M.setup_window_spilt()
   -- If we don't already have a preview window open, open one
   local src_win = vim.fn.win_getid()
   local wins = vim.api.nvim_list_wins()
-  if #wins < 2 then
+
+  -- Find out if we need to open a new window split.
+  -- Windows like NvimTree used for things like a file browser have the
+  -- 'nofile' option set, so ignore them.
+  local win_count = 0
+  for _, winid in ipairs(wins) do
+    local bufnr = vim.api.nvim_win_get_buf(winid)
+    local btype = vim.api.nvim_buf_get_option(bufnr, 'buftype')
+    if btype ~= "nofile" then
+      win_count = win_count + 1
+    end
+  end
+
+  if win_count < 2 then
     vim.cmd('vsplit')
     wins = vim.api.nvim_list_wins()
-    -- Reset the source window to the left-most window (first entry)
-    src_win = wins[1]
   end
-  dest_win = wins[#wins]
+
+  -- THe destination window will be the right-most window.
+  local dest_win = wins[#wins]
+
+  -- Check that the right-most window is now a new window, not the source window.
+  -- If so, change the source window to be the next window to the left.
+  if dest_win == src_win then
+    src_win = wins[#wins-1]
+  end
 
   return { source = src_win, dest = dest_win }
 end
