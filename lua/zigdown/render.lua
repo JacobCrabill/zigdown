@@ -81,21 +81,15 @@ function M.output_to_buffer(content, style_ranges)
   vim.api.nvim_set_current_win(config.dest_win)
   local old_buf = config.dest_buf
   config.dest_buf = vim.api.nvim_create_buf(true, true)
-  vim.api.nvim_win_set_buf(config.dest_win, config.dest_buf)
-  vim.api.nvim_buf_attach(config.dest_buf, false, {
-    on_detach = function()
-      config.dest_buf = nil
-    end,
-  })
+  vim.api.nvim_set_current_buf(config.dest_buf)
 
   -- If an old destination buffer existed, it's safe to remove now that
   -- it's not the active buffer in our destination window
-  if old_buf ~= nil then
+  if old_buf ~= nil and vim.api.nvim_buf_is_loaded(old_buf) then
     vim.api.nvim_buf_delete(old_buf, { unload = true })
   end
 
   -- Fill the buffer with the "rendered" content (minus the highlighting)
-  vim.api.nvim_set_current_buf(config.dest_buf)
   vim.api.nvim_buf_set_lines(config.dest_buf, 0, -1, true, content)
 
   if style_ranges ~= nil then
