@@ -115,12 +115,12 @@ pub const FormatRenderer = struct {
         if (!style.italic and self.cur_style.italic) {
             self.write("_");
         }
-        if (!style.underline and self.cur_style.underline) {
+        if (!style.strike and self.cur_style.strike) {
             self.write("~");
         }
 
         // -- Ending Styles
-        if (style.underline and !self.cur_style.underline) {
+        if (style.strike and !self.cur_style.strike) {
             self.write("~");
         }
         if (style.italic and !self.cur_style.italic) {

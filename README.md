@@ -48,7 +48,7 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 
 - [x] Console and HTML rendering
 - [x] Images (rendered to the console using the
-  [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/))
+      [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/))
 - [x] Web-based images (fetch from URL & display in-terminal)
 - [x] (Clickable) Links
 - [x] Tables
@@ -59,8 +59,8 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 ### Future Work / Missing Pieces
 
 - [ ] Enabling TreeSitter parsers to be used in WASM modules
-  - Requires filling in some libC stub functions (the TS parsers use quite a few functions from the
-    C standard library that are not available in WASM)
+      - Requires filling in some libC stub functions (the TS parsers use quite a few functions from
+        the C standard library that are not available in WASM)
 - [ ] Character escaping
 - [ ] Deeper NeoVim integration: image rendering and auto-scrolling
 - [ ] [Link References](https://spec.commonmark.org/0.31.2/#link-reference-definition)

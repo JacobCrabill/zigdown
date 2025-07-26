@@ -26,6 +26,7 @@ pub const RenderCmdOpts = struct {
     stdin: bool = false,
     width: ?usize = null,
     output: ?[]const u8 = null,
+    inplace: bool = false,
     verbose: bool = false,
     timeit: bool = false,
     positional: struct {
@@ -39,6 +40,7 @@ pub const RenderCmdOpts = struct {
         .stdin = "Read document from stdin (instead of from a file)",
         .width = "Console width to render within (default: 90 chars)",
         .output = "Output to a file, instead of to stdout",
+        .inplace = "Overwrite the input file, instead of writing to stdout (Formatter only)",
         .timeit = "Time the parsing & rendering and display the results",
         .verbose = "Enable verbose output from the parser",
     };
@@ -46,6 +48,7 @@ pub const RenderCmdOpts = struct {
         .stdin = 'i',
         .width = 'w',
         .output = 'o',
+        .inplace = 'I',
         .verbose = 'v',
         .timeit = 't',
     };
@@ -274,6 +277,8 @@ fn handleRender(
     // This will either come from stdin, or from a file
     var md_text: []const u8 = undefined;
     var md_dir: ?[]const u8 = null;
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    var realpath: ?[]const u8 = null;
     if (r_opts.stdin) {
         // Read document from stdin
         const stdin = std.io.getStdIn().reader();
@@ -283,11 +288,11 @@ fn handleRender(
             printHelpAndExit(diags, colorscheme, error.NoFilenameProvided);
         }
         // Read file into memory; Set root directory
-        var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-        const realpath = try std.fs.realpath(filename.?, &path_buf);
-        var md_file: File = try std.fs.openFileAbsolute(realpath, .{});
+        realpath = try std.fs.realpath(filename.?, &path_buf);
+        var md_file: File = try std.fs.openFileAbsolute(realpath.?, .{});
+        defer md_file.close();
         md_text = try md_file.readToEndAlloc(alloc, 1e9);
-        md_dir = std.fs.path.dirname(realpath);
+        md_dir = std.fs.path.dirname(realpath.?);
     }
     defer alloc.free(md_text);
 
@@ -297,11 +302,27 @@ fn handleRender(
 
     // Get the output stream
     var out_stream: std.io.AnyWriter = undefined;
-    if (r_opts.output) |f| {
-        const outfile: std.fs.File = try std.fs.cwd().createFile(f, .{ .truncate = true });
-        out_stream = outfile.writer().any();
+    var outfile: ?File = null;
+    defer if (outfile) |f| f.close();
+
+    if (method == .format) {
+        if (r_opts.inplace) {
+            if (realpath == null) {
+                std.debug.print("ERROR: In-place formatting requested but no input file given\n", .{});
+                return error.InvalidArgument;
+            }
+            outfile = try std.fs.cwd().createFile(realpath.?, .{ .truncate = true });
+            out_stream = outfile.?.writer().any();
+        } else {
+            out_stream = stdout;
+        }
     } else {
-        out_stream = stdout;
+        if (r_opts.output) |f| {
+            outfile = try std.fs.cwd().createFile(f, .{ .truncate = true });
+            out_stream = outfile.?.writer().any();
+        } else {
+            out_stream = stdout;
+        }
     }
 
     // Configure and perform the rendering
