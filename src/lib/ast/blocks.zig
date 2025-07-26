@@ -194,6 +194,14 @@ pub const Container = struct {
             self.children.items.len,
         });
 
+        switch (self.content) {
+            .List => |l| {
+                printIndent(depth + 1);
+                debug.print("List Spacing: {d}\n", .{l.spacing});
+            },
+            else => {},
+        }
+
         for (self.children.items) |child| {
             child.print(depth + 1);
         }

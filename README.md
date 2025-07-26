@@ -22,11 +22,11 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 
 ## Tools
 
-- **Console Renderer:** `zigdown console <file>`
-- **HTML Renderer:** `zigdown html <file>`
-- **Markdown Formatter:** `zigdown format <file>`
-- **In-Terminal Slide Shows:** `zigdown present -d <directory`
-- **HTTP Document Server:** `zigdown serve -f <file>`
+- **Console Renderer:** `zigdown console {file}`
+- **HTML Renderer:** `zigdown html {file}`
+- **Markdown Formatter:** `zigdown format {file}`
+- **In-Terminal Slide Shows:** `zigdown present -d {directory}`
+- **HTTP Document Server:** `zigdown serve -f {file}`
 
 ## Features & Future Work
 

@@ -30,7 +30,10 @@ pub const List = struct {
         task,
     };
     kind: Kind = .unordered,
-    start: usize = 1, // Starting number, if ordered list
+    /// Starting number, if ordered list
+    start: usize = 1,
+    /// Line spacing (Number of blank lines between each item)
+    spacing: u8 = 0,
 };
 
 /// Single ListItem - Only needed for Task lists

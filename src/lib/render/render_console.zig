@@ -502,10 +502,17 @@ pub const ConsoleRenderer = struct {
 
     /// Render an unordered list of items
     fn renderUnorderedList(self: *Self, list: blocks.Container) !void {
-        for (list.children.items) |item| {
+        for (list.children.items, 0..) |item, i| {
             // Ensure we start each list item on a new line
             if (self.column > self.opts.indent)
                 self.renderBreak();
+
+            // For all but the first item, handle the extra line spacing between items
+            if (i > 0) {
+                for (0..list.content.List.spacing) |_| {
+                    self.renderBreak();
+                }
+            }
 
             // print out list bullet
             self.writeLeaders();
@@ -530,6 +537,13 @@ pub const ConsoleRenderer = struct {
             // Ensure we start each list item on a new line
             if (self.column > self.opts.indent)
                 self.renderBreak();
+
+            // For all but the first item, handle the extra line spacing between items
+            if (i > 0) {
+                for (0..list.content.List.spacing) |_| {
+                    self.renderBreak();
+                }
+            }
 
             self.writeLeaders();
             self.needs_leaders = false;
@@ -559,10 +573,17 @@ pub const ConsoleRenderer = struct {
 
     /// Render a list of task items
     fn renderTaskList(self: *Self, list: blocks.Container) !void {
-        for (list.children.items) |item| {
+        for (list.children.items, 0..) |item, i| {
             // Ensure we start each list item on a new line
             if (self.column > self.opts.indent)
                 self.renderBreak();
+
+            // For all but the first item, handle the extra line spacing between items
+            if (i > 0) {
+                for (0..list.content.List.spacing) |_| {
+                    self.renderBreak();
+                }
+            }
 
             self.writeLeaders();
             if (item.Container.content.ListItem.checked) {

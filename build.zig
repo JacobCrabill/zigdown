@@ -26,6 +26,7 @@ const BuildOpts = struct {
     target: ?Target = null,
     dependencies: ?[]Dependency = null,
     options: *Options,
+    use_llvm: bool = true,
 };
 
 pub fn build(b: *std.Build) !void {
@@ -44,6 +45,8 @@ pub fn build(b: *std.Build) !void {
     const build_lua = b.option(bool, "lua", "[WIP] Build Zigdown as a Lua module") orelse false;
     const build_test_exes = b.option(bool, "build-test-exes", "Build the custom test executables") orelse false;
     const do_extra_tests = b.option(bool, "extra-tests", "Run extra (non-standard) tests") orelse false;
+
+    const use_llvm = b.option(bool, "llvm", "Use the LLVM linker (instead of the Zig native backend)") orelse true;
 
     // Add an option to list the set of TreeSitter parsers to statically link into the build
     // This should match the list of parsers defined below and added to the 'queries' module
@@ -87,6 +90,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .dependencies = deps.items,
         .options = options,
+        .use_llvm = use_llvm,
     };
 
     // Compile the main executable
@@ -252,7 +256,7 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
         .version = config.version,
         .optimize = opts.optimize,
         .target = opts.target orelse b.graph.host,
-        .use_llvm = opts.optimize != .Debug,
+        .use_llvm = if (opts.use_llvm) true else opts.optimize != .Debug,
     });
 
     // Add the executable to the default 'zig build' command

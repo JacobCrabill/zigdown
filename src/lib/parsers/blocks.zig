@@ -450,6 +450,18 @@ pub const Parser = struct {
         self.logger.depth += 1;
         defer self.logger.depth -= 1;
 
+        var cblock = block.container();
+
+        if (utils.isEmptyLine(line)) {
+            // We allow spacing between each list item
+            // Keep track of how many blank lines are between each item
+            // Only the gap between the 1st and 2nd items is used to set the spacing
+            if (cblock.children.items.len == 1) {
+                cblock.content.List.spacing += 1;
+            }
+            return true;
+        }
+
         if (!(isLazyContinuationLineList(line) or utils.findStartColumn(line) > block.start_col())) {
             return false;
         }
@@ -459,7 +471,6 @@ pub const Parser = struct {
 
         // Ensure we have at least 1 open ListItem child
         const col: usize = line[0].src.col;
-        var cblock = block.container();
         var child: *Block = undefined;
         if (cblock.children.items.len == 0) {
             block.addChild(Block.initContainer(block.allocator(), .ListItem, col)) catch unreachable;
@@ -914,6 +925,15 @@ pub const Parser = struct {
             .Container => |*c| {
                 for (c.children.items) |*child| {
                     self.closeBlock(child);
+                }
+
+                switch (c.content) {
+                    .List => {
+                        // Spacing only counts if there are >1 ListItems
+                        if (c.children.items.len == 1)
+                            c.content.List.spacing = 0;
+                    },
+                    else => {},
                 }
             },
             .Leaf => |*l| {
