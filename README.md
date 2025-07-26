@@ -33,8 +33,7 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 ### Parser Features
 
 - [x] Headers
-- [x] Basic text formatting (**Bold**, _italic_, ~underline~)
-  - I may change ~this~ back to strikethrough and add another syntax for underline
+- [x] Basic text formatting (**Bold**, _italic_, ~strikethrough~)
 - [x] Links
 - [x] Quote blocks
 - [x] Unordered lists
@@ -43,6 +42,7 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 - [x] Task lists
 - [x] Tables
 - [x] Autolinks
+- [x] GitHub-Flavored Markdown Alerts
 
 ### Renderer Features
 
@@ -64,7 +64,6 @@ This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 - [ ] Character escaping
 - [ ] Deeper NeoVim integration: image rendering and auto-scrolling
 - [ ] [Link References](https://spec.commonmark.org/0.31.2/#link-reference-definition)
-- [ ] GitHub-flavored note/info boxes? (not a fan of the syntax, but such is life)
 - [ ] Color schemes for syntax highlighting
 
 ## Caveats

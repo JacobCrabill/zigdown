@@ -452,6 +452,7 @@ pub const ConsoleRenderer = struct {
             self.needs_leaders = false;
         }
         switch (block.content) {
+            .Alert => try self.renderAlert(block),
             .Break => {},
             .Code => |c| try self.renderCode(c),
             .Heading => try self.renderHeading(block),
@@ -925,6 +926,85 @@ pub const ConsoleRenderer = struct {
         self.writeLeaders();
         self.startStyle(code_fence_style);
         self.write("╰────────────────────");
+        self.resetStyle();
+    }
+
+    fn renderAlert(self: *Self, b: blocks.Leaf) !void {
+        // TODO: Enum for builtin alert types w/ string aliases mapped to them
+        const alert = b.content.Alert.alert orelse "NOTE";
+
+        // Create a new renderer to render all of our inlines into
+        // Use an arena to simplify memory management here
+        var arena = std.heap.ArenaAllocator.init(self.alloc);
+        defer arena.deinit();
+        const alloc = arena.allocator();
+
+        // Create a new Paragraph block using the inlines of the Alert
+        // We'll render this into a new buffer which will then get wrapped
+        // inside of our alert box
+        var item: Block = Block.initLeaf(self.alloc, .Paragraph, 0);
+        item.Leaf.inlines = b.inlines;
+
+        // Render the table cell into a new buffer
+        const width: usize = self.opts.width - 2 * self.opts.indent - 2;
+        var buf_writer = ArrayList(u8).init(alloc);
+        const stream = buf_writer.writer().any();
+
+        const sub_opts = RenderOpts{
+            .out_stream = stream,
+            .width = width,
+            .indent = 1,
+            .max_image_rows = self.opts.max_image_rows,
+            .max_image_cols = width - 2,
+            .box_style = self.opts.box_style,
+            .root_dir = self.opts.root_dir,
+            .rendering_to_buffer = true,
+        };
+
+        var sub_renderer = ConsoleRenderer.init(alloc, sub_opts);
+        try sub_renderer.renderBlock(item);
+        sub_renderer.renderEnd();
+
+        // Get the rendered output
+        const source = buf_writer.items;
+
+        // Write the first line of the Alert box
+        self.writeLeaders();
+        self.startStyle(warn_box_style);
+        self.print("╭─── {s} ", .{alert});
+        self.writeNTimes("─", self.opts.width - 7 - 2 * self.opts.indent - alert.len);
+        self.write("╮");
+        self.renderBreak();
+        self.resetStyle();
+
+        try self.leader_stack.append(warn_indent);
+
+        const trailer: Text = .{ .text = " │", .style = warn_box_style };
+
+        // Write the Alert box contents, line by line
+        var iter = std.mem.tokenizeScalar(u8, source, '\n');
+        while (iter.next()) |line| {
+            // Write leader
+            self.writeLeaders();
+
+            // Write line
+            self.write(utils.trimLeadingWhitespace(line));
+
+            // Write trailer
+            self.printno(cons.set_col, .{self.opts.width - 2 - 1});
+            self.startStyle(trailer.style);
+            self.write(trailer.text);
+            self.resetStyle();
+            self.renderBreak();
+        }
+
+        _ = self.leader_stack.pop();
+        self.resetLine();
+        self.writeLeaders();
+        self.startStyle(warn_box_style);
+        self.write("╰");
+        self.writeNTimes("─", self.opts.width - 2 * self.opts.indent - 2);
+        self.write("╯");
         self.resetStyle();
     }
 

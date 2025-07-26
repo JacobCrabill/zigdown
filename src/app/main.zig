@@ -113,6 +113,7 @@ const Flags = struct {
 
     command: union(enum(u8)) {
         console: RenderCmdOpts,
+        range: RenderCmdOpts,
         html: RenderCmdOpts,
         format: RenderCmdOpts,
 
@@ -181,11 +182,12 @@ pub fn main() !void {
 
     // Process the command-line arguments
     switch (result.command) {
-        .console, .html, .format => |r_opts| {
+        .console, .html, .format, .range => |r_opts| {
             const method: zd.render.RenderMethod = switch (result.command) {
                 .console => .console,
                 .html => .html,
                 .format => .format,
+                .range => .range,
                 else => unreachable,
             };
             try handleRender(alloc, &diags, &colorscheme, method, r_opts);

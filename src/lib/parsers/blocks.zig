@@ -51,7 +51,6 @@ fn isContinuationLineQuote(line: []const Token) bool {
     //    (0 to 3 leading spaces followed by at least one '>')
     // then it can be part of the current Quote block.
     //
-    // // TODO: lazy continuation below...
     // Otherwise, if it is Paragraph lazy continuation line,
     // it can also be a part of the Quote block
     var leading_ws: u8 = 0;
@@ -62,10 +61,6 @@ fn isContinuationLineQuote(line: []const Token) bool {
             .GT => return true,
             else => return false,
         }
-
-        // TODO: keep or no?
-        // if (leading_ws > 3)
-        //     return false;
     }
 
     return false;
@@ -373,6 +368,7 @@ pub const Parser = struct {
             },
             .Leaf => |l| {
                 switch (l.content) {
+                    .Alert => return self.handleLineAlert(block, line),
                     .Break => return self.handleLineBreak(block, line),
                     .Code => return self.handleLineCode(block, line),
                     .Heading => return self.handleLineHeading(block, line),
@@ -639,6 +635,42 @@ pub const Parser = struct {
     // Leaf Block Parsers
     ///////////////////////////////////////////////////////
 
+    pub fn handleLineAlert(self: *Self, block: *Block, line: []const Token) bool {
+        self.logger.depth += 1;
+        defer self.logger.depth -= 1;
+        self.logger.log("Handling Alert\n", .{});
+
+        if (!block.isOpen())
+            return false;
+
+        var alert: *leaves.Alert = &block.Leaf.content.Alert;
+
+        if (alert.alert == null) {
+            // Brand new alert; parse the first line
+            const tline = utils.trimLeadingWhitespace(line);
+            if (tline.len < 6) return false;
+            std.debug.assert(tline[4].kind == .WORD);
+            alert.alert = block.allocator().dupe(u8, tline[4].text) catch @panic("OOM");
+            self.logger.log("  Alert type: {s}\n", .{alert.alert.?});
+
+            return true;
+        }
+
+        // Github Alerts are just quote blocks with no children
+        // after the first alert line
+        var tline = line;
+        if (isContinuationLineQuote(line)) {
+            tline = trimContinuationMarkersQuote(line);
+        } else {
+            return false;
+        }
+        self.logger.log("  Line continues Alert\n", .{});
+
+        block.Leaf.raw_contents.appendSlice(tline) catch unreachable;
+
+        return true;
+    }
+
     pub fn handleLineBreak(_: *Self, block: *Block, line: []const Token) bool {
         _ = block;
         _ = line;
@@ -753,7 +785,7 @@ pub const Parser = struct {
             self.logger.log("  Line does not continue paragraph\n", .{});
             return false;
         }
-        self.logger.log("  Line continues paragraph!\n", .{});
+        self.logger.log("  Line continues paragraph\n", .{});
 
         block.Leaf.raw_contents.appendSlice(line) catch unreachable;
 
@@ -773,11 +805,19 @@ pub const Parser = struct {
 
         switch (line[0].kind) {
             .GT => {
-                // Parse quote block
-                b = Block.initContainer(self.alloc, .Quote, col);
-                b.Container.content.Quote = {};
-                if (!self.handleLineQuote(&b, line))
-                    return error.ParseError;
+                // Check for a Github Alert
+                if (utils.isGithubAlert(line)) {
+                    b = Block.initLeaf(self.alloc, .Alert, col);
+                    b.Leaf.content.Alert = leaves.Alert.init(self.alloc);
+                    if (!self.handleLineAlert(&b, line))
+                        return error.ParseError;
+                } else {
+                    // Parse quote block
+                    b = Block.initContainer(self.alloc, .Quote, col);
+                    b.Container.content.Quote = {};
+                    if (!self.handleLineQuote(&b, line))
+                        return error.ParseError;
+                }
             },
             .MINUS => {
                 if (utils.isListItem(line)) {
@@ -882,6 +922,7 @@ pub const Parser = struct {
                     else => {
                         var p = InlineParser.init(self.alloc, self.opts);
                         defer p.deinit();
+                        self.logger.log("Parsing inlines for Leaf of type {s}\n", .{@tagName(block.Leaf.content)});
                         l.inlines = p.parseInlines(l.raw_contents.items) catch unreachable;
                     },
                 }

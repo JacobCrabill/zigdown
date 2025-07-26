@@ -59,13 +59,12 @@ export fn render_markdown(lua: ?*LuaState) callconv(.C) c_int {
 
     // Render the document
     // TODO: Configure the cwd for the renderer (For use with evaluating links/paths)
-    // TODO: Configure the render width
     const render_opts = zd.render.RangeRenderer.RenderOpts{
         .out_stream = buffer.writer().any(),
         .root_dir = null, // TODO opts.document_dir,
         .indent = 2,
         .width = columns,
-        .max_image_cols = columns - 4,
+        .max_image_cols = if (columns > 4) columns - 4 else columns,
         .termsize = tsize,
     };
     var r_renderer = zd.render.RangeRenderer.init(alloc, render_opts);

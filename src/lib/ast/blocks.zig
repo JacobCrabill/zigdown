@@ -218,6 +218,7 @@ pub const Leaf = struct {
             .start_col = col,
             .content = blk: {
                 switch (kind) {
+                    .Alert => break :blk .{ .Alert = leaves.Alert.init(alloc) },
                     .Break => break :blk .{ .Break = {} },
                     .Code => break :blk .{ .Code = leaves.Code.init(alloc) },
                     .Heading => break :blk .{ .Heading = leaves.Heading.init(alloc) },

@@ -387,6 +387,7 @@ pub const FormatRenderer = struct {
             self.needs_leaders = false;
         }
         switch (block.content) {
+            .Alert => try self.renderAlert(block),
             .Break => {},
             .Code => |c| try self.renderCode(c),
             .Heading => self.renderHeading(block),
@@ -679,6 +680,38 @@ pub const FormatRenderer = struct {
         self.resetStyle();
 
         self.renderBreak();
+    }
+
+    /// Render an Alert block
+    fn renderAlert(self: *Self, block: Leaf) !void {
+        const alert = block.content.Alert.alert orelse "NOTE";
+
+        try self.leader_stack.append(quote_indent);
+        if (!self.needs_leaders) {
+            self.startStyle(quote_indent.style);
+            self.write(quote_indent.text);
+            self.resetStyle();
+        } else {
+            self.writeLeaders();
+            self.needs_leaders = false;
+        }
+
+        self.write("[!");
+        self.write(alert);
+        self.write("]");
+        self.renderBreak();
+        self.writeLeaders();
+
+        self.mode = .scratch;
+        self.scratch_stream = self.scratch.writer();
+        for (block.inlines.items) |item| {
+            self.renderInline(item);
+        }
+        self.mode = .prerender;
+        self.wrapText(self.scratch.items);
+        self.scratch.clearRetainingCapacity();
+
+        _ = self.leader_stack.pop();
     }
 
     /// Render a raw block of code

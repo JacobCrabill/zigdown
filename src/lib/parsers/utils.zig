@@ -69,15 +69,18 @@ pub fn trimLeadingWhitespace(line: []const Token) []const Token {
     return line[start..];
 }
 
-/// Remove all trailing whitespace (spaces or indents) from the end of a line
+/// Remove all trailing whitespace (space, indent, or line break) from the end of a line
 pub fn trimTrailingWhitespace(line: []const Token) []const Token {
     var i: usize = line.len;
     var end: usize = 0;
     while (i > 0) : (i -= 1) {
         const tok = line[i - 1];
-        if (!(tok.kind == .SPACE or tok.kind == .INDENT)) {
-            end = i;
-            break;
+        switch (tok.kind) {
+            .SPACE, .INDENT, .BREAK => {},
+            else => {
+                end = i;
+                break;
+            },
         }
     }
     return line[0..end];
@@ -346,6 +349,47 @@ pub fn isCodeBlock(line: []const Token) bool {
     }
 
     return false;
+}
+
+/// Check for a Github Flavored Markdown Alert like "> [!INFO]\n".
+/// https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts
+pub fn isGithubAlert(line: []const Token) bool {
+    const tline = trimLeadingWhitespace(trimTrailingWhitespace(line));
+    if (tline.len != 6) return false;
+
+    if (tline[0].kind != .GT) return false;
+    if (!(tline[1].kind == .SPACE or tline[1].kind == .INDENT))
+        return false;
+    if (tline[2].kind != .LBRACK) return false;
+    if (tline[3].kind != .BANG) return false;
+    if (tline[4].kind != .WORD) return false;
+    if (tline[5].kind != .RBRACK) return false;
+
+    return true;
+}
+
+test "Github Alert" {
+    const line: []const Token = &.{
+        .{ .kind = .GT, .text = ">" },
+        .{ .kind = .SPACE, .text = " " },
+        .{ .kind = .LBRACK, .text = "[" },
+        .{ .kind = .BANG, .text = "!" },
+        .{ .kind = .WORD, .text = "INFO" },
+        .{ .kind = .RBRACK, .text = "]" },
+        .{ .kind = .BREAK, .text = "\n" },
+    };
+    try std.testing.expect(isGithubAlert(line));
+}
+
+test "Not a Github Alert" {
+    const line: []const Token = &.{
+        .{ .kind = .GT, .text = ">" },
+        .{ .kind = .SPACE, .text = " " },
+        .{ .kind = .BANG, .text = "!" },
+        .{ .kind = .WORD, .text = "INFO" },
+        .{ .kind = .BREAK, .text = "\n" },
+    };
+    try std.testing.expect(!isGithubAlert(line));
 }
 
 /// Concatenate a list of raw token text into a single string

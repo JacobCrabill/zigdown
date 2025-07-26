@@ -342,7 +342,7 @@ test "trimLeadingWhitespace" {
     try std.testing.expectEqualStrings(" ", trimLeadingWhitespace("  "));
 }
 
-/// Given a string, return the substring up to any trailing whitespace
+/// Given a string, return the substring up to any trailing whitespace (including newlines)
 pub fn trimTrailingWhitespace(line: []const u8) []const u8 {
     var i: usize = line.len;
     while (i > 0) : (i -= 1) {
@@ -360,7 +360,10 @@ pub fn trimTrailingWhitespace(line: []const u8) []const u8 {
 test "trimTrailingWhitespace" {
     try std.testing.expectEqualStrings("1234", trimTrailingWhitespace("1234   "));
     try std.testing.expectEqualStrings("1234", trimTrailingWhitespace("1234"));
+    try std.testing.expectEqualStrings("1234", trimTrailingWhitespace("1234\n"));
     try std.testing.expectEqualStrings("", trimTrailingWhitespace(""));
+    try std.testing.expectEqualStrings("\n", trimTrailingWhitespace(&.{'\n'}));
+    try std.testing.expectEqualStrings(" ", trimTrailingWhitespace(&.{ ' ', '\n' }));
     try std.testing.expectEqualStrings(" ", trimTrailingWhitespace(" "));
     try std.testing.expectEqualStrings(" ", trimTrailingWhitespace("  "));
 }

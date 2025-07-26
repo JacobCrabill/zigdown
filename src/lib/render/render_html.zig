@@ -123,6 +123,7 @@ pub const HtmlRenderer = struct {
     /// Render a Leaf block
     pub fn renderLeaf(self: *Self, block: Leaf) !void {
         switch (block.content) {
+            .Alert => try self.renderAlert(block),
             .Break => try self.renderBreak(),
             .Code => |c| try self.renderCode(c),
             .Heading => try self.renderHeading(block),
@@ -277,6 +278,18 @@ pub const HtmlRenderer = struct {
         }
 
         self.print("</div>\n", .{});
+    }
+
+    fn renderAlert(self: *Self, b: Leaf) !void {
+        // TODO: Enum for builtin directive types w/ string aliases mapped to them
+        // const alert = b.content.Leaf.alert orelse "NOTE";
+        self.write("\n<div class=\"directive\">\n");
+        self.write("<p>");
+        for (b.inlines.items) |item| {
+            try self.renderInline(item);
+        }
+        self.write("</p>");
+        self.print("\n</div>\n", .{});
     }
 
     fn renderDirective(self: *Self, d: leaves.Code) !void {

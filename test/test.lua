@@ -23,7 +23,7 @@ local mylib = require('zigdown_lua')
 -- print(o.data[2])
 
 -- Try rendering a file
-local f = io.open("test/mini.md")
+local f = io.open("test/alert.md")
 if f == nil then
   print("error: could not open file")
   return
@@ -31,7 +31,7 @@ end
 
 -- local test_md = "# Hello, World!\n\nTest line\n\n- Test List\n"
 local md = f:read("a")
-local txt, ranges = mylib.render_markdown(md)
+local txt, ranges = mylib.render_markdown(md, 80)
 
 print(txt)
 for i, range in ipairs(ranges) do

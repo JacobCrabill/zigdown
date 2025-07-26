@@ -463,6 +463,7 @@ pub const RangeRenderer = struct {
             self.needs_leaders = false;
         }
         switch (block.content) {
+            .Alert => try self.renderAlert(block),
             .Break => {},
             .Code => |c| try self.renderCode(c),
             .Heading => try self.renderHeading(block),
@@ -620,6 +621,7 @@ pub const RangeRenderer = struct {
         const Cell = struct {
             text: []const u8 = undefined,
             idx: usize = 0, // The current index into 'text'
+            style_ranges: ArrayList(StyleRange) = undefined,
         };
         var cells = ArrayList(Cell).init(alloc);
 
@@ -641,7 +643,10 @@ pub const RangeRenderer = struct {
             try sub_renderer.renderBlock(item);
             sub_renderer.renderEnd();
 
-            try cells.append(.{ .text = buf_writer.items });
+            try cells.append(.{
+                .text = buf_writer.items,
+                .style_ranges = sub_renderer.style_ranges,
+            });
         }
 
         // Demultiplex the rendered text for every cell into
@@ -663,6 +668,26 @@ pub const RangeRenderer = struct {
                     n_lines += 1;
                 }
                 max_rows = @max(max_rows, n_lines);
+            }
+
+            // Append all style ranges from each cell in this row of the table to the parent ranges
+            const current_line = self.line;
+            for (0..ncol) |j| {
+                const cell_idx: usize = i * ncol + j;
+                const cell: *Cell = &cells.items[cell_idx];
+
+                // NOTE: The index here looks off-by-one, but I *think* it's
+                // due to the vertical bar character being 2 bytes
+                const col_offset: usize = self.opts.indent + ((j + 1) * 3) + (j * col_w) + 1;
+                for (cell.style_ranges.items) |range| {
+                    const new_range: StyleRange = .{
+                        .line = current_line + range.line,
+                        .start = col_offset + range.start,
+                        .end = col_offset + range.end,
+                        .style = range.style,
+                    };
+                    self.style_ranges.append(new_range) catch @panic("OOM");
+                }
             }
 
             // Loop over the # of rows of text in this single row of the table
@@ -894,6 +919,99 @@ pub const RangeRenderer = struct {
         self.resetStyle();
     }
 
+    fn renderAlert(self: *Self, b: blocks.Leaf) !void {
+        // TODO: Enum for builtin alert types w/ string aliases mapped to them
+        const alert = b.content.Alert.alert orelse "NOTE";
+
+        // Create a new renderer to render all of our inlines into
+        // Use an arena to simplify memory management here
+        var arena = std.heap.ArenaAllocator.init(self.alloc);
+        defer arena.deinit();
+        const alloc = arena.allocator();
+
+        // Create a new Paragraph block using the inlines of the Alert
+        // We'll render this into a new buffer which will then get wrapped
+        // inside of our alert box
+        var item: Block = Block.initLeaf(self.alloc, .Paragraph, 0);
+        item.Leaf.inlines = b.inlines;
+
+        // Render the table cell into a new buffer
+        const width: usize = self.opts.width - 2 * self.opts.indent - 2;
+        var buf_writer = ArrayList(u8).init(alloc);
+        const stream = buf_writer.writer().any();
+
+        const sub_opts = RenderOpts{
+            .out_stream = stream,
+            .width = width,
+            .indent = 1,
+            .max_image_rows = self.opts.max_image_rows,
+            .max_image_cols = width - 2,
+            .box_style = self.opts.box_style,
+            .root_dir = self.opts.root_dir,
+        };
+
+        var sub_renderer = RangeRenderer.init(alloc, sub_opts);
+        try sub_renderer.renderBlock(item);
+        sub_renderer.renderEnd();
+
+        // Get the rendered output
+        const source = buf_writer.items;
+        const ranges = sub_renderer.style_ranges;
+
+        // Write the first line of the Alert box
+        self.writeLeaders();
+        self.startStyle(warn_box_style);
+        self.print("╭─── {s} ", .{alert});
+        self.writeNTimes("─", self.opts.width - 7 - 2 * self.opts.indent - alert.len);
+        self.write("╮");
+        self.renderBreak();
+        self.resetStyle();
+
+        try self.leader_stack.append(warn_indent);
+
+        const trailer: Text = .{ .text = " │", .style = warn_box_style };
+
+        // Write the Alert box contents, line by line
+        var iter = std.mem.tokenizeScalar(u8, source, '\n');
+        while (iter.next()) |line| {
+            // Write leader
+            self.writeLeaders();
+
+            // Write line
+            self.write(utils.trimLeadingWhitespace(line));
+
+            // Write trailer
+            const end_col: usize = self.opts.width - 2 * self.opts.indent;
+            if (end_col > self.column)
+                self.writeNTimes(" ", end_col - self.column);
+            self.startStyle(trailer.style);
+            self.write(trailer.text);
+            self.resetStyle();
+
+            // Append all styles from this line to our ranges
+            // NOTE: The index here looks off-by-one, but I *think* it's
+            // due to the vertical bar character being 2 bytes
+            const col_offset: usize = self.opts.indent + 3;
+            for (ranges.items) |range| {
+                const new_range: StyleRange = .{
+                    .line = self.line + range.line,
+                    .start = col_offset + range.start,
+                    .end = col_offset + range.end,
+                    .style = range.style,
+                };
+                self.style_ranges.append(new_range) catch @panic("OOM");
+            }
+
+            self.renderBreak();
+        }
+
+        _ = self.leader_stack.pop();
+        self.startStyle(warn_box_style);
+        self.write("╰");
+        self.writeNTimes("─", self.opts.width - 2 * self.opts.indent - 2);
+        self.write("╯");
+        self.resetStyle();
+    }
     fn renderDirective(self: *Self, d: leaves.Code) !void {
         // TODO: Enum for builtin directive types w/ string aliases mapped to them
         const directive = d.directive orelse "note";
