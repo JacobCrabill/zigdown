@@ -1112,7 +1112,8 @@ pub const RangeRenderer = struct {
     }
 
     fn renderLink(self: *Self, link: inls.Link) !void {
-        self.startStyle(.{ .fg_color = .Cyan });
+        self.style_override = .{ .fg_color = .Cyan };
+        defer self.style_override = null;
 
         // Render the visible text of the link, followed by the end of the escape sequence
         for (link.text.items) |text| {
