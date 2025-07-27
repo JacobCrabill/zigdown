@@ -917,7 +917,7 @@ pub const RangeRenderer = struct {
                 self.startStyle(style);
                 self.wrapTextRaw(range.content);
                 self.resetStyle();
-                if (range.newline) {
+                if (range.newline or i == ranges.len - 1) {
                     self.renderBreak();
                     if (i < nrange - 1)
                         self.writeLeaders();
@@ -933,7 +933,6 @@ pub const RangeRenderer = struct {
         }
 
         _ = self.leader_stack.pop();
-        if (self.column > self.opts.indent) self.renderBreak();
         self.writeLeaders();
         self.startStyle(code_fence_style);
         self.write("╰────────────────────");

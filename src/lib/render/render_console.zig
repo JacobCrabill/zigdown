@@ -922,12 +922,12 @@ pub const ConsoleRenderer = struct {
             defer self.alloc.free(ranges);
 
             self.writeLeaders();
-            for (ranges) |range| {
+            for (ranges, 0..) |range, i| {
                 const style = TextStyle{ .fg_color = range.color, .bg_color = .Default };
                 self.startStyle(style);
                 self.wrapTextRaw(range.content);
                 self.endStyle(style);
-                if (range.newline) {
+                if (range.newline or i == ranges.len - 1) {
                     self.renderBreak();
                     self.writeLeaders();
                 }

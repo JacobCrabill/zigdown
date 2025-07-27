@@ -673,17 +673,6 @@ pub const FormatRenderer = struct {
         self.startStyle(cur_style);
     }
 
-    /// Clear and reset the current line
-    fn resetLine(self: *Self) void {
-        // Some styles fill the remainder of the line, even after a '\n'
-        // Reset all styles before wrting the newline and indent
-        const cur_style = self.cur_style;
-        self.resetStyle();
-        self.column = 0;
-        self.writeNTimes(" ", self.opts.indent);
-        self.startStyle(cur_style);
-    }
-
     /// Render an ATX Heading
     fn renderHeading(self: *Self, leaf: Leaf) void {
         const h: leaves.Heading = leaf.content.Heading;
@@ -747,9 +736,8 @@ pub const FormatRenderer = struct {
         self.renderBreak();
 
         self.writeLeaders();
-        self.wrapTextRaw(source);
-
-        self.resetLine();
+        self.wrapTextRaw(utils.trimTrailingWhitespace(source));
+        self.renderBreak();
         self.writeLeaders();
         self.print("{s}", .{fence});
     }

@@ -271,9 +271,15 @@ pub const Parser = struct {
             self.logger.printTypes(line, false);
 
             self.cur_line = line;
+
+            // Handle special case: Very last line being EOF
+            if (line.len == 1 and line[0].kind == .EOF)
+                break :loop;
+
             // We allow some "wiggle room" in the leading whitespace, up to 2 spaces
             if (!self.handleLine(&self.document, line))
                 return error.ParseError;
+
             lino += 1;
             self.advanceCursor(line.len);
             continue :loop;
