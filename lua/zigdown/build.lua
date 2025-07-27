@@ -22,6 +22,12 @@ local arch_patterns = {
   ["arm64"] = "aarch64",
 }
 
+local lib_patterns = {
+  ["Windows"] = ".dll",
+  ["Linux"] = ".so",
+  ["Darwin"] = ".dylib",
+}
+
 M.zigdown = nil
 M.curl_cmd = { "echo", "Hello" }
 M.tar_cmd = { "echo", "World" }
@@ -89,8 +95,10 @@ function M.load_module()
   if M.zigdown ~= nil then
     return M.zigdown
   end
+  local raw_os = vim.loop.os_uname().sysname
+  local lib_ext = lib_patterns[raw_os]
   local path = utils.path_append(M.root_dir, "lua")
-  package.cpath = package.cpath .. ';' .. path .. '/?.so'
+  package.cpath = package.cpath .. ';' .. path .. '/?' .. lib_ext
   return require('zigdown_lua')
 end
 

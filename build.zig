@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const Build = std.Build;
 const Allocator = std.mem.Allocator;
 
@@ -106,6 +107,17 @@ pub fn build(b: *std.Build) !void {
     addExecutable(b, exe_config, exe_opts);
 
     if (build_lua) {
+        const target_os: std.Target.Os.Tag = target.query.os_tag orelse builtin.os.tag;
+        const target_cpu: std.Target.Cpu.Arch = target.query.cpu_arch orelse builtin.cpu.arch;
+        const target_abi: std.Target.Abi = target.query.abi orelse builtin.abi;
+        if (!(target_cpu == builtin.cpu.arch and target_os == builtin.os.tag)) {
+            std.debug.print("ERROR: ziglua does not support cross-compilation!\n", .{});
+            return error.UnsupportedOptions;
+        }
+        if (target_abi == .musl) {
+            std.debug.print("ERROR: ziglua does not support MUSL libC!\n", .{});
+            return error.UnsupportedOptions;
+        }
         const ziglua_opt: ?*std.Build.Dependency = b.lazyDependency("ziglua", .{
             .optimize = optimize,
             .target = target,
