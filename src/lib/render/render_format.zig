@@ -5,6 +5,7 @@ const containers = @import("../ast/containers.zig");
 const leaves = @import("../ast/leaves.zig");
 const inls = @import("../ast/inlines.zig");
 const utils = @import("../utils.zig");
+const theme = @import("../theme.zig");
 
 const cons = @import("../console.zig");
 const debug = @import("../debug.zig");
@@ -24,7 +25,7 @@ const Container = blocks.Container;
 const Leaf = blocks.Leaf;
 const Inline = inls.Inline;
 const Text = inls.Text;
-const TextStyle = utils.TextStyle;
+const TextStyle = theme.TextStyle;
 
 const quote_indent = Text{ .text = "> " };
 const list_indent = Text{ .style = .{}, .text = "  " };

@@ -110,20 +110,20 @@ fn convertStyleRangeToTable(lua: ?*LuaState, range: zd.RangeRenderer.StyleRange)
 
 /// Create a Lua table containing the TextStyle object.
 /// After this function, the table will reside on the top of the Lua stack.
-fn convertStyleToTable(lua: ?*LuaState, style: zd.utils.TextStyle) void {
+fn convertStyleToTable(lua: ?*LuaState, style: zd.theme.TextStyle) void {
     const narr: c_int = 0;
     const nfield: c_int = 7;
     c.lua_createtable(lua, narr, nfield);
 
     if (style.fg_color) |fg_color| {
-        c.lua_pushstring(lua, @ptrCast(zd.utils.colorHexStr(fg_color)));
+        c.lua_pushstring(lua, @ptrCast(zd.theme.colorHexStr(fg_color)));
     } else {
         c.lua_pushnil(lua);
     }
     c.lua_setfield(lua, -2, "fg");
 
     if (style.bg_color) |bg_color| {
-        c.lua_pushstring(lua, @ptrCast(zd.utils.colorHexStr(bg_color)));
+        c.lua_pushstring(lua, @ptrCast(zd.theme.colorHexStr(bg_color)));
     } else {
         c.lua_pushnil(lua);
     }

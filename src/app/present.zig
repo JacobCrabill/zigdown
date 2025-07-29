@@ -26,9 +26,6 @@ pub const Source = struct {
 /// source:  Struct specifying the location of the slides (.md files) to render
 /// recurse: If true, all *.md files in all child directories of {dir}/{dirname} will be used
 pub fn present(alloc: Allocator, writer: std.io.AnyWriter, source: Source, recurse: bool) !void {
-    const raw_tty = try RawTTY.init();
-    defer raw_tty.deinit();
-
     // Store all of the Markdown file paths, in iterator order
     var slides = ArrayList([]const u8).init(alloc);
     defer {
@@ -52,6 +49,9 @@ pub fn present(alloc: Allocator, writer: std.io.AnyWriter, source: Source, recur
         return error.NoSlidesFound;
     }
 
+    const raw_tty = try RawTTY.init();
+    defer raw_tty.deinit();
+
     // Begin the presentation, using stdin to go forward/backward
     var i: usize = 0;
     var update: bool = true;
@@ -59,10 +59,15 @@ pub fn present(alloc: Allocator, writer: std.io.AnyWriter, source: Source, recur
     while (!quit) {
         if (update) {
             const slide: []const u8 = slides.items[i];
-            const file = try std.fs.openFileAbsolute(slide, .{});
-            defer file.close();
-            try renderFile(alloc, writer, source.root, file, i + 1, slides.items.len);
-            update = false;
+            if (std.fs.openFileAbsolute(slide, .{})) |file| {
+                defer file.close();
+                try renderFile(alloc, writer, source.root, file, i + 1, slides.items.len);
+                update = false;
+            } else |err| {
+                _ = try writer.write(cons.clear_screen);
+                try writer.print(cons.set_row_col, .{ 0, 0 });
+                try writer.print("ERROR: {any} on slide {s}\n", .{ err, slide });
+            }
         }
 
         // Check for a keypress to advance to the next slide

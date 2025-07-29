@@ -7,6 +7,7 @@ const containers = @import("../ast/containers.zig");
 const leaves = @import("../ast/leaves.zig");
 const inls = @import("../ast/inlines.zig");
 const utils = @import("../utils.zig");
+const theme = @import("../theme.zig");
 
 const cons = @import("../console.zig");
 const debug = @import("../debug.zig");
@@ -28,7 +29,7 @@ const Container = blocks.Container;
 const Leaf = blocks.Leaf;
 const Inline = inls.Inline;
 const Text = inls.Text;
-const TextStyle = utils.TextStyle;
+const TextStyle = theme.TextStyle;
 
 const quote_indent = Text{ .style = .{ .fg_color = .White }, .text = "┃ " };
 const list_indent = Text{ .style = .{}, .text = "  " };
@@ -39,10 +40,8 @@ const numlist_indent_1000 = Text{ .style = .{}, .text = "      " };
 const task_list_indent = Text{ .style = .{}, .text = "  " };
 
 const code_fence_style = TextStyle{ .fg_color = .PurpleGrey, .bold = true };
-const warn_box_style = TextStyle{ .fg_color = .Red, .bold = true };
 const code_text_style = TextStyle{ .bg_color = .DarkGrey, .fg_color = .PurpleGrey };
 const code_indent = Text{ .style = code_fence_style, .text = "│ " };
-const warn_indent = Text{ .style = warn_box_style, .text = "│ " };
 
 const TreezError = error{
     Unknown,
@@ -136,11 +135,11 @@ pub const RangeRenderer = struct {
         self.deinit();
     }
 
-    fn startFgColor(self: *Self, fg_color: utils.Color) void {
+    fn startFgColor(self: *Self, fg_color: theme.Color) void {
         self.writeno(cons.getFgColor(fg_color));
     }
 
-    fn startBgColor(self: *Self, bg_color: utils.Color) void {
+    fn startBgColor(self: *Self, bg_color: theme.Color) void {
         self.writeno(cons.getBgColor(bg_color));
     }
 
@@ -155,12 +154,12 @@ pub const RangeRenderer = struct {
         // if (style_a.reverse != style_b.reverse) return false;
         // if (style_a.hide != style_b.hide) return false;
 
-        const fg_color_a: utils.Color = style_a.fg_color orelse .Default;
-        const fg_color_b: utils.Color = style_b.fg_color orelse .Default;
+        const fg_color_a: theme.Color = style_a.fg_color orelse .Default;
+        const fg_color_b: theme.Color = style_b.fg_color orelse .Default;
         if (fg_color_a != fg_color_b) return false;
 
-        const bg_color_a: utils.Color = style_a.bg_color orelse .Default;
-        const bg_color_b: utils.Color = style_b.bg_color orelse .Default;
+        const bg_color_a: theme.Color = style_a.bg_color orelse .Default;
+        const bg_color_b: theme.Color = style_b.bg_color orelse .Default;
         if (bg_color_a != bg_color_b) return false;
 
         return true;
@@ -978,18 +977,23 @@ pub const RangeRenderer = struct {
         const source = buf_writer.items;
         const ranges = sub_renderer.style_ranges;
 
+        const style: TextStyle = .{
+            .fg_color = theme.directiveToColor(alert),
+            .bold = true,
+        };
+        const leader: Text = .{ .text = "│ ", .style = style };
+        const trailer: Text = .{ .text = " │", .style = style };
+
         // Write the first line of the Alert box
         self.writeLeaders();
-        self.startStyle(warn_box_style);
+        self.startStyle(style);
         self.print("╭─── {s} ", .{alert});
         self.writeNTimes("─", self.opts.width - 7 - 2 * self.opts.indent - alert.len);
         self.write("╮");
         self.renderBreak();
         self.resetStyle();
 
-        try self.leader_stack.append(warn_indent);
-
-        const trailer: Text = .{ .text = " │", .style = warn_box_style };
+        try self.leader_stack.append(leader);
 
         // Write the Alert box contents, line by line
         var iter = std.mem.tokenizeScalar(u8, source, '\n');
@@ -1026,7 +1030,7 @@ pub const RangeRenderer = struct {
         }
 
         _ = self.leader_stack.pop();
-        self.startStyle(warn_box_style);
+        self.startStyle(style);
         self.write("╰");
         self.writeNTimes("─", self.opts.width - 2 * self.opts.indent - 2);
         self.write("╯");
@@ -1045,25 +1049,31 @@ pub const RangeRenderer = struct {
             return;
         }
 
+        const style: TextStyle = .{
+            .fg_color = theme.directiveToColor(directive),
+            .bold = true,
+        };
+        const leader: Text = .{ .text = "│ ", .style = style };
+        const trailer: Text = .{ .text = " │", .style = style };
+
         self.writeLeaders();
-        self.startStyle(warn_box_style);
+        self.startStyle(style);
         self.print("╭─── {s} ", .{directive});
         self.writeNTimes("─", self.opts.width - 7 - 2 * self.opts.indent - directive.len);
         self.write("╮");
         self.renderBreak();
         self.resetStyle();
 
-        try self.leader_stack.append(warn_indent);
+        try self.leader_stack.append(leader);
         self.writeLeaders();
 
         const source = d.text orelse "";
 
-        const trailer: Text = .{ .text = " │", .style = warn_box_style };
         self.wrapTextWithTrailer(source, trailer);
 
         _ = self.leader_stack.pop();
         self.writeLeaders();
-        self.startStyle(warn_box_style);
+        self.startStyle(style);
         self.write("╰");
         self.writeNTimes("─", self.opts.width - 2 * self.opts.indent - 2);
         self.write("╯");

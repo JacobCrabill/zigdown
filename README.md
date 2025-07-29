@@ -16,9 +16,8 @@ web site, or present a set of files interactively as an in-terminal slide show.
 This will likely forever be a WIP, but it currently supports the the most common features of simple
 Markdown files.
 
-```{warning}
-This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
-```
+> [!WARNING]
+> This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 
 ## Tools
 
@@ -178,4 +177,6 @@ queries to `$TS_CONFIG_DIR/queries`, which defaults to `$HOME/.config/tree-sitte
 
 ### Presentations
 
-[![asciicast](https://asciinema.org/a/667398.png)](https://asciinema.org/a/667398)
+![asciicast](https://asciinema.org/a/667398.png)
+
+[Demo](https://asciinema.org/a/667398)

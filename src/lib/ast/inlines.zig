@@ -1,12 +1,13 @@
 const std = @import("std");
 const utils = @import("../utils.zig");
+const theme = @import("../theme.zig");
 const debug = @import("../debug.zig");
 const tokens = @import("../tokens.zig");
 
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 
-const TextStyle = utils.TextStyle;
+const TextStyle = theme.TextStyle;
 const Token = tokens.Token;
 const printIndent = utils.printIndent;
 

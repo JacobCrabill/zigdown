@@ -13,6 +13,7 @@ const debug = @import("../debug.zig");
 const gfx = @import("../image.zig");
 const ts_queries = @import("../ts_queries.zig");
 const syntax = @import("../syntax.zig");
+const theme = @import("../theme.zig");
 
 pub const Renderer = @import("Renderer.zig");
 
@@ -28,7 +29,7 @@ const Container = blocks.Container;
 const Leaf = blocks.Leaf;
 const Inline = inls.Inline;
 const Text = inls.Text;
-const TextStyle = utils.TextStyle;
+const TextStyle = theme.TextStyle;
 
 const quote_indent = Text{ .style = .{ .fg_color = .White }, .text = "┃ " };
 const list_indent = Text{ .style = .{}, .text = "  " };
@@ -39,10 +40,8 @@ const numlist_indent_1000 = Text{ .style = .{}, .text = "      " };
 const task_list_indent = Text{ .style = .{}, .text = "  " };
 
 const code_fence_style = TextStyle{ .fg_color = .PurpleGrey, .bold = true };
-const warn_box_style = TextStyle{ .fg_color = .Red, .bold = true };
 const code_text_style = TextStyle{ .bg_color = .DarkGrey, .fg_color = .PurpleGrey };
 const code_indent = Text{ .style = code_fence_style, .text = "│ " };
-const warn_indent = Text{ .style = warn_box_style, .text = "│ " };
 
 const TreezError = error{
     Unknown,
@@ -120,11 +119,11 @@ pub const ConsoleRenderer = struct {
         self.deinit();
     }
 
-    fn startFgColor(self: *Self, fg_color: utils.Color) void {
+    fn startFgColor(self: *Self, fg_color: theme.Color) void {
         self.writeno(cons.getFgColor(fg_color));
     }
 
-    fn startBgColor(self: *Self, bg_color: utils.Color) void {
+    fn startBgColor(self: *Self, bg_color: theme.Color) void {
         self.writeno(cons.getBgColor(bg_color));
     }
 
@@ -989,18 +988,23 @@ pub const ConsoleRenderer = struct {
         // Get the rendered output
         const source = buf_writer.items;
 
+        const style: TextStyle = .{
+            .fg_color = theme.directiveToColor(alert),
+            .bold = true,
+        };
+        const leader: Text = .{ .text = "│ ", .style = style };
+        const trailer: Text = .{ .text = " │", .style = style };
+
         // Write the first line of the Alert box
         self.writeLeaders();
-        self.startStyle(warn_box_style);
+        self.startStyle(style);
         self.print("╭─── {s} ", .{alert});
         self.writeNTimes("─", self.opts.width - 7 - 2 * self.opts.indent - alert.len);
         self.write("╮");
         self.renderBreak();
         self.resetStyle();
 
-        try self.leader_stack.append(warn_indent);
-
-        const trailer: Text = .{ .text = " │", .style = warn_box_style };
+        try self.leader_stack.append(leader);
 
         // Write the Alert box contents, line by line
         var iter = std.mem.tokenizeScalar(u8, source, '\n');
@@ -1022,7 +1026,7 @@ pub const ConsoleRenderer = struct {
         _ = self.leader_stack.pop();
         self.resetLine();
         self.writeLeaders();
-        self.startStyle(warn_box_style);
+        self.startStyle(style);
         self.write("╰");
         self.writeNTimes("─", self.opts.width - 2 * self.opts.indent - 2);
         self.write("╯");
@@ -1042,26 +1046,32 @@ pub const ConsoleRenderer = struct {
             return;
         }
 
+        const style: TextStyle = .{
+            .fg_color = theme.directiveToColor(directive),
+            .bold = true,
+        };
+        const leader: Text = .{ .text = "│ ", .style = style };
+        const trailer: Text = .{ .text = " │", .style = style };
+
         self.writeLeaders();
-        self.startStyle(warn_box_style);
+        self.startStyle(style);
         self.print("╭─── {s} ", .{directive});
         self.writeNTimes("─", self.opts.width - 7 - 2 * self.opts.indent - directive.len);
         self.write("╮");
         self.renderBreak();
         self.resetStyle();
 
-        try self.leader_stack.append(warn_indent);
+        try self.leader_stack.append(leader);
         self.writeLeaders();
 
         const source = d.text orelse "";
 
-        const trailer: Text = .{ .text = " │", .style = warn_box_style };
         self.wrapTextWithTrailer(source, trailer);
 
         _ = self.leader_stack.pop();
         self.resetLine();
         self.writeLeaders();
-        self.startStyle(warn_box_style);
+        self.startStyle(style);
         self.write("╰");
         self.writeNTimes("─", self.opts.width - 2 * self.opts.indent - 2);
         self.write("╯");
@@ -1146,6 +1156,7 @@ pub const ConsoleRenderer = struct {
         self.write(image.src);
         self.startStyle(cur_style);
 
+        // Get the raw contents of the image file
         var img_bytes: ?[]u8 = null;
         defer if (img_bytes) |bytes| self.alloc.free(bytes);
 

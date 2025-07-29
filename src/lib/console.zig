@@ -1,11 +1,11 @@
 const std = @import("std");
-const utils = @import("utils.zig");
+const theme = @import("theme.zig");
 
 const AnyWriter = std.io.AnyWriter;
 
-const Color = utils.Color;
-const Style = utils.Style;
-const TextStyle = utils.TextStyle;
+const Color = theme.Color;
+const Style = theme.Style;
+const TextStyle = theme.TextStyle;
 
 // ANSI terminal escape character
 pub const ansi = [1]u8{0x1b};

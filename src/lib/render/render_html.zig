@@ -9,6 +9,7 @@ const containers = @import("../ast/containers.zig");
 
 const debug = @import("../debug.zig");
 const utils = @import("../utils.zig");
+const theme = @import("../theme.zig");
 const syntax = @import("../syntax.zig");
 const ts_queries = @import("../ts_queries.zig");
 const wasm = @import("../wasm.zig");
@@ -248,7 +249,7 @@ pub const HtmlRenderer = struct {
                 // Alternative: Have a CSS class for each color ( 'var(--color-x)' )
                 // Split by line into a table with line numbers
                 if (range.content.len > 0) {
-                    self.print("<span style=\"color:{s}\">{s}</span>", .{ utils.colorToCss(range.color), range.content });
+                    self.print("<span style=\"color:{s}\">{s}</span>", .{ theme.colorToCss(range.color), range.content });
                 }
                 if (range.newline) {
                     self.write("</pre></td></tr>\n");
@@ -271,7 +272,7 @@ pub const HtmlRenderer = struct {
                 // Alternative: Have a CSS class for each color ( 'var(--color-x)' )
                 // Split by line into a table with line numbers
                 self.print("<tr><td><span style=\"color:var(--color-peach)\">{d}</span></td>", .{lino});
-                self.print("<td><pre><span style=\"color:{s}\">{s}</span></pre></td></tr>\n", .{ utils.colorToCss(.Default), line });
+                self.print("<td><pre><span style=\"color:{s}\">{s}</span></pre></td></tr>\n", .{ theme.colorToCss(.Default), line });
                 lino += 1;
             }
             self.write("</pre></td></tr></tbody></table>\n");

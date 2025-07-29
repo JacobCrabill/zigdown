@@ -13,6 +13,7 @@ pub const parser = @import("parser.zig");
 pub const render = @import("render.zig");
 pub const tokens = @import("tokens.zig");
 pub const utils = @import("utils.zig");
+pub const theme = @import("theme.zig");
 pub const blocks = @import("ast/blocks.zig");
 pub const gfx = @import("image.zig");
 pub const ts_queries = @import("ts_queries.zig");

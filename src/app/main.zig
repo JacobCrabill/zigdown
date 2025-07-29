@@ -378,7 +378,10 @@ pub fn handlePresent(
     }
     defer alloc.free(source.root);
 
-    source.dir = try std.fs.openDirAbsolute(source.root, .{ .iterate = true });
+    source.dir = std.fs.openDirAbsolute(source.root, .{ .iterate = true }) catch {
+        printHelpAndExit(diags, colorscheme, error.DirectoryNotFound);
+        unreachable;
+    };
 
     const recurse: bool = p_opts.recurse;
     const stdout = std.io.getStdOut().writer().any();

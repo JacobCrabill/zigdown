@@ -19,7 +19,7 @@ const TokenList = toks.TokenList;
 
 const InlineType = inls.InlineType;
 const Inline = inls.Inline;
-const TextStyle = @import("../utils.zig").TextStyle;
+const TextStyle = @import("../theme.zig").TextStyle;
 
 const ParserOpts = utils.ParserOpts;
 const appendWords = utils.appendWords;

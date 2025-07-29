@@ -13,93 +13,6 @@ const ArrayList = std.ArrayList;
 
 const Block = blocks.Block;
 
-pub const Color = enum(u8) {
-    Black,
-    Red,
-    Green,
-    Yellow,
-    Blue,
-    Magenta,
-    Cyan,
-    White,
-    // Colors from the RGB range
-    DarkYellow,
-    PurpleGrey,
-    MediumGrey,
-    DarkGrey,
-    DarkRed,
-    Orange,
-    Coral,
-    // Use terminal defaults
-    Default,
-};
-
-pub const Style = enum(u8) {
-    Bold,
-    Italic,
-    Underline,
-    Blink,
-    FastBlink,
-    Reverse, // Invert the foreground and background colors
-    Hide,
-    Strike,
-};
-
-pub const TextStyle = struct {
-    fg_color: ?Color = null,
-    bg_color: ?Color = null,
-    bold: bool = false,
-    italic: bool = false,
-    underline: bool = false,
-    blink: bool = false,
-    fastblink: bool = false,
-    reverse: bool = false,
-    hide: bool = false,
-    strike: bool = false,
-};
-
-pub fn colorHex(color: Color) usize {
-    return switch (color) {
-        .Black => 0x29283B,
-        .Red => 0xEF6487,
-        .Green => 0x5ECA89,
-        .Blue => 0x65AEF7,
-        .Yellow => 0xFFFF00,
-        .Cyan => 0x43C1BE,
-        .White => 0xFFFFFF,
-        .Magenta => 0xFF00FF,
-        .DarkYellow => 0xAEAC30,
-        .PurpleGrey => 0xAA82FA,
-        .MediumGrey => 0x707070,
-        .DarkGrey => 0x404040,
-        .DarkRed => 0x802020,
-        .Orange => 0xFF9700,
-        .Coral => 0xD7649B,
-        .Default => 0xFFFFFF,
-    };
-}
-
-pub fn colorHexStr(color: Color) []const u8 {
-    return switch (color) {
-        .Black => "#29283B",
-        .Red => "#EF6487",
-        .Green => "#5ECA89",
-        .Blue => "#65AEF7",
-        .Yellow => "#FFFF00",
-        .Cyan => "#43C1BE",
-        .White => "#FFFFFF",
-        .Magenta => "#FF00FF",
-        .DarkYellow => "#AEAC30",
-        .PurpleGrey => "#AA82FA",
-        .MediumGrey => "#707070",
-        .DarkGrey => "#404040",
-        .DarkRed => "#802020",
-        .Orange => "#FF9700",
-        .Coral => "#D7649B",
-        .Default => "#FFFFFF",
-    };
-}
-
 pub const Vec2i = struct {
     x: usize,
     y: usize,
@@ -153,24 +66,6 @@ pub fn isPunctuation(c: u8) bool {
 pub fn stdout(comptime fmt: []const u8, args: anytype) void {
     const out = std.io.getStdOut().writer();
     out.print(fmt, args) catch @panic("stdout failed!");
-}
-
-/// Color enum -> CSS Class
-pub fn colorToCss(color: Color) []const u8 {
-    return switch (color) {
-        .Yellow => "var(--color-yellow)",
-        .Blue => "var(--color-blue)",
-        .DarkYellow => "var(--color-maroon)",
-        .Cyan => "var(--color-sapphire)",
-        .Green => "var(--color-green)",
-        .Magenta => "var(--color-pink)",
-        .Red => "var(--color-mauve)",
-        .White => "var(--color-text)",
-        .Coral => "var(--color-peach)",
-        .MediumGrey => "var(--color-overlay2)",
-        .DarkGrey => "var(--color-overlay0)",
-        else => "var(--color-text)",
-    };
 }
 
 /// A simple timer that operates in seconds using f64 time points

@@ -6,6 +6,7 @@ const cons = @import("console.zig");
 const debug = @import("debug.zig");
 const gfx = @import("image.zig");
 const ts_queries = @import("ts_queries.zig");
+const theme = @import("theme.zig");
 const utils = @import("utils.zig");
 const wasm = @import("wasm.zig");
 
@@ -13,14 +14,14 @@ const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 
 pub const Range = struct {
-    color: utils.Color,
+    color: theme.Color,
     content: []const u8,
     newline: bool = false,
 };
 
 // Capture group name -> Color
 // List taken from neovim's runtime/doc/treesitter.txt
-const highlights_map = std.StaticStringMap(utils.Color).initComptime(.{
+const highlights_map = std.StaticStringMap(theme.Color).initComptime(.{
     .{ "variable", .White }, // various variable names
     .{ "variable.builtin", .Yellow }, // built-in variable names (e.g. `this`, `self`)
     .{ "variable.parameter", .Red }, // parameters of a function
@@ -120,7 +121,7 @@ const highlights_map = std.StaticStringMap(utils.Color).initComptime(.{
 /// Get the highlight color for a specific capture group
 /// TODO: Load from JSON, possibly on a per-language basis
 /// TODO: Setup RGB color schemes and a Vim-style subset of highlight groups
-pub fn getHighlightFor(label: []const u8) ?utils.Color {
+pub fn getHighlightFor(label: []const u8) ?theme.Color {
     return highlights_map.get(label);
 }
 
@@ -218,7 +219,7 @@ pub fn getHighlights(alloc: Allocator, code: []const u8, lang_name: []const u8) 
 
 /// Split a range of content by newlines
 /// This allows the renderer to easily know when the current source line needs to end
-fn splitByLines(ranges: *ArrayList(Range), color: utils.Color, content: []const u8) !void {
+fn splitByLines(ranges: *ArrayList(Range), color: theme.Color, content: []const u8) !void {
     var split_content = content;
     while (std.mem.indexOf(u8, split_content, "\n")) |l_end| {
         try ranges.append(.{ .color = color, .content = split_content[0..l_end], .newline = true });

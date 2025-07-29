@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const utils = @import("../utils.zig");
+const theme = @import("../theme.zig");
 const toks = @import("../tokens.zig");
 const blocks = @import("../ast/blocks.zig");
 const containers = @import("../ast/containers.zig");
@@ -14,7 +15,7 @@ const TokenType = toks.TokenType;
 const Token = toks.Token;
 const TokenList = toks.TokenList;
 
-const TextStyle = utils.TextStyle;
+const TextStyle = theme.TextStyle;
 const Text = inls.Text;
 const Inline = inls.Inline;
 const InlineData = inls.InlineData;
