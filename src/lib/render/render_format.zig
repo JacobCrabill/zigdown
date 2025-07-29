@@ -736,9 +736,11 @@ pub const FormatRenderer = struct {
         self.print("{s}{s}", .{ fence, tag });
         self.renderBreak();
 
-        self.writeLeaders();
-        self.wrapTextRaw(utils.trimTrailingWhitespace(source));
-        self.renderBreak();
+        if (source.len > 0) {
+            self.writeLeaders();
+            self.wrapTextRaw(utils.trimTrailingWhitespace(source));
+            self.renderBreak();
+        }
         self.writeLeaders();
         self.print("{s}", .{fence});
     }
