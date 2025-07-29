@@ -3,7 +3,7 @@
 ![CI Status](https://github.com/JacobCrabill/zigdown/actions/workflows/main.yml/badge.svg)
 
 ```{toctree}
-<This block will be rendered as a Table of Contents>
+
 ```
 
 ![Zig is Awesome!](src/assets/img/zig-zero.png)
@@ -57,6 +57,7 @@ Markdown files.
 
 ### Future Work / Missing Pieces
 
+- [ ] HTML-encode all text in the HTML renderer
 - [ ] Enabling TreeSitter parsers to be used in WASM modules
       - Requires filling in some libC stub functions (the TS parsers use quite a few functions from
         the C standard library that are not available in WASM)

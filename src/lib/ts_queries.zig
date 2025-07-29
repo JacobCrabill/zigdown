@@ -39,6 +39,7 @@ pub fn init(alloc: Allocator) void {
 
     putAlias("c++", "cpp");
     putAlias("cpp", "cpp");
+    putAlias("sh", "bash");
 
     builtin_languages = std.StringHashMap(TsParserPair).init(alloc);
 
