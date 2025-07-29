@@ -464,7 +464,7 @@ pub const RangeRenderer = struct {
         switch (block.content) {
             .Alert => try self.renderAlert(block),
             .Break => {},
-            .Code => |c| try self.renderCode(c),
+            .Code => try self.renderCode(block),
             .Heading => try self.renderHeading(block),
             .Paragraph => try self.renderParagraph(block),
         }
@@ -889,9 +889,10 @@ pub const RangeRenderer = struct {
     }
 
     /// Render a raw block of code
-    fn renderCode(self: *Self, c: leaves.Code) !void {
+    fn renderCode(self: *Self, b: blocks.Leaf) !void {
+        const c: leaves.Code = b.content.Code;
         if (c.directive) |_| {
-            try self.renderDirective(c);
+            try self.renderDirective(b);
             return;
         }
         self.writeLeaders();
@@ -1013,7 +1014,7 @@ pub const RangeRenderer = struct {
             // Append all styles from this line to our ranges
             // NOTE: The index here looks off-by-one, but I *think* it's
             // due to the vertical bar character being 2 bytes
-            const col_offset: usize = self.opts.indent + 3;
+            const col_offset: usize = self.opts.indent + 4;
             for (ranges.items) |range| {
                 const new_range: StyleRange = .{
                     .line = self.line + range.line,
@@ -1034,8 +1035,9 @@ pub const RangeRenderer = struct {
         self.write("╯");
         self.resetStyle();
     }
-    fn renderDirective(self: *Self, d: leaves.Code) !void {
-        // TODO: Enum for builtin directive types w/ string aliases mapped to them
+
+    fn renderDirective(self: *Self, b: blocks.Leaf) !void {
+        const d: leaves.Code = b.content.Code;
         const directive = d.directive orelse "note";
 
         if (utils.isDirectiveToC(directive)) {
@@ -1047,14 +1049,47 @@ pub const RangeRenderer = struct {
             return;
         }
 
-        const icon = theme.directiveToIcon(directive);
-        const style: TextStyle = .{
-            .fg_color = theme.directiveToColor(directive),
-            .bold = true,
+        // Create a new renderer to render all of our inlines into
+        // Use an arena to simplify memory management here
+        var arena = std.heap.ArenaAllocator.init(self.alloc);
+        defer arena.deinit();
+        const alloc = arena.allocator();
+
+        // Create a new Paragraph block using the inlines of the Alert
+        // We'll render this into a new buffer which will then get wrapped
+        // inside of our alert box
+        var item: Block = Block.initLeaf(self.alloc, .Paragraph, 0);
+        item.Leaf.inlines = b.inlines;
+
+        // Render the table cell into a new buffer
+        const width: usize = self.opts.width - 2 * self.opts.indent - 2;
+        var buf_writer = ArrayList(u8).init(alloc);
+        const stream = buf_writer.writer().any();
+
+        const sub_opts = RenderOpts{
+            .out_stream = stream,
+            .width = width,
+            .indent = 1,
+            .max_image_rows = self.opts.max_image_rows,
+            .max_image_cols = width - 2,
+            .box_style = self.opts.box_style,
+            .root_dir = self.opts.root_dir,
         };
+
+        var sub_renderer = RangeRenderer.init(alloc, sub_opts);
+        try sub_renderer.renderBlock(item);
+        sub_renderer.renderEnd();
+
+        // Get the rendered output
+        const source = buf_writer.items;
+        const ranges = sub_renderer.style_ranges;
+
+        const icon = theme.directiveToIcon(directive);
+        const style: TextStyle = .{ .fg_color = theme.directiveToColor(directive), .bold = true };
         const leader: Text = .{ .text = "│ ", .style = style };
         const trailer: Text = .{ .text = " │", .style = style };
 
+        // Write the first line of the Directive box
         self.writeLeaders();
         self.startStyle(style);
         self.print("╭─── {s}{s} ", .{ icon.text, directive });
@@ -1064,14 +1099,42 @@ pub const RangeRenderer = struct {
         self.resetStyle();
 
         try self.leader_stack.append(leader);
-        self.writeLeaders();
 
-        const source = d.text orelse "";
+        // Write the Alert box contents, line by line
+        var iter = std.mem.tokenizeScalar(u8, source, '\n');
+        while (iter.next()) |line| {
+            // Write leader
+            self.writeLeaders();
 
-        self.wrapTextWithTrailer(source, trailer);
+            // Write line
+            self.write(utils.trimLeadingWhitespace(line));
+
+            // Write trailer
+            const end_col: usize = self.opts.width - 2 * self.opts.indent;
+            if (end_col > self.column)
+                self.writeNTimes(" ", end_col - self.column);
+            self.startStyle(trailer.style);
+            self.write(trailer.text);
+            self.resetStyle();
+
+            // Append all styles from this line to our ranges
+            // NOTE: The index here looks off-by-one, but I *think* it's
+            // due to the vertical bar character being 2 bytes
+            const col_offset: usize = self.opts.indent + 4;
+            for (ranges.items) |range| {
+                const new_range: StyleRange = .{
+                    .line = self.line + range.line,
+                    .start = col_offset + range.start,
+                    .end = col_offset + range.end,
+                    .style = range.style,
+                };
+                self.style_ranges.append(new_range) catch @panic("OOM");
+            }
+
+            self.renderBreak();
+        }
 
         _ = self.leader_stack.pop();
-        self.writeLeaders();
         self.startStyle(style);
         self.write("╰");
         self.writeNTimes("─", self.opts.width - 2 * self.opts.indent - 2);

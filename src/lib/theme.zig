@@ -119,7 +119,7 @@ pub fn directiveToColor(directive: []const u8) Color {
     };
     const mapping: []const TagColor = &[_]TagColor{
         .{ .tag = "note", .color = .Blue },
-        .{ .tag = "info", .color = .Green },
+        .{ .tag = "info", .color = .Cyan },
         .{ .tag = "tip", .color = .Green },
         .{ .tag = "important", .color = .PurpleGrey },
         .{ .tag = "warning", .color = .Orange },
@@ -151,12 +151,13 @@ pub fn directiveToIcon(directive: []const u8) Icon {
         icon: Icon,
     };
     const mapping: []const TagColor = &[_]TagColor{
-        .{ .tag = "note", .icon = .{ .text = "🗒 ", .width = 3 } },
+        .{ .tag = "note", .icon = .{ .text = "📄 ", .width = 3 } },
         .{ .tag = "info", .icon = .{ .text = "🅘 ", .width = 2 } },
-        .{ .tag = "tip", .icon = .{ .text = "⏻ ", .width = 2 } },
+        .{ .tag = "tip", .icon = .{ .text = "💡", .width = 2 } },
+        //.{ .tag = "tip", .icon = .{ .text = "⏻ ", .width = 2 } },
         .{ .tag = "important", .icon = .{ .text = "❗", .width = 2 } },
-        .{ .tag = "warning", .icon = .{ .text = "❗", .width = 2 } },
-        .{ .tag = "caution", .icon = .{ .text = "🛆 ", .width = 2 } },
+        .{ .tag = "warning", .icon = .{ .text = "⚠ ", .width = 2 } },
+        .{ .tag = "caution", .icon = .{ .text = "🚧 ", .width = 3 } },
     };
     for (mapping) |entry| {
         if (std.mem.eql(u8, d, entry.tag)) {

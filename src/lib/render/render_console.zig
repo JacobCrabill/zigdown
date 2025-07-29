@@ -453,7 +453,7 @@ pub const ConsoleRenderer = struct {
         switch (block.content) {
             .Alert => try self.renderAlert(block),
             .Break => {},
-            .Code => |c| try self.renderCode(c),
+            .Code => try self.renderCode(block),
             .Heading => try self.renderHeading(block),
             .Paragraph => try self.renderParagraph(block),
         }
@@ -900,9 +900,10 @@ pub const ConsoleRenderer = struct {
     }
 
     /// Render a raw block of code
-    fn renderCode(self: *Self, c: leaves.Code) !void {
+    fn renderCode(self: *Self, b: blocks.Leaf) !void {
+        const c: leaves.Code = b.content.Code;
         if (c.directive) |_| {
-            try self.renderDirective(c);
+            try self.renderDirective(b);
             return;
         }
         self.writeLeaders();
@@ -950,7 +951,6 @@ pub const ConsoleRenderer = struct {
     }
 
     fn renderAlert(self: *Self, b: blocks.Leaf) !void {
-        // TODO: Enum for builtin alert types w/ string aliases mapped to them
         const alert = b.content.Alert.alert orelse "NOTE";
 
         // Create a new renderer to render all of our inlines into
@@ -1031,8 +1031,8 @@ pub const ConsoleRenderer = struct {
         self.resetStyle();
     }
 
-    fn renderDirective(self: *Self, d: leaves.Code) !void {
-        // TODO: Enum for builtin directive types w/ string aliases mapped to them
+    fn renderDirective(self: *Self, b: blocks.Leaf) !void {
+        const d: leaves.Code = b.content.Code;
         const directive = d.directive orelse "note";
 
         if (utils.isDirectiveToC(directive)) {
@@ -1043,6 +1043,41 @@ pub const ConsoleRenderer = struct {
             try self.renderBlock(toc);
             return;
         }
+
+        // Create a new renderer to render all of our inlines into
+        // Use an arena to simplify memory management here
+        var arena = std.heap.ArenaAllocator.init(self.alloc);
+        defer arena.deinit();
+        const alloc = arena.allocator();
+
+        // Create a new Paragraph block using the inlines of the Alert
+        // We'll render this into a new buffer which will then get wrapped
+        // inside of our alert box
+        var item: Block = Block.initLeaf(self.alloc, .Paragraph, 0);
+        item.Leaf.inlines = b.inlines;
+
+        // Render the table cell into a new buffer
+        const width: usize = self.opts.width - 2 * self.opts.indent - 2;
+        var buf_writer = ArrayList(u8).init(alloc);
+        const stream = buf_writer.writer().any();
+
+        const sub_opts = RenderOpts{
+            .out_stream = stream,
+            .width = width,
+            .indent = 1,
+            .max_image_rows = self.opts.max_image_rows,
+            .max_image_cols = width - 2,
+            .box_style = self.opts.box_style,
+            .root_dir = self.opts.root_dir,
+            .rendering_to_buffer = true,
+        };
+
+        var sub_renderer = ConsoleRenderer.init(alloc, sub_opts);
+        try sub_renderer.renderBlock(item);
+        sub_renderer.renderEnd();
+
+        // Get the rendered output
+        const source = buf_writer.items;
 
         const icon = theme.directiveToIcon(directive);
         const style: TextStyle = .{ .fg_color = theme.directiveToColor(directive), .bold = true };
@@ -1058,11 +1093,23 @@ pub const ConsoleRenderer = struct {
         self.resetStyle();
 
         try self.leader_stack.append(leader);
-        self.writeLeaders();
 
-        const source = d.text orelse "";
+        // Write the Alert box contents, line by line
+        var iter = std.mem.tokenizeScalar(u8, source, '\n');
+        while (iter.next()) |line| {
+            // Write leader
+            self.writeLeaders();
 
-        self.wrapTextWithTrailer(source, trailer);
+            // Write line
+            self.write(utils.trimLeadingWhitespace(line));
+
+            // Write trailer
+            self.printno(cons.set_col, .{self.opts.width - 2 - 1});
+            self.startStyle(trailer.style);
+            self.write(trailer.text);
+            self.resetStyle();
+            self.renderBreak();
+        }
 
         _ = self.leader_stack.pop();
         self.resetLine();

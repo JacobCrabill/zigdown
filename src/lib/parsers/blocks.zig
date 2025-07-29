@@ -944,7 +944,16 @@ pub const Parser = struct {
             },
             .Leaf => |*l| {
                 switch (l.content) {
-                    .Code => self.closeBlockCode(block),
+                    .Code => |c| {
+                        if (c.directive != null) {
+                            var p = InlineParser.init(self.alloc, self.opts);
+                            defer p.deinit();
+                            self.logger.log("Parsing inlines for Leaf of type {s}\n", .{@tagName(block.Leaf.content)});
+                            l.inlines = p.parseInlines(l.raw_contents.items) catch unreachable;
+                        } else {
+                            self.closeBlockCode(block);
+                        }
+                    },
                     else => {
                         var p = InlineParser.init(self.alloc, self.opts);
                         defer p.deinit();
