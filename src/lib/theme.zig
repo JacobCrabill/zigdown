@@ -133,3 +133,36 @@ pub fn directiveToColor(directive: []const u8) Color {
 
     return .Red;
 }
+
+pub const Icon = struct {
+    text: []const u8 = "",
+    /// Displayed width of the icon
+    width: usize = 0,
+};
+
+/// Get the icon associated with a Directive
+pub fn directiveToIcon(directive: []const u8) Icon {
+    var buf: [64]u8 = undefined;
+    if (directive.len > 64) return .{};
+    const d = std.ascii.lowerString(&buf, directive);
+
+    const TagColor = struct {
+        tag: []const u8,
+        icon: Icon,
+    };
+    const mapping: []const TagColor = &[_]TagColor{
+        .{ .tag = "note", .icon = .{ .text = "🗒 ", .width = 3 } },
+        .{ .tag = "info", .icon = .{ .text = "🅘 ", .width = 2 } },
+        .{ .tag = "tip", .icon = .{ .text = "⏻ ", .width = 2 } },
+        .{ .tag = "important", .icon = .{ .text = "❗", .width = 2 } },
+        .{ .tag = "warning", .icon = .{ .text = "❗", .width = 2 } },
+        .{ .tag = "caution", .icon = .{ .text = "🛆 ", .width = 2 } },
+    };
+    for (mapping) |entry| {
+        if (std.mem.eql(u8, d, entry.tag)) {
+            return entry.icon;
+        }
+    }
+
+    return .{};
+}

@@ -1,6 +1,7 @@
 # Heading 1
 
 ```{toc}
+
 ```
 
 ## Heading 2
@@ -9,26 +10,28 @@
 
 #### Heading 4
 
-Plain text with **bold** and _italic_ styles (and **_bold_italic_**) or ~underlined **and bold _or
-italic_**~.
+Plain text with **bold** and _italic_ styles (and _**bold_italic**_) or ~underlined **and bold _or
+italic**_~.
 
 - Unordered list
 - Works as you'd expect
   1. Nested numbered list
-  1. Numbers auto-increment
+  2. Numbers auto-increment
      - more nesting!
        - > nested quote
-     - `list` with `lots of code` to test `inline code` being `wrapped` on `line breaks` `foo` `bar`
-  1. Numbers _continue_ to auto-increment
+     - `list` with `lots of code` to test `inline code` being `wrapped` on `line breaks` `foo`
+       `bar`
+  3. Numbers _continue_ to auto-increment
 -
 - ^ Empty list item
-- with **_simple_ formatting**!
+- with _**simple_ formatting**!
 
 ## Quotes
 
 > Quote Block
 >
-> > With line breaks and **_Formatting_**.
+> > With line breaks and _**Formatting**_.
+>
 >
 > - Lists inside quotes
 
@@ -73,24 +76,24 @@ const std = @import("std");
 const ArrayList = std.ArrayList;
 
 pub const Range = struct {
-    color: utils.Color,
+    color: theme.Color,
     content: []const u8,
     newline: bool = false,
 };
 
 // Capture Name: number
-const highlights_map = std.StaticStringMap(utils.Color).initComptime(.{
+const highlights_map = std.StaticStringMap(theme.Color).initComptime(.{
     .{ "number", .Yellow },
 });
 
 /// Get the highlight color for a specific capture group
-pub fn getHighlightFor(label: []const u8) ?utils.Color {
+pub fn getHighlightFor(label: []const u8) ?theme.Color {
     return highlights_map.get(label);
 }
 
 for (ranges) |range| {
     if (range.content.len > 0) {
-        self.print("<span style=\"color:{s}\">{s}</span>", .{ utils.colorToCss(range.color), range.content });
+        self.print("<span style=\"color:{s}\">{s}</span>", .{ theme.colorToCss(range.color), range.content });
     }
 }
 ```

@@ -988,18 +988,16 @@ pub const ConsoleRenderer = struct {
         // Get the rendered output
         const source = buf_writer.items;
 
-        const style: TextStyle = .{
-            .fg_color = theme.directiveToColor(alert),
-            .bold = true,
-        };
+        const icon = theme.directiveToIcon(alert);
+        const style: TextStyle = .{ .fg_color = theme.directiveToColor(alert), .bold = true };
         const leader: Text = .{ .text = "│ ", .style = style };
         const trailer: Text = .{ .text = " │", .style = style };
 
         // Write the first line of the Alert box
         self.writeLeaders();
         self.startStyle(style);
-        self.print("╭─── {s} ", .{alert});
-        self.writeNTimes("─", self.opts.width - 7 - 2 * self.opts.indent - alert.len);
+        self.print("╭─── {s}{s} ", .{ icon.text, alert });
+        self.writeNTimes("─", self.opts.width - 7 - 2 * self.opts.indent - alert.len - icon.width);
         self.write("╮");
         self.renderBreak();
         self.resetStyle();
@@ -1046,17 +1044,15 @@ pub const ConsoleRenderer = struct {
             return;
         }
 
-        const style: TextStyle = .{
-            .fg_color = theme.directiveToColor(directive),
-            .bold = true,
-        };
+        const icon = theme.directiveToIcon(directive);
+        const style: TextStyle = .{ .fg_color = theme.directiveToColor(directive), .bold = true };
         const leader: Text = .{ .text = "│ ", .style = style };
         const trailer: Text = .{ .text = " │", .style = style };
 
         self.writeLeaders();
         self.startStyle(style);
-        self.print("╭─── {s} ", .{directive});
-        self.writeNTimes("─", self.opts.width - 7 - 2 * self.opts.indent - directive.len);
+        self.print("╭─── {s}{s} ", .{ icon.text, directive });
+        self.writeNTimes("─", self.opts.width - 7 - 2 * self.opts.indent - directive.len - icon.width);
         self.write("╮");
         self.renderBreak();
         self.resetStyle();
