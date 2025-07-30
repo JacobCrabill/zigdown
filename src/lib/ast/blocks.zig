@@ -442,6 +442,7 @@ test "Print basic AST" {
         \\Print basic AST result:
         \\│ Container: open: true, type: Document with 2 children
         \\│ │ Container: open: true, type: List with 1 children
+        \\│ │ │ List Spacing: 0
         \\│ │ │ Container: open: true, type: ListItem with 1 children
         \\│ │ │ │ Leaf: open: true, type: Paragraph
         \\│ │ │ │ │ Inline content:

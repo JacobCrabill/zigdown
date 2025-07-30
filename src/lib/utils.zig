@@ -361,18 +361,21 @@ test "Table Of Contents" {
 
     const expected =
         \\│ Container: open: false, type: List with 2 children
+        \\│ │ List Spacing: 0
         \\│ │ Container: open: false, type: ListItem with 2 children
         \\│ │ │ Leaf: open: false, type: Paragraph
         \\│ │ │ │ Inline content:
         \\│ │ │ │ │ Link:
         \\│ │ │ │ │ │ Text: 'Heading 1' [line: 0, col: 0]
         \\│ │ │ Container: open: false, type: List with 2 children
+        \\│ │ │ │ List Spacing: 0
         \\│ │ │ │ Container: open: false, type: ListItem with 2 children
         \\│ │ │ │ │ Leaf: open: false, type: Paragraph
         \\│ │ │ │ │ │ Inline content:
         \\│ │ │ │ │ │ │ Link:
         \\│ │ │ │ │ │ │ │ Text: 'Heading 2' [line: 0, col: 0]
         \\│ │ │ │ │ Container: open: false, type: List with 1 children
+        \\│ │ │ │ │ │ List Spacing: 0
         \\│ │ │ │ │ │ Container: open: false, type: ListItem with 1 children
         \\│ │ │ │ │ │ │ Leaf: open: false, type: Paragraph
         \\│ │ │ │ │ │ │ │ Inline content:
