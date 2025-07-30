@@ -9,3 +9,7 @@ Here's a link:
   - ![[link inside an image](https://google.com)](foo.png)
 
 Autolink: <example.com>
+
+[**Bold _Link_**](https://google.com)
+
+[_Italic **~Link~ Text**_](https://google.com)

@@ -3,7 +3,6 @@
 ![CI Status](https://github.com/JacobCrabill/zigdown/actions/workflows/main.yml/badge.svg)
 
 ```{toctree}
-
 ```
 
 ![Zig is Awesome!](src/assets/img/zig-zero.png)
@@ -178,6 +177,6 @@ queries to `$TS_CONFIG_DIR/queries`, which defaults to `$HOME/.config/tree-sitte
 
 ### Presentations
 
-![asciicast](https://asciinema.org/a/667398.png)
+![asciicast](https://asciinema.org/a/730075.png)
 
-[Demo](https://asciinema.org/a/667398)
+[Demo](https://asciinema.org/a/730075)

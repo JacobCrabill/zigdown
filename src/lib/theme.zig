@@ -154,7 +154,6 @@ pub fn directiveToIcon(directive: []const u8) Icon {
         .{ .tag = "note", .icon = .{ .text = "📄 ", .width = 3 } },
         .{ .tag = "info", .icon = .{ .text = "🅘 ", .width = 2 } },
         .{ .tag = "tip", .icon = .{ .text = "💡", .width = 2 } },
-        //.{ .tag = "tip", .icon = .{ .text = "⏻ ", .width = 2 } },
         .{ .tag = "important", .icon = .{ .text = "❗", .width = 2 } },
         .{ .tag = "warning", .icon = .{ .text = "⚠ ", .width = 2 } },
         .{ .tag = "caution", .icon = .{ .text = "🚧 ", .width = 3 } },

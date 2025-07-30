@@ -51,13 +51,17 @@ pub const FormatRenderer = struct {
         scratch,
         final,
     };
+    const StyleFlag = enum(u8) {
+        bold,
+        italic,
+        strike,
+    };
     stream: AnyWriter,
     opts: RenderOpts = undefined,
     column: usize = 0,
     alloc: std.mem.Allocator,
     leader_stack: ArrayList(Text),
     needs_leaders: bool = true,
-    style_override: ?TextStyle = null,
     cur_style: TextStyle = .{},
     root: ?Block = null,
     scratch: ArrayList(u8), // Scratch buffer for pre-rendering (to find length)
@@ -65,6 +69,9 @@ pub const FormatRenderer = struct {
     scratch_stream: ArrayList(u8).Writer = undefined,
     prerender_stream: ArrayList(u8).Writer = undefined,
     mode: RenderMode = .prerender,
+    /// In order to track the order in which to start/end each style,
+    /// we need a stack to push/pop each modification from
+    style_stack: ArrayList(StyleFlag) = undefined,
 
     /// Create a new FormatRenderer
     pub fn init(alloc: Allocator, opts: RenderOpts) Self {
@@ -75,6 +82,7 @@ pub const FormatRenderer = struct {
             .leader_stack = ArrayList(Text).init(alloc),
             .scratch = ArrayList(u8).init(alloc),
             .prerender = ArrayList(u8).init(alloc),
+            .style_stack = ArrayList(StyleFlag).init(alloc),
         };
     }
 
@@ -94,6 +102,7 @@ pub const FormatRenderer = struct {
         self.leader_stack.deinit();
         self.scratch.deinit();
         self.prerender.deinit();
+        self.style_stack.deinit();
     }
 
     pub fn typeErasedDeinit(ctx: *anyopaque) void {
@@ -106,10 +115,44 @@ pub const FormatRenderer = struct {
     /// changing only what is necessary
     fn startStyleImpl(self: *Self, style: TextStyle) void {
         // This is annoying:
-        // We want to be consistent about the order, and apply the styles
-        // in reverse order when ending vs starting (xml style)
+        // We want to be consistent about the order, and pop off the styles
+        // in reverse order when ending vs starting (xml style).
+        //
+        // We still have some issues / room for improvement in cases where
+        // the "inner-most" style is not started/ended in the same order it
+        // is ended/started.
+        // For example, this:    _Lorem **~Ipsum~ Dolor**_
+        // Will result in this:  _Lorem ~**Ipsum~ Dolor**_
+        const N: usize = self.style_stack.items.len;
+        for (0..self.style_stack.items.len) |i| {
+            const idx = (N - 1) - i;
+            const flag: StyleFlag = self.style_stack.items[idx];
+            switch (flag) {
+                .bold => {
+                    if (!style.bold) {
+                        _ = self.style_stack.orderedRemove(idx);
+                        self.write("**");
+                        self.cur_style.bold = false;
+                    }
+                },
+                .italic => {
+                    if (!style.italic) {
+                        _ = self.style_stack.orderedRemove(idx);
+                        self.write("_");
+                        self.cur_style.italic = false;
+                    }
+                },
+                .strike => {
+                    if (!style.strike) {
+                        _ = self.style_stack.orderedRemove(idx);
+                        self.write("~");
+                        self.cur_style.strike = false;
+                    }
+                },
+            }
+        }
 
-        // -- Starting Styles
+        // -- Ending Styles
         if (!style.bold and self.cur_style.bold) {
             self.write("**");
         }
@@ -120,14 +163,17 @@ pub const FormatRenderer = struct {
             self.write("~");
         }
 
-        // -- Ending Styles
+        // -- Starting Styles
         if (style.strike and !self.cur_style.strike) {
+            self.style_stack.append(.strike) catch @panic("OOM");
             self.write("~");
         }
         if (style.italic and !self.cur_style.italic) {
+            self.style_stack.append(.italic) catch @panic("OOM");
             self.write("_");
         }
         if (style.bold and !self.cur_style.bold) {
+            self.style_stack.append(.bold) catch @panic("OOM");
             self.write("**");
         }
 
@@ -145,12 +191,11 @@ pub const FormatRenderer = struct {
     /// applying the global style overrides afterwards
     fn startStyle(self: *Self, style: TextStyle) void {
         self.startStyleImpl(style);
-        if (self.style_override) |override| self.startStyleImpl(override);
     }
 
     /// Reset all style in the terminal
     fn resetStyle(self: *Self) void {
-        self.cur_style = TextStyle{};
+        self.startStyle(.{ .bold = false, .italic = false, .strike = false });
     }
 
     /// Write an array of bytes to the underlying writer, and update the current column
@@ -819,6 +864,7 @@ pub const FormatRenderer = struct {
         for (link.text.items) |text| {
             self.renderText(text);
         }
+        self.resetStyle();
 
         self.write("](");
         self.write(link.url);

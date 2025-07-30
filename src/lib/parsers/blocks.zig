@@ -890,6 +890,8 @@ pub const Parser = struct {
                     try errorReturn(@src(), "Cannot parse line as heading: {any}", .{line});
             },
             .DIRECTIVE => {
+                // TODO: if line == .DIRECTIVE, .LBRACK, .WORD, .RBRACK
+                //   then it's a Directive, not a Code
                 b = Block.initLeaf(self.alloc, .Code, col);
                 if (!self.handleLineCode(&b, line))
                     try errorReturn(@src(), "Cannot parse line as code: {any}", .{line});
