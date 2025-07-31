@@ -69,9 +69,9 @@ body {
   background-color: var(--color-base);
 
   text-align: left;
-  font-family: "Nova Flat";
-  // font-family: "Ubuntu Mono";
+  // font-family: "Nova Flat";
   // font-family: mononoki;
+  font-family: "Ubuntu Mono";
   font-size: 20px;
   color: var(--color-text);
 
@@ -92,6 +92,7 @@ body {
   text-align: center;
   font-size: 24px;
   font-weight: bold;
+  font-family: "Nova Flat";
   padding: 20px;
 }
 
@@ -107,24 +108,28 @@ h1 {
   color: var(--color-blue);
   margin-top: 20px;
   margin-bottom: 0px;
+  font-family: "Nova Flat";
 }
 
 h2 {
   color: var(--color-peach);
   margin-top: 20px;
   margin-bottom: 0px;
+  font-family: "Nova Flat";
 }
 
 h3 {
   color: var(--color-green);
   margin-top: 16px;
   margin-bottom: 0px;
+  font-family: "Nova Flat";
 }
 
 h4 {
   color: var(--color-mauve);
   margin-top: 16px;
   margin-bottom: 0px;
+  font-family: "Nova Flat";
 }
 
 p {
@@ -137,9 +142,11 @@ ol, ul {
   margin-bottom: 0px;
 }
 
+/* Inline Code */
 code {
   background-color: var(--color-mantle);
   color: var(--color-lavender);
+  font-size: 18px;
   margin-top: 10px;
   margin-bottom: 10px;
 }
@@ -168,7 +175,7 @@ code {
   color: var(--color-lavender);
   font-family: monospace;
   background-color: var(--color-mantle);
-  padding: 0px 12px;
+  padding: 10px 12px; /* top/bottom, left/right */
   margin-top: 10px;
   margin-bottom: 10px;
 }
