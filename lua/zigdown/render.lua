@@ -71,7 +71,7 @@ end
 -- Get the contents of the given buffer as a single string with unix line endings
 local function buffer_to_string(bufnr)
   local content = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  return table.concat(content, "\n")
+  return table.concat(content, "\n") .. "\n" -- Add an extra '\n' at the end
 end
 
 -- Take the rendered output and apply it to a neovim buffer with highlighting
