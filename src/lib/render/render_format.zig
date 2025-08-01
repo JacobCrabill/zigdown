@@ -834,7 +834,8 @@ pub const FormatRenderer = struct {
             if (self.column + code.text.len + 3 + self.opts.indent > self.opts.width) {
                 self.renderBreak();
                 self.writeLeaders();
-            } else if (self.prerender.getLast() != ' ') {
+            } else if (std.mem.indexOfAny(u8, &.{self.prerender.getLast()}, " ([{<") == null) {
+                // Add a space if we need one (not after an open bracket or another space)
                 self.write(" ");
             }
         }
