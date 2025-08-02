@@ -47,7 +47,10 @@ pub fn build(b: *std.Build) !void {
     const build_test_exes = b.option(bool, "build-test-exes", "Build the custom test executables") orelse false;
     const do_extra_tests = b.option(bool, "extra-tests", "Run extra (non-standard) tests") orelse false;
 
-    const use_llvm = b.option(bool, "llvm", "Use the LLVM linker in Debug mode (instead of the Zig native backend)") orelse false;
+    const use_llvm = b.option(bool, "llvm", "Use the LLVM linker in Debug mode (instead of the Zig native backend)") orelse blk: {
+        const target_cpu: std.Target.Cpu.Arch = target.query.cpu_arch orelse builtin.cpu.arch;
+        break :blk if (target_cpu == .x86_64) false else true;
+    };
 
     // Add an option to list the set of TreeSitter parsers to statically link into the build
     // This should match the list of parsers defined below and added to the 'queries' module
