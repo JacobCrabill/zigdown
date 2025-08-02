@@ -73,6 +73,9 @@ pub fn serve(alloc: std.mem.Allocator, config: ServeOpts) !void {
         if (builtin.os.tag == .windows) {
             const argv = &[_][]const u8{ "start", url };
             proc = std.process.Child.init(argv, alloc);
+        } else if (builtin.os.tag.isDarwin()) {
+            const argv = &[_][]const u8{ "open", url };
+            proc = std.process.Child.init(argv, alloc);
         } else {
             const argv = &[_][]const u8{ "xdg-open", url };
             proc = std.process.Child.init(argv, alloc);
