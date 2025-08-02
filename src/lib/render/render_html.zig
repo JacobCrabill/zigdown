@@ -333,7 +333,7 @@ pub const HtmlRenderer = struct {
     }
 
     fn renderAutolink(self: *Self, link: inls.Autolink) !void {
-        self.print("<a href=\"{s}\"/>", .{link.url});
+        self.print("<a href=\"{s}\">{s}</a>", .{ link.url, link.url });
     }
 
     fn renderInlineCode(self: *Self, code: inls.Codespan) !void {
