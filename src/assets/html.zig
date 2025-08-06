@@ -1,4 +1,4 @@
-pub const style_css = @embedFile("html/style.css");
+pub const Css = @import("html/Css.zig");
 
 pub const error_page =
     \\<html><body>

@@ -9,13 +9,16 @@ pub const Self = @This();
 
 var alloc: Allocator = undefined;
 var root_dir: std.fs.Dir = undefined;
+var css: html.Css = .{};
 
 pub fn init(
     a: std.mem.Allocator,
     dir: std.fs.Dir,
+    in_css: html.Css,
 ) void {
     alloc = a;
     root_dir = dir;
+    css = in_css;
 }
 
 pub fn deinit() void {}
@@ -45,15 +48,7 @@ pub fn renderMarkdown(r: *std.http.Server.Request) void {
     };
     defer alloc.free(md_html);
 
-    const body_template =
-        \\<html><body>
-        \\  <style>{s}</style>
-        \\  {s}
-        \\</body></html>
-    ;
-    const body = std.fmt.allocPrint(alloc, body_template, .{ html.style_css, md_html }) catch unreachable;
-    defer alloc.free(body);
-    r.respond(body, .{
+    r.respond(md_html, .{
         .status = .created,
         .extra_headers = &.{
             .{ .name = "content-type", .value = "text/html" },
@@ -100,6 +95,7 @@ fn renderMarkdownImpl(path: []const u8) ?[]const u8 {
     // Render slide
     var h_renderer = zd.HtmlRenderer.init(buf.writer().any(), alloc);
     defer h_renderer.deinit();
+    h_renderer.css = css;
 
     h_renderer.renderBlock(parser.document) catch |err| {
         std.log.err("Error rendering HTML from markdown: {any}", .{err});

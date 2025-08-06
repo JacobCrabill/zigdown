@@ -263,6 +263,16 @@ test "trimTrailingWhitespace" {
     try std.testing.expectEqualStrings(" ", trimTrailingWhitespace("  "));
 }
 
+/// Convert from snake_case to kebab-case at comptime
+pub fn toKebab(comptime string: []const u8) []const u8 {
+    comptime var kebab: []const u8 = "";
+    inline for (string) |ch| kebab = kebab ++ .{switch (ch) {
+        '_' => '-',
+        else => ch,
+    }};
+    return kebab;
+}
+
 /// Helper function to read the contents of a file given a relative path.
 /// Caller owns the returned memory.
 pub fn readFile(alloc: Allocator, file_path: []const u8) ![]u8 {

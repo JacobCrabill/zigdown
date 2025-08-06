@@ -18,6 +18,7 @@ pub const ServeOpts = struct {
     root_file: ?[]const u8 = null,
     root_directory: ?[]const u8 = null,
     port: u16 = 8000,
+    css: html.Css = .{},
 };
 
 const server_addr = "127.0.0.1";
@@ -61,7 +62,7 @@ pub fn serve(alloc: std.mem.Allocator, config: ServeOpts) !void {
     var server = try address.listen(.{ .reuse_address = true });
     defer server.deinit();
 
-    md.init(alloc, context.dir);
+    md.init(alloc, context.dir, config.css);
 
     var t_accept = try std.Thread.spawn(.{}, runServer, .{ &context, &server });
     defer t_accept.join();
@@ -69,6 +70,7 @@ pub fn serve(alloc: std.mem.Allocator, config: ServeOpts) !void {
     if (context.file) |file| {
         const url = try std.fmt.allocPrint(alloc, "http://localhost:{d}/{s}", .{ config.port, file });
         defer alloc.free(url);
+        std.debug.print("Serving at {s}\n", .{url});
         var proc: std.process.Child = undefined;
         if (builtin.os.tag == .windows) {
             const argv = &[_][]const u8{ "start", url };
@@ -133,12 +135,6 @@ fn serveRequest(request: *std.http.Server.Request, context: *const Context) !voi
                 .{ .name = "content-type", .value = "text/png" },
             },
         });
-    } else if (std.mem.eql(u8, path, "/style.css")) {
-        try request.respond(html.style_css, .{
-            .extra_headers = &.{
-                .{ .name = "content-type", .value = "text/css" },
-            },
-        });
     } else {
         serveFile(request, context) catch {
             try request.respond(html.error_page, .{
@@ -165,11 +161,14 @@ fn serveFile(
     std.debug.assert(std.mem.startsWith(u8, request.head.target, "/"));
     const path = request.head.target[1..];
 
+    var arena = std.heap.ArenaAllocator.init(context.alloc);
+    defer arena.deinit();
+
     const ftype: []const u8 = std.fs.path.extension(path);
     const content_type = context.mimes.get(ftype) orelse "text/plain";
 
-    const file_contents = try context.dir.readFileAlloc(context.alloc, path, 10 * 1024 * 1024);
-    defer context.alloc.free(file_contents);
+    const file_contents = try context.dir.readFileAlloc(arena.allocator(), path, 10 * 1024 * 1024);
+    // defer context.alloc.free(file_contents);
 
     try request.respond(file_contents, .{
         .extra_headers = &.{
@@ -198,6 +197,7 @@ pub fn initMimeMap(alloc: Allocator) !MimeMap {
     try mimes.put(".JPEG", "image/jpeg");
     try mimes.put(".png", "image/png");
     try mimes.put(".PNG", "image/png");
+    try mimes.put(".svg", "image/svg");
 
     return mimes;
 }

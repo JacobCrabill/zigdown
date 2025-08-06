@@ -19,8 +19,8 @@ pub const Range = struct {
     newline: bool = false,
 };
 
-// Capture group name -> Color
-// List taken from neovim's runtime/doc/treesitter.txt
+/// Capture group name -> Color
+/// List taken from neovim's runtime/doc/treesitter.txt
 const highlights_map = std.StaticStringMap(theme.Color).initComptime(.{
     .{ "variable", .White }, // various variable names
     .{ "variable.builtin", .Yellow }, // built-in variable names (e.g. `this`, `self`)

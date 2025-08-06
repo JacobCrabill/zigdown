@@ -6,18 +6,21 @@ const ArrayList = std.ArrayList;
 const File = std.fs.File;
 const os = std.os;
 
+const Css = zd.assets.html.Css;
 const cons = zd.cons;
 const TextStyle = zd.utils.TextStyle;
 const Parser = zd.Parser;
 const TokenList = zd.TokenList;
 
-fn printHelpAndExit(diags: *const flags.Diagnostics, colorscheme: *const flags.ColorScheme, err: anyerror) noreturn {
+var g_colorscheme: flags.ColorScheme = .{};
+
+fn printHelpAndExit(command: []const u8, err: anyerror) noreturn {
     std.debug.print(
         "\nEncountered error while parsing for command '{s}': {s}\n\n",
-        .{ diags.command_name, @errorName(err) },
+        .{ command, @errorName(err) },
     );
 
-    diags.printHelp(colorscheme) catch unreachable;
+    flags.printHelp("zigdown", Flags, .{ .colors = &g_colorscheme });
     std.process.exit(1);
 }
 
@@ -59,6 +62,14 @@ pub const ServeCmdOpts = struct {
     root_file: ?[]const u8 = null,
     root_directory: ?[]const u8 = null,
     port: u16 = 8000,
+
+    command: ?union(enum(u8)) {
+        css: Css,
+
+        pub const descriptions = .{
+            .css = "CSS style entries",
+        };
+    },
 
     pub const descriptions = .{
         .root_file =
@@ -153,7 +164,10 @@ pub fn main() !void {
     }
     zd.debug.setStream(std.io.getStdErr().writer().any());
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .never_unmap = true }){};
+    var gpa = std.heap.GeneralPurposeAllocator(.{
+        .never_unmap = true,
+        .thread_safe = true,
+    }){};
 
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
@@ -161,9 +175,6 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, args);
 
-    // Diagnostics store the name and help info about the command being parsed.
-    // You can use this to display help / usage if there is a parsing error.
-    var diags: flags.Diagnostics = undefined;
     const colorscheme = flags.ColorScheme{
         .error_label = &.{ .red, .bold },
         .header = &.{ .bright_green, .bold },
@@ -171,17 +182,7 @@ pub fn main() !void {
         .option_name = &.{.bright_magenta},
     };
 
-    const result = flags.parse(args, "zigdown", Flags, .{
-        .diagnostics = &diags,
-        .colors = &colorscheme,
-    }) catch |err| {
-        // This error is returned when "--help" is passed, not when an actual error occured.
-        if (err == error.PrintedHelp) {
-            std.process.exit(0);
-        }
-
-        printHelpAndExit(&diags, &colorscheme, err);
-    };
+    const result: Flags = flags.parse(args, "zigdown", Flags, .{ .colors = &colorscheme });
 
     // Process the command-line arguments
     switch (result.command) {
@@ -193,7 +194,7 @@ pub fn main() !void {
                 .range => .range,
                 else => unreachable,
             };
-            try handleRender(alloc, &diags, &colorscheme, method, r_opts);
+            try handleRender(alloc, method, r_opts);
             std.process.exit(0);
         },
         .serve => |s_opts| {
@@ -202,12 +203,13 @@ pub fn main() !void {
                 .root_file = s_opts.root_file,
                 .root_directory = s_opts.root_directory,
                 .port = s_opts.port,
+                .css = if (s_opts.command) |cmd| cmd.css else Css{},
             };
             try serve.serve(alloc, opts);
             std.process.exit(0);
         },
         .present => |p_opts| {
-            try handlePresent(alloc, &diags, &colorscheme, p_opts);
+            try handlePresent(alloc, p_opts);
             std.process.exit(0);
         },
         .install_parsers => |ip_opts| {
@@ -238,11 +240,9 @@ pub fn main() !void {
     }
 }
 
-const ParseResult = struct {
-    time_s: f64,
-    parser: zd.Parser,
-};
+const ParseResult = struct { time_s: f64, parser: zd.Parser };
 
+/// Parse a Markdown file and return the time taken and the Parser object
 fn parse(alloc: std.mem.Allocator, input: []const u8, verbose: bool) !ParseResult {
     // Parse the input text
     const opts = zd.parser.ParserOpts{
@@ -265,8 +265,6 @@ fn parse(alloc: std.mem.Allocator, input: []const u8, verbose: bool) !ParseResul
 
 fn handleRender(
     alloc: std.mem.Allocator,
-    diags: *const flags.Diagnostics,
-    colorscheme: *const flags.ColorScheme,
     method: zd.render.RenderMethod,
     r_opts: RenderCmdOpts,
 ) !void {
@@ -285,7 +283,7 @@ fn handleRender(
         md_text = try stdin.readAllAlloc(alloc, 1e9);
     } else {
         if (filename == null) {
-            printHelpAndExit(diags, colorscheme, error.NoFilenameProvided);
+            printHelpAndExit(@tagName(method), error.NoFilenameProvided);
         }
         // Read file into memory; Set root directory
         realpath = try std.fs.realpath(filename.?, &path_buf);
@@ -345,8 +343,6 @@ fn handleRender(
 
 pub fn handlePresent(
     alloc: std.mem.Allocator,
-    diags: *const flags.Diagnostics,
-    colorscheme: *const flags.ColorScheme,
     p_opts: PresentCmdOpts,
 ) !void {
     const present = @import("present.zig");
@@ -359,13 +355,11 @@ pub fn handlePresent(
     var root: ?[]const u8 = null;
     if (p_opts.slides) |s| {
         const path = std.fs.realpath(s, &path_buf) catch {
-            printHelpAndExit(diags, colorscheme, error.SlidesFileNotFound);
-            unreachable;
+            printHelpAndExit("present", error.SlidesFileNotFound);
         };
         root = std.fs.path.dirname(path) orelse return error.DirectoryNotFound;
         source.slides = std.fs.openFileAbsolute(path, .{ .mode = .read_only }) catch {
-            printHelpAndExit(diags, colorscheme, error.SlidesFileNotFound);
-            unreachable;
+            printHelpAndExit("present", error.SlidesFileNotFound);
         };
     }
 
@@ -379,8 +373,7 @@ pub fn handlePresent(
     defer alloc.free(source.root);
 
     source.dir = std.fs.openDirAbsolute(source.root, .{ .iterate = true }) catch {
-        printHelpAndExit(diags, colorscheme, error.DirectoryNotFound);
-        unreachable;
+        printHelpAndExit("present", error.DirectoryNotFound);
     };
 
     const recurse: bool = p_opts.recurse;

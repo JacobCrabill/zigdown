@@ -21,8 +21,8 @@
             .hash = "plutosvg-0.0.6-LyMxgbMuAADqe6_HVbOOBTtsmMVlb-ar-iOc7pRrPQYc",
         },
         .flags = .{
-            .url = "https://github.com/n0s4/flags/archive/0e2491d8e6d2be38dc0c2ce8e103469886e468bb.tar.gz",
-            .hash = "flags-0.10.0-a_9h3kR2AABNAfaPGRyOOGmWsfv12Hk6JQPTX4MM446s",
+            .url = "https://github.com/n0s4/flags/archive/c0e9215d6405fe4fa534f2ccd1b94d5e07c097da.tar.gz",
+            .hash = "flags-0.10.0-a_9h3pByAADAx5wvBF0bM1abyAiPVnOSsxvXvRiSaU6u",
         },
         .treez = .{
             .url = "https://github.com/JacobCrabill/treez/archive/640de7530c4567a0cadf3f701d1c315724eed4c3.tar.gz",
@@ -31,6 +31,11 @@
         .known_folders = .{
             .url = "git+https://github.com/ziglibs/known-folders.git#aa24df42183ad415d10bc0a33e6238c437fc0f59",
             .hash = "known_folders-0.0.0-Fy-PJtLDAADGDOwYwMkVydMSTp_aN-nfjCZw6qPQ2ECL",
+        },
+        .ziglua = .{
+            .url = "https://github.com/JacobCrabill/ziglua/archive/f273f4ff8cd58ca238896b61aa8348dd67b74c7d.tar.gz",
+            .hash = "zlua-0.1.0-hGRpCzDfBADxeCzhxWsbcatYQnS5FeXWUsZdkWBZoANl",
+            .lazy = true,
         },
 
         // Individual TreeSitter language parsers
@@ -73,11 +78,6 @@
         .tree_sitter_zig = .{
             .url = "https://github.com/tree-sitter-grammars/tree-sitter-zig/archive/b670c8df85a1568f498aa5c8cae42f51a90473c0.tar.gz",
             .hash = "N-V-__8AAN6NXgCZxLUnqe4620P_FqHrEY8PHTA1-VlOn4yX",
-        },
-        .ziglua = .{
-            .url = "https://github.com/JacobCrabill/ziglua/archive/f273f4ff8cd58ca238896b61aa8348dd67b74c7d.tar.gz",
-            .hash = "zlua-0.1.0-hGRpCzDfBADxeCzhxWsbcatYQnS5FeXWUsZdkWBZoANl",
-            .lazy = true,
         },
     },
 }

@@ -1,5 +1,9 @@
-/// ts_queries.zig
-/// TreeSitter highlight queries and related functionality
+//! TreeSitter highlight queries, parsers, and related functionality.
+//!
+//! Queries and parsers may be baked into the Zigdown executable, or they may
+//! be stored on disk under $TS_CONFIG_DIR.
+//!
+//! Queries and language parser libraries may also be fetched from the internet.
 const std = @import("std");
 const known_folders = @import("known-folders");
 
@@ -27,6 +31,8 @@ var allocator: Allocator = undefined;
 var queries: std.StringHashMap([]const u8) = undefined;
 var aliases: std.StringHashMap([]const u8) = undefined;
 
+/// Initialize our queries and parsers maps.
+/// This only has to be called once for the entire process.
 pub fn init(alloc: Allocator) void {
     if (initialized) {
         return;
@@ -54,7 +60,11 @@ pub fn init(alloc: Allocator) void {
     }
 }
 
+/// Free all memory from the queries and parsers maps.
+/// This should only be called once for the entire process.
 pub fn deinit() void {
+    if (!initialized) return;
+
     // Free all strings in the hash map
     var iter = queries.iterator();
     while (iter.next()) |*kv| {
@@ -72,9 +82,8 @@ pub fn deinit() void {
         allocator.free(kv.value_ptr.*);
     }
 
-    // Free the hashmap itself
+    // Free the hashmaps themselves
     aliases.deinit();
-
     builtin_languages.deinit();
 
     initialized = false;
@@ -361,6 +370,7 @@ test "Fetch C parser" {
 }
 
 /// Save the TreeSitter query to a file at the standard name "highlights-{language}.scm"
+///
 /// @param[in] body:     The content of the file
 /// @param[in] dir:      The directory in which to create the file
 /// @param[in] language: The TreeSitter language name

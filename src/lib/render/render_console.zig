@@ -1,6 +1,7 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const stb = @import("stb_image");
-const plutosvg = @import("plutosvg");
+const plutosvg = if (builtin.os.tag == .windows) {} else @import("plutosvg");
 
 const blocks = @import("../ast/blocks.zig");
 const containers = @import("../ast/containers.zig");
@@ -1343,6 +1344,7 @@ pub const ConsoleRenderer = struct {
     }
 
     fn renderImageSvg(self: *Self, bytes: []const u8) !void {
+        if (builtin.os.tag == .windows) return;
         if (plutosvg.convertSvgToPng(self.alloc, bytes)) |png_bytes| {
             defer self.alloc.free(png_bytes);
             try self.renderImagePng(png_bytes);

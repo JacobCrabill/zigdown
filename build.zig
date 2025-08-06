@@ -49,7 +49,8 @@ pub fn build(b: *std.Build) !void {
 
     const use_llvm = b.option(bool, "llvm", "Use the LLVM linker in Debug mode (instead of the Zig native backend)") orelse blk: {
         const target_cpu: std.Target.Cpu.Arch = target.query.cpu_arch orelse builtin.cpu.arch;
-        break :blk if (target_cpu == .x86_64) false else true;
+        const target_os: std.Target.Os.Tag = target.query.os_tag orelse builtin.os.tag;
+        break :blk if (target_cpu == .x86_64 and target_os != .windows) false else true;
     };
 
     // Add an option to list the set of TreeSitter parsers to statically link into the build
@@ -158,19 +159,26 @@ pub fn build(b: *std.Build) !void {
         step.dependOn(&copy_step.step);
     }
 
-    // Build HTML library documentation
+    // Generate documentation for Zigdown and its dependencies by building a library
+    // Note that the main page of the generated documentation will be the root_source_file
+    // of the library target.
     const lib = b.addSharedLibrary(.{
         .name = "zigdown",
         .root_source_file = b.path("src/lib/zigdown.zig"),
         .optimize = optimize,
         .target = target,
     });
-    b.installArtifact(lib);
+    const lib_deps = try getDependencies(b, target, optimize, ts_language_list.items);
+    for (lib_deps.items) |dep| {
+        lib.root_module.addImport(dep.name, dep.module);
+    }
+
     const lib_step = b.step("lib", "Build Zigdown as a shared library (and also build HTML docs)");
     lib_step.dependOn(&lib.step);
+    b.installArtifact(lib);
     b.getInstallStep().dependOn(lib_step);
 
-    // Generate and install documentation
+    // Generate and install documentation using the library target
     const install_docs = b.addInstallDirectory(.{
         .source_dir = lib.getEmittedDocs(),
         .install_dir = .prefix,
@@ -218,6 +226,8 @@ pub fn build(b: *std.Build) !void {
     wasm.entry = .disabled;
     wasm.rdynamic = true;
 
+    // // [WIP] An attempt to bring in the minimal set of functions from libC
+    // // in order to build TreeSitter for WASM
     // const wasm_libc = b.addStaticLibrary(.{
     //     .name = "wasm-libc",
     //     .root_source_file = b.path("src/wasm/stdlib.zig"),
@@ -400,10 +410,13 @@ fn getDependencies(b: *std.Build, target: Target, optimize: OptimizeMode, ts_lan
         const stbi_dep = Dependency{ .name = "stb_image", .module = stbi.module("stb_image") };
         try dependencies.append(stbi_dep);
 
-        // PlutoSVG
-        const plutosvg = b.dependency("plutosvg", .{ .optimize = optimize, .target = target });
-        const plutosvg_dep = Dependency{ .name = "plutosvg", .module = plutosvg.module("plutosvg") };
-        try dependencies.append(plutosvg_dep);
+        const target_os: std.Target.Os.Tag = target.query.os_tag orelse builtin.os.tag;
+        if (target_os != .windows) {
+            // PlutoSVG
+            const plutosvg = b.dependency("plutosvg", .{ .optimize = optimize, .target = target });
+            const plutosvg_dep = Dependency{ .name = "plutosvg", .module = plutosvg.module("plutosvg") };
+            try dependencies.append(plutosvg_dep);
+        }
 
         // Flags
         const flags = b.dependency("flags", .{ .optimize = optimize, .target = target });

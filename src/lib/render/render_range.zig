@@ -1,6 +1,7 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const stb = @import("stb_image");
-const plutosvg = @import("plutosvg");
+const plutosvg = if (builtin.os.tag == .windows) {} else @import("plutosvg");
 
 const blocks = @import("../ast/blocks.zig");
 const containers = @import("../ast/containers.zig");

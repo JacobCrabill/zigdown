@@ -24,7 +24,7 @@ const Container = blocks.Container;
 const Leaf = blocks.Leaf;
 const Inline = inls.Inline;
 
-const css = assets.html.style_css;
+const Css = assets.html.Css;
 
 const google_fonts =
     \\ <link href="https://fonts.googleapis.com/css2?family=Nova+Flat:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
@@ -37,6 +37,7 @@ pub const HtmlRenderer = struct {
     stream: AnyWriter,
     alloc: Allocator,
     root: ?Block = null,
+    css: Css = .{},
 
     /// Create a new HtmlRenderer
     pub fn init(stream: AnyWriter, alloc: Allocator) Self {
@@ -136,11 +137,11 @@ pub const HtmlRenderer = struct {
 
     /// Render a Document block (contains only other blocks)
     fn renderDocument(self: *Self, doc: Container) !void {
-        try self.renderBegin();
+        self.renderBegin();
         for (doc.children.items) |block| {
             try self.renderBlock(block);
         }
-        try self.renderEnd();
+        self.renderEnd();
     }
 
     /// Render a Quote block
@@ -168,9 +169,9 @@ pub const HtmlRenderer = struct {
                 .ordered, .unordered => self.write("<li>\n"),
                 .task => {
                     if (item.Container.content.ListItem.checked) {
-                        self.write("<li class=\"checked\">\n");
+                        self.write("<li class=\"task_checked\">\n");
                     } else {
-                        self.write("<li class=\"unchecked\">\n");
+                        self.write("<li class=\"task_unchecked\">\n");
                     }
                 },
             }
@@ -208,7 +209,7 @@ pub const HtmlRenderer = struct {
         std.mem.replaceScalar(u8, id_s, ' ', '-');
 
         if (h.level == 1) {
-            self.print("<div class=\"header\">", .{});
+            self.print("<div class=\"title\">", .{});
         }
         self.print("<h{d} id=\"{s}\">", .{ h.level, id_s });
         for (leaf.inlines.items) |item| {
@@ -410,18 +411,28 @@ pub const HtmlRenderer = struct {
     }
 
     fn renderImage(self: *Self, image: inls.Image) !void {
-        self.print("<img src=\"{s}\" class=\"center\" alt=\"", .{image.src});
+        self.print("<img src=\"{s}\" class=\"image\" alt=\"", .{image.src});
         for (image.alt.items) |text| {
             try self.renderText(text);
         }
-        self.print("\"/>", .{});
+        self.write("\"/>");
     }
 
-    fn renderBegin(self: *Self) !void {
-        self.print("<html><body>{s}\n<style>\n{s}</style>", .{ google_fonts, css });
+    fn renderBegin(self: *Self) void {
+        self.print("<html><body>{s}\n<style>\n", .{google_fonts});
+        self.renderCss();
+        self.write("</style>");
     }
 
-    fn renderEnd(self: *Self) !void {
+    fn renderEnd(self: *Self) void {
         self.print("</body></html>\n", .{});
+    }
+
+    /// Print out all of the CSS entries from the css struct
+    fn renderCss(self: *Self) void {
+        inline for (@typeInfo(Css).@"struct".fields) |field| {
+            self.print("/* css field: {s} */\n", .{utils.toKebab(field.name)});
+            self.print("{s}\n", .{@field(self.css, field.name)});
+        }
     }
 };
