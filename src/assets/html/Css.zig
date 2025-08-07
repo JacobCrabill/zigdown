@@ -95,43 +95,39 @@ pub const default_html_body =
     \\  height: fit-content;
     \\  overflow-wrap: break-word;
     \\}
+    \\*,
+    \\*::before,
+    \\*::after {
+    \\  box-sizing: border-box;
+    \\}
 ;
 
 pub const default_colors =
     \\body {
-    \\  --color-rosewater: #f2d5cf;
-    \\  --color-flamingo: #eebebe;
-    \\  --color-pink: #f4b8e4;
-    \\  --color-mauve: #cda1e6;
-    \\  --color-red: #e78284;
-    \\  --color-maroon: #ea999c;
-    \\  --color-peach: #ef9f76;
-    \\  --color-yellow: #eaca60;
-    \\  --color-green: #96dd87;
-    \\  --color-teal: #81c8be;
-    \\  --color-sky: #99d1db;
-    \\  --color-sapphire: #85c1dc;
-    \\  --color-blue: #66aaff;
-    \\  --color-lavender: #babbf1;
-    \\  --color-text: #d6e0ff;
-    \\  --color-subtext1: #b5bfe2;
-    \\  --color-subtext0: #a5adce;
-    \\  --color-overlay2: #949cbb;
-    \\  --color-overlay1: #838ba7;
-    \\  --color-overlay0: #737994;
-    \\  --color-surface2: #626880;
-    \\  --color-surface1: #51576d;
-    \\  --color-surface0: #414559;
-    \\  --color-base: #303446;
-    \\  --color-mantle: #292c3c;
-    \\  --color-crust: #232634;
+    \\--color-black: #292930;
+    \\--color-red: #ef6487;
+    \\--color-green: #5eca89;
+    \\--color-blue: #65aef7;
+    \\--color-yellow: #ffff00;
+    \\--color-cyan: #60EEDD;
+    \\--color-white: #ffffff;
+    \\--color-magenta: #eca5cb;
+    \\--color-darkyellow: #aeac30;
+    \\--color-purplegrey: #aa82fa;
+    \\--color-mediumgrey: #707070;
+    \\--color-darkgrey: #404040;
+    \\--color-darkred: #802020;
+    \\--color-orange: #ff9700;
+    \\--color-coral: #d7649b;
+    \\--color-default: #d0e0ff;
+    \\--color-text: #d0e0ff;
     \\}
 ;
 
 pub const default_background =
     \\body {
     \\  background-image: none;
-    \\  background-color: var(--color-base);
+    \\  background-color: var(--color-black);
     \\}
 ;
 
@@ -154,11 +150,10 @@ pub const default_body_padding =
     \\}
 ;
 
-/// Global style for selected elements
 pub const default_selection =
     \\*::selection {
     \\    background: var(--color-blue);
-    \\    color: var(--color-base);
+    \\    color: var(--color-black);
     \\}
 ;
 
@@ -173,8 +168,8 @@ pub const default_title_class =
 ;
 
 pub const default_image_class =
-    \\/* Basic centering of simple elements */
-    \\.center {
+    \\/* Image centered on page */
+    \\.image {
     \\  display: block;
     \\  margin-left: auto;
     \\  margin-right: auto;
@@ -193,28 +188,31 @@ pub const default_heading_1 =
 
 pub const default_heading_2 =
     \\h2 {
-    \\  color: var(--color-peach);
+    \\  color: var(--color-green);
     \\  margin-top: 20px;
     \\  margin-bottom: 0px;
     \\  font-family: "Nova Flat";
+    \\  border-bottom: 1px solid var(--color-green);
     \\}
 ;
 
 pub const default_heading_3 =
     \\h3 {
-    \\  color: var(--color-green);
+    \\  color: var(--color-white);
     \\  margin-top: 16px;
     \\  margin-bottom: 0px;
     \\  font-family: "Nova Flat";
+    \\  border-bottom: 1px solid var(--color-white);
     \\}
 ;
 
 pub const default_heading_4 =
     \\h4 {
-    \\  color: var(--color-mauve);
+    \\  color: var(--color-white);
     \\  margin-top: 16px;
     \\  margin-bottom: 0px;
     \\  font-family: "Nova Flat";
+    \\  border-bottom: 1px dashed var(--color-white);
     \\}
 ;
 
@@ -254,7 +252,7 @@ pub const default_task_list_class =
 pub const default_task_item_checked_class =
     \\ul.task_list {
     \\  li.task_checked {
-    \\    list-style-type: "\2705 "; /* ✅ */
+    \\    list-style-type: "\2705  "; /* ✅ */
     \\  }
     \\}
 ;
@@ -262,15 +260,15 @@ pub const default_task_item_checked_class =
 pub const default_task_item_unchecked_class =
     \\ul.task_list {
     \\  li.task_unchecked {
-    \\    list-style-type: "\2B1C "; /* ⬜ */
+    \\    list-style-type: "\2B1C  "; /* ⬜ */
     \\  }
     \\}
 ;
 
 pub const default_inline_code =
     \\code {
-    \\  background-color: var(--color-mantle);
-    \\  color: var(--color-lavender);
+    \\  background-color: var(--color-darkgrey);
+    \\  color: var(--color-purplegrey);
     \\  font-size: 18px;
     \\  margin-top: 10px;
     \\  margin-bottom: 10px;
@@ -280,44 +278,44 @@ pub const default_inline_code =
 pub const default_table =
     \\.md_table {
     \\  tr, td, th {
-    \\    border: 2px solid var(--color-subtext0);
+    \\    border: 2px solid var(--color-default);
     \\  }
     \\  th {
-    \\    background-color: var(--color-mantle);
+    \\    background-color: var(--color-mediumgrey);
     \\    color: var(--color-green);
     \\  }
     \\  td {
-    \\    background-color: var(--color-surface0);
+    \\    background-color: var(--color-darkgrey);
     \\  }
     \\}
 ;
 
 pub const default_link =
     \\a {
-    \\    color: var(--color-sky);
+    \\    color: var(--color-cyan);
     \\    text-decoration: none;
     \\    padding: 0.05em;
     \\
     \\    &:visited {
-    \\        color: var(--color-mauve);
+    \\        color: var(--color-magenta);
     \\
     \\        &:hover {
-    \\            background: var(--color-mauve);
+    \\            background: var(--color-magenta);
     \\        }
     \\    }
     \\
     \\    &:hover {
     \\        text-decoration: underline;
-    \\        background: var(--color-sky);
-    \\        color: var(--color-base);
+    \\        background: var(--color-blue);
+    \\        color: var(--color-black);
     \\    }
     \\}
 ;
 
 pub const default_blockquote =
     \\blockquote {
-    \\    background: var(--color-crust);
-    \\    color: var(--color-subtext1);
+    \\    background: var(--color-darkgrey);
+    \\    color: var(--color-text);
     \\    margin: 0;
     \\    margin-left: 0.75em;
     \\    max-width: fit-content;
@@ -333,9 +331,9 @@ pub const default_blockquote =
 
 pub const default_code_block_class =
     \\.code_block {
-    \\  color: var(--color-lavender);
+    \\  color: var(--color-purplegrey);
     \\  font-family: monospace;
-    \\  background-color: var(--color-mantle);
+    \\  background-color: var(--color-darkgrey);
     \\  padding: 10px 12px; /* top/bottom, left/right */
     \\  margin-top: 10px;
     \\  margin-bottom: 10px;
@@ -344,12 +342,30 @@ pub const default_code_block_class =
 
 pub const default_directive_class =
     \\.directive {
-    \\  border: 4px solid var(--color-red);
-    \\  border-radius: 10px;
-    \\  margin-top: 10px;
-    \\  margin-bottom: 10px;
-    \\  padding: 20px;
-    \\  background-color: var(--color-red);
-    \\  color: white;
+    \\  h1 {
+    \\    color: var(--color-white);
+    \\    font-size: 1.17em;
+    \\    position: relative !important;
+    \\    margin: 0 !important;
+    \\    text-align: left;
+    \\    padding-left: 15px;
+    \\    padding-right: 15px;
+    \\    padding-top: 5px !important;
+    \\    padding-bottom: 5px !important;
+    \\    background-color: var(--color-red);
+    \\    width: 100%;
+    \\  }
+    \\  p {
+    \\    margin-top: 10px;
+    \\    margin-bottom: 10px;
+    \\    padding-top: 10px;
+    \\    padding-bottom: 10px;
+    \\    padding-left: 10px;
+    \\    padding-right: 10px;
+    \\  }
+    \\  border: 1px solid var(--color-red);
+    \\  background-color: var(--color-darkgrey);
+    \\  color: var(--color-white);
+    \\  /* border-radius: 1ch; */
     \\}
 ;

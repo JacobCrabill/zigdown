@@ -77,7 +77,7 @@ pub fn colorHexStr(color: Color) []const u8 {
         .Yellow => "#FFFF00",
         .Cyan => "#43C1BE",
         .White => "#FFFFFF",
-        .Magenta => "#FF00FF",
+        .Magenta => "#ECA5CB",
         .DarkYellow => "#AEAC30",
         .PurpleGrey => "#AA82FA",
         .MediumGrey => "#707070",

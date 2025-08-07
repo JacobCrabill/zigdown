@@ -283,9 +283,9 @@ pub const HtmlRenderer = struct {
     }
 
     fn renderAlert(self: *Self, b: Leaf) !void {
-        // TODO: Enum for builtin directive types w/ string aliases mapped to them
-        // const alert = b.content.Leaf.alert orelse "NOTE";
+        const alert = b.content.Alert.alert orelse "NOTE";
         self.write("\n<div class=\"directive\">\n");
+        self.print("<h1>{s}</h1>\n", .{alert});
         self.write("<p>");
         for (b.inlines.items) |item| {
             try self.renderInline(item);
@@ -305,6 +305,7 @@ pub const HtmlRenderer = struct {
             return;
         }
         self.write("\n<div class=\"directive\">\n");
+        self.print("<h1>{s}</h1>\n", .{directive});
         if (d.text) |text| {
             self.print("{s}", .{text});
         }
@@ -415,13 +416,15 @@ pub const HtmlRenderer = struct {
         for (image.alt.items) |text| {
             try self.renderText(text);
         }
-        self.write("\"/>");
+        self.write("\">");
     }
 
     fn renderBegin(self: *Self) void {
-        self.print("<html><body>{s}\n<style>\n", .{google_fonts});
+        self.write("<html><head>\n");
+        self.write(google_fonts);
+        self.write("\n  <style>\n");
         self.renderCss();
-        self.write("</style>");
+        self.write("  </style>\n</head>\n<body>");
     }
 
     fn renderEnd(self: *Self) void {
