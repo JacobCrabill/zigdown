@@ -22,25 +22,27 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: ghcr.io/jacobcrabill/alpine-zig:0.14.1
+      image: ghcr.io/jacobcrabill/alpine-zig:0.14.0
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Change if you need git info
 
-      - name: Build Linux
-        run: |
-          zig build -Dtarget=x86_64-linux-musl
-          zig build -Dtarget=aarch64-linux-musl
-
-      - name: Build MacOS
-        run: |
-          zig build -Dtarget=x86_64-macos
-          zig build -Dtarget=aarch64-macos
-
-      - name: Build Windows
-        run: zig build -Dtarget=x86_64-windows
+      - name: Build x86 Linux
+        run: zig build -Dllvm -Dtarget=x86_64-linux-musl
 
       - name: Test
-        run: zig build test -Dtarget=x86_64-linux-musl
+        run: zig build -Dllvm -Dtarget=x86_64-linux-musl test
+
+      - name: Build aarch64 Linux
+        run: zig build -Dllvm -Dtarget=aarch64-linux
+
+      - name: Build x86 MacOS
+        run: zig build -Dllvm -Dtarget=x86_64-macos
+
+      - name: Build aarch64 MacOS
+        run: zig build -Dllvm -Dtarget=aarch64-macos
+
+      - name: Build Windows
+        run: zig build -Dllvm -Dtarget=x86_64-windows

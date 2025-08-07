@@ -159,14 +159,18 @@ pub fn build(b: *std.Build) !void {
         step.dependOn(&copy_step.step);
     }
 
+    // -------- TODO: This fails on the first try - WHY?!?! --------
     // Generate documentation for Zigdown and its dependencies by building a library
     // Note that the main page of the generated documentation will be the root_source_file
     // of the library target.
-    const lib = b.addSharedLibrary(.{
+    const lib = b.addLibrary(.{
         .name = "zigdown",
-        .root_source_file = b.path("src/lib/zigdown.zig"),
-        .optimize = optimize,
-        .target = target,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/lib/zigdown.zig"),
+            .optimize = optimize,
+            .target = target,
+        }),
+        .linkage = .static,
     });
     const lib_deps = try getDependencies(b, target, optimize, ts_language_list.items);
     for (lib_deps.items) |dep| {
@@ -175,8 +179,6 @@ pub fn build(b: *std.Build) !void {
 
     const lib_step = b.step("lib", "Build Zigdown as a shared library (and also build HTML docs)");
     lib_step.dependOn(&lib.step);
-    b.installArtifact(lib);
-    b.getInstallStep().dependOn(lib_step);
 
     // Generate and install documentation using the library target
     const install_docs = b.addInstallDirectory(.{
@@ -184,6 +186,7 @@ pub fn build(b: *std.Build) !void {
         .install_dir = .prefix,
         .install_subdir = "docs",
     });
+    install_docs.step.dependOn(lib_step);
     const docs_step = b.step("docs", "Copy documentation artifacts to prefix path");
     docs_step.dependOn(&install_docs.step);
 
