@@ -31,7 +31,7 @@ jobs:
 
       - name: Build x86 Linux
         run: |
-          zig build -Dtarget=x86_64-linux-musl
+          HOME=/root zig build -Dtarget=x86_64-linux-musl -Doptimize=ReleaseSmall
 
       - name: Build aarch64 Linux
         run: |
