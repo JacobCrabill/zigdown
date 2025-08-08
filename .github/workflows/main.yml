@@ -25,9 +25,6 @@ jobs:
       image: ghcr.io/jacobcrabill/alpine-zig:0.14.1
 
     env:
-      # I think Github overrides this, so reset it
-      # (Otherwise, zig will try to use $HOME/.cache/zig in non-existent directory)
-      HOME: /root/
       ZVM_INSTALL: /root/.zvm/self
 
     steps:
@@ -37,6 +34,7 @@ jobs:
 
       - name: Build Linux
         run: |
+          mkdir -p $HOME/.cache/zig
           zig build -Dtarget=x86_64-linux-musl
           zig build -Dtarget=aarch64-linux-musl
 
