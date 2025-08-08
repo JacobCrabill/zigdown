@@ -30,23 +30,19 @@ jobs:
           fetch-depth: 0  # Change if you need git info
 
       - name: Build x86 Linux
-        run: |
-          HOME=/root zig build -Dtarget=x86_64-linux-musl -Doptimize=ReleaseSmall
+        run: HOME=/root zig build -Dtarget=x86_64-linux-musl -Doptimize=ReleaseSmall
 
       - name: Build aarch64 Linux
-        run: |
-          zig build -Dtarget=aarch64-linux-musl
+        run: HOME=/root zig build -Dtarget=aarch64-linux-musl
 
       - name: Build x86 MacOS
-        run: |
-          zig build -Dtarget=x86_64-macos
+        run: HOME=/root zig build -Dtarget=x86_64-macos
 
       - name: Build aarch64 MacOS
-        run: |
-          zig build -Dtarget=aarch64-macos
+        run: HOME=/root zig build -Dtarget=aarch64-macos
 
       - name: Build Windows
-        run: zig build -Dtarget=x86_64-windows
+        run: HOME=/root zig build -Dtarget=x86_64-windows
 
       - name: Test
-        run: zig build test -Dtarget=x86_64-linux-musl
+        run: HOME=/root zig build test -Dtarget=x86_64-linux-musl
