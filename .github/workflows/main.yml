@@ -24,23 +24,25 @@ jobs:
     container:
       image: ghcr.io/jacobcrabill/alpine-zig:0.14.1
 
-    env:
-      ZVM_INSTALL: /root/.zvm/self
-
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Change if you need git info
 
-      - name: Build Linux
+      - name: Build x86 Linux
         run: |
-          mkdir -p $HOME/.cache/zig
           zig build -Dtarget=x86_64-linux-musl
+
+      - name: Build aarch64 Linux
+        run: |
           zig build -Dtarget=aarch64-linux-musl
 
-      - name: Build MacOS
+      - name: Build x86 MacOS
         run: |
           zig build -Dtarget=x86_64-macos
+
+      - name: Build aarch64 MacOS
+        run: |
           zig build -Dtarget=aarch64-macos
 
       - name: Build Windows
