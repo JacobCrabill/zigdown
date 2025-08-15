@@ -38,6 +38,10 @@ pub const HtmlRenderer = struct {
     alloc: Allocator,
     root: ?Block = null,
     css: Css = .{},
+    /// Optional HTML to be inserted at the start of the <body> tag
+    header: []const u8 = "",
+    /// Optional HTML to be inserted at the end of the <body> tag
+    footer: []const u8 = "",
 
     /// Create a new HtmlRenderer
     pub fn init(stream: AnyWriter, alloc: Allocator) Self {
@@ -283,8 +287,9 @@ pub const HtmlRenderer = struct {
     }
 
     fn renderAlert(self: *Self, b: Leaf) !void {
-        const alert = b.content.Alert.alert orelse "NOTE";
-        self.write("\n<div class=\"directive\">\n");
+        const alert = try std.ascii.allocLowerString(self.alloc, b.content.Alert.alert orelse "note");
+        defer self.alloc.free(alert);
+        self.print("\n<div class=\"directive {s}\">\n", .{alert});
         self.print("<h1>{s}</h1>\n", .{alert});
         self.write("<p>");
         for (b.inlines.items) |item| {
@@ -295,8 +300,8 @@ pub const HtmlRenderer = struct {
     }
 
     fn renderDirective(self: *Self, d: leaves.Code) !void {
-        // TODO: Enum for builtin directive types w/ string aliases mapped to them
-        const directive = d.directive orelse "note";
+        const directive = try std.ascii.allocLowerString(self.alloc, d.directive orelse "note");
+        defer self.alloc.free(directive);
         if (utils.isDirectiveToC(directive)) {
             // Generate and render a Table of Contents for the whole document
             var toc: Block = try utils.generateTableOfContents(self.alloc, &self.root.?);
@@ -304,7 +309,7 @@ pub const HtmlRenderer = struct {
             try self.renderBlock(toc);
             return;
         }
-        self.write("\n<div class=\"directive\">\n");
+        self.print("\n<div class=\"directive {s}\">\n", .{directive});
         self.print("<h1>{s}</h1>\n", .{directive});
         if (d.text) |text| {
             self.print("{s}", .{text});
@@ -425,9 +430,11 @@ pub const HtmlRenderer = struct {
         self.write("\n  <style>\n");
         self.renderCss();
         self.write("  </style>\n</head>\n<body>");
+        self.write(self.header);
     }
 
     fn renderEnd(self: *Self) void {
+        self.write(self.footer);
         self.print("</body></html>\n", .{});
     }
 

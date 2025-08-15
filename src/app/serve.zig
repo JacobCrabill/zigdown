@@ -135,6 +135,30 @@ fn serveRequest(request: *std.http.Server.Request, context: *const Context) !voi
                 .{ .name = "content-type", .value = "text/png" },
             },
         });
+    } else if (std.mem.startsWith(u8, path, "/fonts/")) {
+        const font = path[7..];
+        inline for (@typeInfo(html.Fonts).@"struct".decls) |decl| {
+            if (std.mem.eql(u8, decl.name, font)) {
+                try request.respond(@field(html.Fonts, decl.name), .{
+                    .extra_headers = &.{
+                        .{ .name = "content-type", .value = "application/x-font-ttf" },
+                    },
+                });
+            }
+        }
+    } else if (std.mem.eql(u8, path, "/style.css")) {
+        const stylesheet: []const u8 = comptime blk: {
+            const css = html.Css{};
+            var txt: []const u8 = "";
+            for (@typeInfo(html.Css).@"struct".fields) |field| {
+                txt = txt ++ @field(css, field.name);
+                txt = txt ++ "\n";
+            }
+            break :blk txt;
+        };
+        try request.respond(stylesheet, .{ .extra_headers = &.{
+            .{ .name = "content-type", .value = "text/css" },
+        } });
     } else {
         serveFile(request, context) catch {
             try request.respond(html.error_page, .{
@@ -198,6 +222,9 @@ pub fn initMimeMap(alloc: Allocator) !MimeMap {
     try mimes.put(".png", "image/png");
     try mimes.put(".PNG", "image/png");
     try mimes.put(".svg", "image/svg");
+
+    // Fonts
+    try mimes.put(".ttf", "application/x-font-ttf");
 
     return mimes;
 }

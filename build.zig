@@ -50,7 +50,7 @@ pub fn build(b: *std.Build) !void {
     const use_llvm = b.option(bool, "llvm", "Use the LLVM linker in Debug mode (instead of the Zig native backend)") orelse blk: {
         const target_cpu: std.Target.Cpu.Arch = target.query.cpu_arch orelse builtin.cpu.arch;
         const target_os: std.Target.Os.Tag = target.query.os_tag orelse builtin.os.tag;
-        break :blk if (target_cpu == .x86_64 and target_os != .windows) false else true;
+        break :blk if (optimize == .Debug and target_cpu == .x86_64 and target_os != .windows) false else true;
     };
 
     // Add an option to list the set of TreeSitter parsers to statically link into the build
