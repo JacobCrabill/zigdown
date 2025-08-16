@@ -2,6 +2,7 @@
 /// Common utilities.
 const std = @import("std");
 
+const config = @import("config");
 const blocks = @import("ast/blocks.zig");
 const containers = @import("ast/containers.zig");
 const leaves = @import("ast/leaves.zig");
@@ -352,6 +353,7 @@ pub fn fetchFile(alloc: Allocator, url_s: []const u8, storage: *std.ArrayList(u8
 }
 
 test "fetchFile" {
+    if (!config.extra_tests) return error.SkipZigTest;
     const url = "https://picsum.photos/id/237/200/300";
     var buffer = ArrayList(u8).init(std.testing.allocator);
     defer buffer.deinit();

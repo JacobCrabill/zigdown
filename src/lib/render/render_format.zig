@@ -783,8 +783,9 @@ pub const FormatRenderer = struct {
 
         self.writeLeaders();
 
-        if (c.text) |text| {
-            self.write(text);
+        const has_raw_text: bool = if (c.text) |text| (text.len > 0) else false;
+        if (has_raw_text) {
+            self.write(c.text.?);
         } else {
             self.mode = .scratch;
             self.scratch_stream = self.scratch.writer();
@@ -1068,6 +1069,50 @@ test "auto-format" {
             .input = "`a realllllllly long inline code span that overflows a single line of text`",
             .output = "`a realllllllly long inline code span that overflows a single line of text`\n",
             .width = 40,
+        },
+        .{
+            .input = "( [foo](bar))",
+            .output = "([foo](bar))\n",
+        },
+        .{
+            .input =
+            \\```{foo}
+            \\```
+            ,
+            .output =
+            \\```{foo}
+            \\```
+            \\
+            ,
+        },
+        .{
+            // newline at end
+            .input =
+            \\```{NOTE}
+            \\bar
+            \\```
+            \\
+            ,
+            .output =
+            \\```{NOTE}
+            \\bar
+            \\```
+            \\
+            ,
+        },
+        .{
+            // no newline at end
+            .input =
+            \\```{NOTE}
+            \\bar
+            \\```
+            ,
+            .output =
+            \\```{NOTE}
+            \\bar
+            \\```
+            \\
+            ,
         },
     };
 

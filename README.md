@@ -54,10 +54,10 @@ Markdown files.
 - [x] Automatic Table of Contents creation
 - [x] Neovim integration (Lua)
 - [x] Markdown formatter
+- [x] HTML-encode all text in the HTML renderer
 
 ### Future Work / Missing Pieces
 
-- [ ] HTML-encode all text in the HTML renderer
 - [ ] Enabling TreeSitter parsers to be used in WASM modules
       - Requires filling in some libC stub functions (the TS parsers use quite a few functions from
         the C standard library that are not available in WASM)
@@ -65,6 +65,7 @@ Markdown files.
 - [ ] Deeper NeoVim integration: image rendering and auto-scrolling
 - [ ] [Link References](https://spec.commonmark.org/0.31.2/#link-reference-definition)
 - [ ] Color schemes for syntax highlighting
+- [ ] Table of Contents generation from a directory tree of files
 
 ## Caveats
 

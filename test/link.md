@@ -13,3 +13,5 @@ Autolink: <example.com>
 [**Bold _Link_**](https://google.com)
 
 [_Italic **~Link~ Text**_](https://google.com)
+
+([link in parens](example.com))

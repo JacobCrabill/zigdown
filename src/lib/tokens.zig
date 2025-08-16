@@ -151,11 +151,9 @@ pub const DirectiveTokenizer = struct {
         if (text.len == 0) return null;
 
         var end: usize = 0;
-        for (text, 0..) |c, i| {
-            if (c != '`') {
-                end = i;
-                break;
-            }
+        for (text) |c| {
+            if (c != '`') break;
+            end += 1;
         }
 
         // We only match 3 or more '`' characters
