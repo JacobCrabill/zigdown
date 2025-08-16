@@ -339,18 +339,18 @@ pub const FormatRenderer = struct {
             }
 
             for (word) |c| {
-                if (c == '\r') {
-                    continue;
-                }
-                if (c == '\n') {
-                    self.renderBreak();
-                    self.writeLeaders();
-                    continue;
+                switch (c) {
+                    '\r' => continue,
+                    '\n' => {
+                        self.renderBreak();
+                        self.writeLeaders();
+                        continue;
+                    },
+                    '(', '[', '{' => need_space = 0,
+                    else => need_space = 1,
                 }
                 self.write(&.{c});
             }
-
-            if (need_space == 0) need_space = 1;
         }
     }
 
@@ -889,8 +889,12 @@ pub const FormatRenderer = struct {
             if (self.column + self.scratch.items.len + 1 + self.opts.indent > self.opts.width) {
                 self.renderBreak();
                 self.writeLeaders();
-            } else if (self.prerender.getLast() != ' ') {
-                self.write(" ");
+            } else {
+                const c = self.prerender.getLast();
+                switch (c) {
+                    ' ', '(', '[', '{' => {},
+                    else => self.write(" "),
+                }
             }
         }
 
