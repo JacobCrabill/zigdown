@@ -297,7 +297,7 @@ pub const HtmlRenderer = struct {
             self.write("</pre></td></tr></tbody></table>\n");
         }
 
-        self.print("</div>\n", .{});
+        self.write("</div>\n");
     }
 
     fn renderAlert(self: *Self, b: Leaf) !void {
@@ -310,7 +310,7 @@ pub const HtmlRenderer = struct {
             try self.renderInline(item);
         }
         self.write("</p>");
-        self.print("\n</div>\n", .{});
+        self.write("\n</div>\n");
     }
 
     fn renderDirective(self: *Self, d: leaves.Code) !void {
@@ -328,7 +328,7 @@ pub const HtmlRenderer = struct {
         if (d.text) |text| {
             self.print("{s}", .{text});
         }
-        self.print("\n</div>\n", .{});
+        self.write("\n</div>\n");
     }
 
     /// Render a standard paragraph of text
@@ -354,7 +354,9 @@ pub const HtmlRenderer = struct {
     }
 
     fn renderAutolink(self: *Self, link: inls.Autolink) !void {
-        self.print("<a href=\"{s}\">{s}</a>", .{ link.url, link.url });
+        self.print("<a href=\"{s}\">", .{link.url});
+        self.writeHtmlEncode(link.url);
+        self.write("</a>");
     }
 
     fn renderInlineCode(self: *Self, code: inls.Codespan) !void {
@@ -440,7 +442,7 @@ pub const HtmlRenderer = struct {
 
     fn renderEnd(self: *Self) void {
         self.write(self.footer);
-        self.print("</body></html>\n", .{});
+        self.write("</body></html>\n");
     }
 
     /// Print out all of the CSS entries from the css struct

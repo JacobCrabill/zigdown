@@ -32,14 +32,7 @@ const BuildOpts = struct {
 
 pub fn build(b: *std.Build) !void {
     const target: Target = b.standardTargetOptions(.{});
-    var optimize: OptimizeMode = b.standardOptimizeOption(.{});
-    if (b.option(bool, "safe", "Build ReleaseSafe mode") != null) {
-        optimize = .ReleaseSafe;
-    } else if (b.option(bool, "small", "Build ReleaseSmall mode") != null) {
-        optimize = .ReleaseSmall;
-    } else if (b.option(bool, "fast", "Build ReleaseFast mode") != null) {
-        optimize = .ReleaseFast;
-    }
+    const optimize: OptimizeMode = b.standardOptimizeOption(.{});
 
     const wasm_optimize = b.option(OptimizeMode, "wasm-optimize", "Optimization mode for WASM targets") orelse .ReleaseSmall;
 
@@ -48,8 +41,10 @@ pub fn build(b: *std.Build) !void {
     const do_extra_tests = b.option(bool, "extra-tests", "Run extra (non-standard) tests") orelse false;
 
     const use_llvm = b.option(bool, "llvm", "Use the LLVM linker in Debug mode (instead of the Zig native backend)") orelse blk: {
-        const target_cpu: std.Target.Cpu.Arch = target.query.cpu_arch orelse builtin.cpu.arch;
-        const target_os: std.Target.Os.Tag = target.query.os_tag orelse builtin.os.tag;
+        const host_target: std.Target = b.graph.host.result;
+        const target_cpu: std.Target.Cpu.Arch = target.query.cpu_arch orelse host_target.cpu.arch;
+        const target_os: std.Target.Os.Tag = target.query.os_tag orelse host_target.os.tag;
+        // TODO: Figure out which ABIs are supported by the Zig backend (MUSL isn't supported?)
         break :blk if (optimize == .Debug and target_cpu == .x86_64 and target_os != .windows) false else true;
     };
 

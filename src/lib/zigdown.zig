@@ -1,4 +1,7 @@
-/// Package up the entire Zigdown library
+//! Zigdown: Markdown Toolset in Zig.
+//!
+//! This module exposes the entire Zigdown package,
+//! including all of its dependencies.
 
 // Expose dependencies to downstream consumers
 pub const stbi = @import("stb_image");

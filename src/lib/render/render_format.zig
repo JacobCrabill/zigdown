@@ -783,17 +783,22 @@ pub const FormatRenderer = struct {
 
         self.writeLeaders();
 
-        self.mode = .scratch;
-        self.scratch_stream = self.scratch.writer();
-        for (block.inlines.items) |item| {
-            self.renderInline(item);
+        if (c.text) |text| {
+            self.write(text);
+        } else {
+            self.mode = .scratch;
+            self.scratch_stream = self.scratch.writer();
+            for (block.inlines.items) |item| {
+                self.renderInline(item);
+            }
+            self.mode = .prerender;
+            const needs_break: bool = (self.scratch.items.len > 0);
+            self.wrapText(self.scratch.items);
+            self.scratch.clearRetainingCapacity();
+            if (needs_break) self.renderBreak();
         }
-        self.mode = .prerender;
-        self.wrapText(self.scratch.items);
-        self.scratch.clearRetainingCapacity();
 
-        self.renderBreak();
-        self.print("{s}", .{fence});
+        self.write(fence);
     }
 
     /// Render a standard paragraph of text
