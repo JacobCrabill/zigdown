@@ -95,6 +95,16 @@ pub const HtmlRenderer = struct {
         };
     }
 
+    fn writeHtmlEncode(self: *Self, bytes: []const u8) void {
+        if (std.mem.indexOfAny(u8, bytes, utils.html_chars)) |_| {
+            const encoded = utils.htmlEncode(self.alloc, bytes) catch @panic("OOM");
+            defer self.alloc.free(encoded);
+            self.write(encoded);
+        } else {
+            self.write(bytes);
+        }
+    }
+
     // Top-Level Block Rendering Functions --------------------------------
 
     /// The render entrypoint from the Renderer interface
@@ -150,11 +160,11 @@ pub const HtmlRenderer = struct {
 
     /// Render a Quote block
     fn renderQuote(self: *Self, block: Container) !void {
-        self.print("\n<blockquote>", .{});
+        self.write("\n<blockquote>");
         for (block.children.items) |child| {
             try self.renderBlock(child);
         }
-        self.print("</blockquote>\n", .{});
+        self.write("</blockquote>\n");
     }
 
     /// Render a List of Items (may be ordered or unordered)
@@ -200,7 +210,7 @@ pub const HtmlRenderer = struct {
 
     /// Render a single line break
     fn renderBreak(self: *Self) !void {
-        self.print("<br>\n", .{});
+        self.write("<br>\n");
     }
 
     /// Render an ATX Heading
@@ -213,7 +223,7 @@ pub const HtmlRenderer = struct {
         std.mem.replaceScalar(u8, id_s, ' ', '-');
 
         if (h.level == 1) {
-            self.print("<div class=\"title\">", .{});
+            self.write("<div class=\"title\">");
         }
         self.print("<h{d} id=\"{s}\">", .{ h.level, id_s });
         for (leaf.inlines.items) |item| {
@@ -221,7 +231,7 @@ pub const HtmlRenderer = struct {
         }
         self.print("</h{d}>\n", .{h.level});
         if (h.level == 1) {
-            self.print("</div>", .{});
+            self.write("</div>");
         }
     }
 
@@ -247,14 +257,16 @@ pub const HtmlRenderer = struct {
             var need_newline: bool = true;
             for (ranges) |range| {
                 if (need_newline) {
-                    self.print("<tr><td><span style=\"color:var(--color-peach)\">{d}</span></td><td><pre>", .{lino});
+                    self.print("<tr><td><span style=\"color:var(--purple)\">{d}</span></td><td><pre>", .{lino});
                     need_newline = false;
                 }
 
                 // Alternative: Have a CSS class for each color ( 'var(--color-x)' )
                 // Split by line into a table with line numbers
                 if (range.content.len > 0) {
-                    self.print("<span style=\"color:{s}\">{s}</span>", .{ theme.colorToCss(range.color), range.content });
+                    self.print("<span style=\"color:{s}\">", .{theme.colorToCss(range.color)});
+                    self.writeHtmlEncode(range.content);
+                    self.write("</span>");
                 }
                 if (range.newline) {
                     self.write("</pre></td></tr>\n");
@@ -276,8 +288,10 @@ pub const HtmlRenderer = struct {
             while (lines.next()) |line| {
                 // Alternative: Have a CSS class for each color ( 'var(--color-x)' )
                 // Split by line into a table with line numbers
-                self.print("<tr><td><span style=\"color:var(--color-peach)\">{d}</span></td>", .{lino});
-                self.print("<td><pre><span style=\"color:{s}\">{s}</span></pre></td></tr>\n", .{ theme.colorToCss(.Default), line });
+                self.print("<tr><td><span style=\"color:var(--purple)\">{d}</span></td>", .{lino});
+                self.print("<td><pre><span style=\"color:{s}\">", .{theme.colorToCss(.Default)});
+                self.writeHtmlEncode(line);
+                self.write("</span></pre></td></tr>\n");
                 lino += 1;
             }
             self.write("</pre></td></tr></tbody></table>\n");
@@ -344,42 +358,33 @@ pub const HtmlRenderer = struct {
     }
 
     fn renderInlineCode(self: *Self, code: inls.Codespan) !void {
-        self.print("<code>{s}</code>", .{code.text});
+        self.write("<code>");
+        self.writeHtmlEncode(code.text);
+        self.write("</code>");
     }
 
     fn renderText(self: *Self, text: inls.Text) !void {
         // for style in style => add style tag
         if (text.style.bold)
-            self.print("<b>", .{});
+            self.write("<b>");
 
         if (text.style.italic)
-            self.print("<i>", .{});
+            self.write("<i>");
 
         if (text.style.underline)
-            self.print("<u>", .{});
+            self.write("<u>");
 
-        self.print("{s}", .{text.text});
+        self.writeHtmlEncode(text.text);
 
         // Don't forget to reverse the order!
         if (text.style.underline)
-            self.print("</u>", .{});
+            self.write("</u>");
 
         if (text.style.italic)
-            self.print("</i>", .{});
+            self.write("</i>");
 
         if (text.style.bold)
-            self.print("</b>", .{});
-    }
-
-    fn renderNumlist(self: *Self, list: containers.List) !void {
-        self.print("<ol start=\"{d}\">\n", .{list.start});
-        for (list.lines.items) |line| {
-            // TODO: Number
-            self.print("<li>", .{});
-            try self.render_textblock(line.text);
-            self.print("</li>\n", .{});
-        }
-        self.print("</ol>\n", .{});
+            self.write("</b>");
     }
 
     fn renderTable(self: *Self, table: Container) !void {

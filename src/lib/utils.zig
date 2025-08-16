@@ -273,6 +273,50 @@ pub fn toKebab(comptime string: []const u8) []const u8 {
     return kebab;
 }
 
+/// Characters which must be HTML-encoded
+pub const html_chars: []const u8 = "<>";
+
+/// HTML-encode the given string to a new heap-allocated string.
+pub fn htmlEncode(alloc: Allocator, bytes: []const u8) ![]const u8 {
+    var new_size: usize = 0;
+    for (bytes) |c| {
+        switch (c) {
+            '<', '>' => new_size += 4,
+            else => new_size += 1,
+        }
+    }
+
+    var out = try ArrayList(u8).initCapacity(alloc, new_size);
+    var writer = out.writer();
+    for (bytes) |c| {
+        switch (c) {
+            '<' => writer.writeAll("&lt;") catch unreachable,
+            '>' => writer.writeAll("&gt;") catch unreachable,
+            else => writer.writeByte(c) catch unreachable,
+        }
+    }
+    return out.items;
+}
+
+test htmlEncode {
+    const TestData = struct {
+        in: []const u8,
+        out: []const u8,
+    };
+    const test_data: []const TestData = &.{
+        .{ .in = "hi", .out = "hi" },
+        .{ .in = "<hi", .out = "&lt;hi" },
+        .{ .in = "<hi>", .out = "&lt;hi&gt;" },
+    };
+
+    const alloc = std.testing.allocator;
+    for (test_data) |data| {
+        const out = try htmlEncode(alloc, data.in);
+        defer alloc.free(out);
+        try std.testing.expectEqualStrings(data.out, out);
+    }
+}
+
 /// Helper function to read the contents of a file given a relative path.
 /// Caller owns the returned memory.
 pub fn readFile(alloc: Allocator, file_path: []const u8) ![]u8 {

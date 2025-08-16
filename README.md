@@ -3,6 +3,7 @@
 ![CI Status](https://github.com/JacobCrabill/zigdown/actions/workflows/main.yml/badge.svg)
 
 ```{toctree}
+This block will be rendered as a Table of Contents
 ```
 
 ![Zig is Awesome!](src/assets/img/zig-zero.png)

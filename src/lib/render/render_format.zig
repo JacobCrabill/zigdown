@@ -435,7 +435,7 @@ pub const FormatRenderer = struct {
         switch (block.content) {
             .Alert => try self.renderAlert(block),
             .Break => {},
-            .Code => |c| try self.renderCode(c),
+            .Code => try self.renderCode(block),
             .Heading => self.renderHeading(block),
             .Paragraph => self.renderParagraph(block),
         }
@@ -771,22 +771,28 @@ pub const FormatRenderer = struct {
     }
 
     /// Render a raw block of code
-    fn renderCode(self: *Self, c: leaves.Code) !void {
+    fn renderCode(self: *Self, block: Leaf) !void {
+        const c = block.content.Code;
         const dir: []const u8 = c.directive orelse "";
         const tag = c.tag orelse dir;
-        const source = c.text orelse "";
         const fence = c.opener orelse "```";
 
         self.writeLeaders();
         self.print("{s}{s}", .{ fence, tag });
         self.renderBreak();
 
-        if (source.len > 0) {
-            self.writeLeaders();
-            self.wrapTextRaw(utils.trimTrailingWhitespace(source));
-            self.renderBreak();
-        }
         self.writeLeaders();
+
+        self.mode = .scratch;
+        self.scratch_stream = self.scratch.writer();
+        for (block.inlines.items) |item| {
+            self.renderInline(item);
+        }
+        self.mode = .prerender;
+        self.wrapText(self.scratch.items);
+        self.scratch.clearRetainingCapacity();
+
+        self.renderBreak();
         self.print("{s}", .{fence});
     }
 
