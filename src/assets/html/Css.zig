@@ -104,56 +104,56 @@ extra_end: []const u8 = "",
 pub const default_fonts =
     \\@font-face {
     \\  font-family: "NovaFlatBook";
-    \\  src: url("fonts/NovaFlatBook.ttf") format("truetype");
+    \\  src: url("/fonts/NovaFlatBook.ttf") format("truetype");
     \\  font-weight: normal;
     \\  font-style: normal;
     \\  font-display: swap;
     \\}
     \\@font-face {
     \\  font-family: "NovaFlatBook";
-    \\  src: url("fonts/NovaFlatBookOblique.ttf") format("truetype");
+    \\  src: url("/fonts/NovaFlatBookOblique.ttf") format("truetype");
     \\  font-weight: normal;
     \\  font-style: italic;
     \\  font-display: swap;
     \\}
     \\@font-face {
     \\  font-family: "NovaFlatBook";
-    \\  src: url("fonts/NovaFlatBold.ttf") format("truetype");
+    \\  src: url("/fonts/NovaFlatBold.ttf") format("truetype");
     \\  font-weight: bold;
     \\  font-style: normal;
     \\  font-display: swap;
     \\}
     \\@font-face {
     \\  font-family: "NovaFlatBook";
-    \\  src: url("fonts/NovaFlatBoldOblique.ttf") format("truetype");
+    \\  src: url("/fonts/NovaFlatBoldOblique.ttf") format("truetype");
     \\  font-weight: bold;
     \\  font-style: italic;
     \\  font-display: swap;
     \\}
     \\@font-face {
     \\  font-family: "RobotoMono";
-    \\  src: url("fonts/RobotoMonoLight.ttf") format("truetype");
+    \\  src: url("/fonts/RobotoMonoLight.ttf") format("truetype");
     \\  font-weight: normal;
     \\  font-style: normal;
     \\  font-display: swap;
     \\}
     \\@font-face {
     \\  font-family: "RobotoMono";
-    \\  src: url("fonts/RobotoMonoLightItalic.ttf") format("truetype");
+    \\  src: url("/fonts/RobotoMonoLightItalic.ttf") format("truetype");
     \\  font-weight: normal;
     \\  font-style: italic;
     \\  font-display: swap;
     \\}
     \\@font-face {
     \\  font-family: "RobotoMono";
-    \\  src: url("fonts/RobotoMonoBold.ttf") format("truetype");
+    \\  src: url("/fonts/RobotoMonoBold.ttf") format("truetype");
     \\  font-weight: bold;
     \\  font-style: normal;
     \\  font-display: swap;
     \\}
     \\@font-face {
     \\  font-family: "RobotoMono";
-    \\  src: url("fonts/RobotoMonoBoldItalic.ttf") format("truetype");
+    \\  src: url("/fonts/RobotoMonoBoldItalic.ttf") format("truetype");
     \\  font-weight: bold;
     \\  font-style: italic;
     \\  font-display: swap;

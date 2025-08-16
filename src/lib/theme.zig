@@ -71,20 +71,20 @@ pub fn colorHex(color: Color) usize {
 pub fn colorHexStr(color: Color) []const u8 {
     return switch (color) {
         .Black => "#29283B",
+        .White => "#FFFFFF",
         .Red => "#EF6487",
         .Green => "#5ECA89",
         .Blue => "#65AEF7",
         .Yellow => "#FFFF00",
         .Cyan => "#43C1BE",
-        .White => "#FFFFFF",
         .Magenta => "#ECA5CB",
+        .Coral => "#D7649B",
+        .Orange => "#FF9700",
         .DarkYellow => "#AEAC30",
         .PurpleGrey => "#AA82FA",
         .MediumGrey => "#707070",
         .DarkGrey => "#404040",
         .DarkRed => "#802020",
-        .Orange => "#FF9700",
-        .Coral => "#D7649B",
         .Default => "#FFFFFF",
     };
 }
@@ -92,17 +92,21 @@ pub fn colorHexStr(color: Color) []const u8 {
 /// Color enum -> CSS Class
 pub fn colorToCss(color: Color) []const u8 {
     return switch (color) {
-        .Yellow => "var(--color-yellow)",
-        .Blue => "var(--color-blue)",
-        .DarkYellow => "var(--color-maroon)",
-        .Cyan => "var(--color-sapphire)",
-        .Green => "var(--color-green)",
-        .Magenta => "var(--color-pink)",
-        .Red => "var(--color-mauve)",
-        .White => "var(--color-text)",
-        .Coral => "var(--color-peach)",
-        .MediumGrey => "var(--color-overlay2)",
-        .DarkGrey => "var(--color-overlay0)",
+        .Black => "var(--black)",
+        .White => "var(--white)",
+        .Red => "var(--red)",
+        .Green => "var(--green)",
+        .Blue => "var(--blue)",
+        .Yellow => "var(--yellow)",
+        .Cyan => "var(--cyan)",
+        .Magenta => "var(--pink)",
+        .Coral => "var(--orange)",
+        .Orange => "var(--orange)",
+        .DarkYellow => "var(--darkyello)",
+        .PurpleGrey => "var(--purple)",
+        .MediumGrey => "var(--mediumgrey)",
+        .DarkGrey => "var(--darkgrey)",
+        .DarkRed => "var(--darkred)",
         else => "var(--color-text)",
     };
 }
