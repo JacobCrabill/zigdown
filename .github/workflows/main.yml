@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: ghcr.io/jacobcrabill/alpine-zig:0.14.0
+      image: ghcr.io/jacobcrabill/alpine-zig:0.14.1
 
     steps:
       - uses: actions/checkout@v4
