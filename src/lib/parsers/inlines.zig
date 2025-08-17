@@ -142,7 +142,6 @@ pub const InlineParser = struct {
             } else {
                 next_type = .BREAK;
             }
-
             switch (tok.kind) {
                 .EMBOLD => {
                     style.bold = !style.bold;
@@ -249,14 +248,14 @@ pub const InlineParser = struct {
                     }
                 },
                 .BREAK => {
-                    if (prev_type == .SPACE) continue;
+                    if (prev_type == .SPACE or prev_type == .BREAK) continue;
                     // Treat line breaks as spaces; Don't clear the style (The renderer deals with wrapping)
                     var space_token = tok;
                     space_token.text = " ";
                     try utils.appendSingleToken(self.alloc, &inlines, space_token, style);
                 },
                 .SPACE => {
-                    if (prev_type == .SPACE) continue;
+                    if (prev_type == .SPACE or prev_type == .BREAK) continue;
                     try utils.appendSingleToken(self.alloc, &inlines, tok, style);
                 },
                 else => {

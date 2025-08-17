@@ -946,7 +946,7 @@ fn testRender(alloc: Allocator, input: []const u8, out_stream: std.io.AnyWriter,
     try r.renderBlock(p.document);
 }
 
-test "auto-format" {
+test "FormatRenderer" {
     const TestData = struct {
         input: []const u8,
         output: []const u8,

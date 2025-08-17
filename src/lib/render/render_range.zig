@@ -273,8 +273,10 @@ pub const RangeRenderer = struct {
         const len = text.len;
         if (len == 0) return;
 
+        var prev_was_space: bool = false;
         if (std.mem.startsWith(u8, text, " ")) {
             self.write(" ");
+            prev_was_space = true;
         }
 
         var words = std.mem.tokenizeAny(u8, text, " ");
@@ -285,21 +287,26 @@ pub const RangeRenderer = struct {
                 self.writeLeaders();
             } else if (need_space > 0) {
                 self.write(" ");
+                prev_was_space = true;
             }
 
             for (word) |c| {
+                switch (c) {
+                    '\r', '\n', '(', '[', '{', ' ' => need_space = 0,
+                    else => need_space = 1,
+                }
                 if (c == '\r') {
                     continue;
                 }
                 if (c == '\n') {
                     self.renderBreak();
                     self.writeLeaders();
+                    prev_was_space = false;
                     continue;
                 }
                 self.write(&.{c});
+                prev_was_space = (c == ' ');
             }
-
-            if (need_space == 0) need_space = 1;
         }
 
         if (std.mem.endsWith(u8, text, " ") and need_space > 0) {
@@ -1355,3 +1362,44 @@ pub const RangeRenderer = struct {
         }
     }
 };
+
+//////////////////////////////////////////////////////////
+// Tests
+//////////////////////////////////////////////////////////
+
+fn testRender(alloc: Allocator, input: []const u8, out_stream: std.io.AnyWriter, width: usize) !void {
+    var p = @import("../parser.zig").Parser.init(alloc, .{});
+    try p.parseMarkdown(input);
+    var r = RangeRenderer.init(alloc, .{ .out_stream = out_stream, .width = width });
+    try r.renderBlock(p.document);
+}
+
+test "RangeRenderer" {
+    const TestData = struct {
+        input: []const u8,
+        output: []const u8,
+        width: usize = 90,
+    };
+
+    const test_data: []const TestData = &.{
+        .{
+            .input =
+            \\- [**ZEFR**](https://github.com/RomeroJosh/ZEFR): The Aerospace Computing Lab (ACL)'s collaborative
+            \\  high-order, GPU-enabled CFD solver. Uses the Direct Flux Reconstruction (DFR) method on both CPUs
+            \\  and GPUs (using CUDA), and can run on arbitrary 3D unstructured grids.
+            ,
+            // TODO: Fix trailing whitespace
+            .output = "\n  ‣ ZEFR: The Aerospace Computing Lab (ACL)'s collaborative high-order, GPU-enabled CFD \n    solver. Uses the Direct Flux Reconstruction (DFR) method on both CPUs and GPUs (\n    using CUDA), and can run on arbitrary 3D unstructured grids.\n  \n  ",
+        },
+    };
+
+    const alloc = std.testing.allocator;
+    for (test_data) |data| {
+        var arena = std.heap.ArenaAllocator.init(alloc);
+        defer arena.deinit();
+        var buf_array = ArrayList(u8).init(arena.allocator());
+
+        try testRender(arena.allocator(), data.input, buf_array.writer().any(), data.width);
+        try std.testing.expectEqualSlices(u8, data.output, buf_array.items);
+    }
+}
