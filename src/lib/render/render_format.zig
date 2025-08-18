@@ -408,6 +408,7 @@ pub const FormatRenderer = struct {
         if (self.root == null) {
             self.root = block;
             self.prerender_stream = self.prerender.writer();
+            self.scratch_stream = self.scratch.writer();
         }
         switch (block) {
             .Container => |c| try self.renderContainer(c),
@@ -723,9 +724,22 @@ pub const FormatRenderer = struct {
     fn renderHeading(self: *Self, leaf: Leaf) void {
         const h: leaves.Heading = leaf.content.Heading;
 
-        // Indent
-        self.writeNTimes("#", h.level);
-        self.write(" ");
+        // Setup the header tags as leaders in the case we have
+        // a very long header that needs to be wrapped
+        const level: usize = @min(h.level, 15);
+        var indent_buf: [16]u8 = undefined;
+        indent_buf[level] = ' ';
+        for (0..level) |i| {
+            indent_buf[i] = '#';
+        }
+        const header_indent = Text{ .text = indent_buf[0 .. level + 1] };
+
+        self.leader_stack.append(header_indent) catch unreachable;
+
+        self.writeLeaders();
+        self.needs_leaders = false;
+
+        // Override the indent level for the purpose of text wrapping
 
         // Content
         for (leaf.inlines.items) |item| {
@@ -734,6 +748,8 @@ pub const FormatRenderer = struct {
 
         // Reset
         self.resetStyle();
+
+        defer _ = self.leader_stack.pop();
 
         self.renderBreak();
     }
@@ -759,7 +775,6 @@ pub const FormatRenderer = struct {
         self.writeLeaders();
 
         self.mode = .scratch;
-        self.scratch_stream = self.scratch.writer();
         for (block.inlines.items) |item| {
             self.renderInline(item);
         }
@@ -788,7 +803,6 @@ pub const FormatRenderer = struct {
             self.write(c.text.?);
         } else {
             self.mode = .scratch;
-            self.scratch_stream = self.scratch.writer();
             for (block.inlines.items) |item| {
                 self.renderInline(item);
             }
@@ -805,7 +819,6 @@ pub const FormatRenderer = struct {
     /// Render a standard paragraph of text
     fn renderParagraph(self: *Self, leaf: Leaf) void {
         self.mode = .scratch;
-        self.scratch_stream = self.scratch.writer();
         for (leaf.inlines.items) |item| {
             self.renderInline(item);
         }
@@ -886,7 +899,11 @@ pub const FormatRenderer = struct {
         // Next, write the link all at once to the prerender buffer
         self.mode = .prerender;
 
-        if (self.column > self.opts.indent) {
+        var indent: usize = self.opts.indent;
+        for (self.leader_stack.items) |leader| {
+            indent += leader.text.len;
+        }
+        if (self.column > indent) {
             if (self.column + self.scratch.items.len + 1 + self.opts.indent > self.opts.width) {
                 self.renderBreak();
                 self.writeLeaders();
@@ -1113,6 +1130,11 @@ test "FormatRenderer" {
             \\```
             \\
             ,
+        },
+        .{
+            .input = "## [A very long link that will overflow](./foo/bar.html)",
+            .output = "## [A very long link that will overflow](./foo/bar.html)\n",
+            .width = 50,
         },
     };
 
