@@ -1136,6 +1136,10 @@ test "FormatRenderer" {
             .output = "## [A very long link that will overflow](./foo/bar.html)\n",
             .width = 50,
         },
+        .{
+            .input = "![](foo.bar)",
+            .output = "![](foo.bar)\n",
+        },
     };
 
     const alloc = std.testing.allocator;
