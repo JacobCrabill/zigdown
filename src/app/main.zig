@@ -12,7 +12,7 @@ const TextStyle = zd.utils.TextStyle;
 const Parser = zd.Parser;
 const TokenList = zd.TokenList;
 
-var g_colorscheme: flags.ColorScheme = .{};
+var g_colorscheme: flags.ColorScheme = .default;
 
 fn printHelpAndExit(command: []const u8, err: anyerror) noreturn {
     std.debug.print(
@@ -175,14 +175,14 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, args);
 
-    const colorscheme = flags.ColorScheme{
+    g_colorscheme = flags.ColorScheme{
         .error_label = &.{ .red, .bold },
         .header = &.{ .bright_green, .bold },
         .command_name = &.{.bright_blue},
         .option_name = &.{.bright_magenta},
     };
 
-    const result: Flags = flags.parse(args, "zigdown", Flags, .{ .colors = &colorscheme });
+    const result: Flags = flags.parse(args, "zigdown", Flags, .{ .colors = &g_colorscheme });
 
     // Process the command-line arguments
     switch (result.command) {

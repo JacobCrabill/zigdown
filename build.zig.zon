@@ -21,8 +21,8 @@
             .hash = "plutosvg-0.0.6-LyMxgbMuAADqe6_HVbOOBTtsmMVlb-ar-iOc7pRrPQYc",
         },
         .flags = .{
-            .url = "https://github.com/n0s4/flags/archive/c0e9215d6405fe4fa534f2ccd1b94d5e07c097da.tar.gz",
-            .hash = "flags-0.10.0-a_9h3pByAADAx5wvBF0bM1abyAiPVnOSsxvXvRiSaU6u",
+            .url = "https://github.com/n0s4/flags/archive/2839f30a02485f863f5780170eef290c8ccf8d53.tar.gz",
+            .hash = "flags-0.10.0-a_9h3uhzAAAmWXi1xd_xfZIIJqh3HFwsTMlfx5aVggCS",
         },
         .treez = .{
             .url = "https://github.com/JacobCrabill/treez/archive/640de7530c4567a0cadf3f701d1c315724eed4c3.tar.gz",
