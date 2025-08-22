@@ -7,6 +7,8 @@
 const std = @import("std");
 const zd = @import("zigdown");
 
+const ArrayList = std.array_list.Managed;
+
 // The code here is specific to Lua 5.1
 // This has been tested with LuaJIT 5.1, specifically
 pub const c = @cImport({
@@ -23,14 +25,14 @@ const FnReg = c.luaL_Reg;
 
 /// A Zig function called by Lua must accept a single ?*LuaState parameter and must
 /// return a c_int representing the number of return values pushed onto the stack
-export fn adder(lua: ?*LuaState) callconv(.C) c_int {
+export fn adder(lua: ?*LuaState) callconv(.c) c_int {
     const a = c.lua_tointeger(lua, 1);
     const b = c.lua_tointeger(lua, 2);
     c.lua_pushinteger(lua, a + b);
     return 1;
 }
 
-export fn render_markdown(lua: ?*LuaState) callconv(.C) c_int {
+export fn render_markdown(lua: ?*LuaState) callconv(.c) c_int {
     // Markdown text to render
     var len: usize = 0;
     const input_a: [*c]const u8 = c.lua_tolstring(lua, 1, &len);
@@ -50,8 +52,8 @@ export fn render_markdown(lua: ?*LuaState) callconv(.C) c_int {
     const md: zd.Block = parser.document;
 
     // Create a buffer to render into - Note that Lua creates its own copy internally
-    var buffer = std.ArrayList(u8).init(alloc);
-    defer buffer.deinit();
+    var alloc_writer = std.Io.Writer.Allocating.init(alloc);
+    defer alloc_writer.deinit();
 
     // Still need the terminal size; TODO: fix this...
     // (Needed for "printing" images with the Kitty graphics protocol)
@@ -60,7 +62,7 @@ export fn render_markdown(lua: ?*LuaState) callconv(.C) c_int {
     // Render the document
     // TODO: Configure the cwd for the renderer (For use with evaluating links/paths)
     const render_opts = zd.render.RangeRenderer.RenderOpts{
-        .out_stream = buffer.writer().any(),
+        .out_stream = &alloc_writer.writer,
         .root_dir = null, // TODO opts.document_dir,
         .indent = 2,
         .width = columns,
@@ -72,7 +74,8 @@ export fn render_markdown(lua: ?*LuaState) callconv(.C) c_int {
     r_renderer.renderBlock(md) catch @panic("Render error!");
 
     // Push the rendered string to the Lua stack
-    c.lua_pushlstring(lua, @ptrCast(buffer.items), buffer.items.len);
+    const buffer = alloc_writer.written();
+    c.lua_pushlstring(lua, @ptrCast(buffer), buffer.len);
 
     // Create a Lua array (table with numerical indices) of all styles
     const narr: c_int = @intCast(r_renderer.style_ranges.items.len);
@@ -144,12 +147,12 @@ fn convertStyleToTable(lua: ?*LuaState, style: zd.theme.TextStyle) void {
 
 /// I recommend using ZLS (the Zig language server) for autocompletion to help
 /// find relevant Lua function calls like pushstring, tostring, etc.
-export fn hello(lua: ?*LuaState) callconv(.C) c_int {
+export fn hello(lua: ?*LuaState) callconv(.c) c_int {
     c.lua_pushstring(lua, "Hello, LuaJIT!");
     return 1;
 }
 
-export fn table_test(lua: ?*LuaState) callconv(.C) c_int {
+export fn table_test(lua: ?*LuaState) callconv(.c) c_int {
     const narr: c_int = 0;
     const nfield: c_int = 2;
     c.lua_createtable(lua, narr, nfield);
@@ -204,7 +207,7 @@ const lib_fn_reg = [_]FnReg{
 
 /// Register the function with Lua using the special luaopen_x function
 /// This is the entrypoint into the library from a Lua script
-export fn luaopen_zigdown_lua(lua: ?*LuaState) callconv(.C) c_int {
+export fn luaopen_zigdown_lua(lua: ?*LuaState) callconv(.c) c_int {
     c.luaL_register(lua.?, "zigdown_lua", @ptrCast(&lib_fn_reg[0]));
     return 1;
 }

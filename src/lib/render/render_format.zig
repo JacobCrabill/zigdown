@@ -17,8 +17,8 @@ const errorReturn = debug.errorReturn;
 const errorMsg = debug.errorMsg;
 
 const Allocator = std.mem.Allocator;
-const ArrayList = std.ArrayList;
-const AnyWriter = std.io.AnyWriter;
+const ArrayList = std.array_list.Managed;
+const Writer = *std.io.Writer;
 
 const Block = blocks.Block;
 const Container = blocks.Container;
@@ -40,7 +40,7 @@ const task_list_indent = Text{ .style = .{}, .text = "      " };
 pub const FormatRenderer = struct {
     const Self = @This();
     pub const RenderOpts = struct {
-        out_stream: AnyWriter,
+        out_stream: Writer,
         width: usize = 90, // Column at which to wrap all text
         indent: usize = 0, // Left indent for the entire document
         root_dir: ?[]const u8 = null,
@@ -56,7 +56,7 @@ pub const FormatRenderer = struct {
         italic,
         strike,
     };
-    stream: AnyWriter,
+    stream: Writer,
     opts: RenderOpts = undefined,
     column: usize = 0,
     alloc: std.mem.Allocator,
@@ -620,10 +620,9 @@ pub const FormatRenderer = struct {
 
         for (table.children.items) |item| {
             // Render the table cell into a new buffer
-            var buf_writer = ArrayList(u8).init(self.alloc);
-            const stream = buf_writer.writer().any();
+            var alloc_writer = std.Io.Writer.Allocating.init(alloc);
             const sub_opts = RenderOpts{
-                .out_stream = stream,
+                .out_stream = &alloc_writer.writer,
                 .width = 256, // col_w,
                 .indent = 1,
                 .root_dir = self.opts.root_dir,
@@ -637,7 +636,7 @@ pub const FormatRenderer = struct {
             var sub_renderer: FormatRenderer = .init(alloc, sub_opts);
             try sub_renderer.renderBlock(root);
 
-            const text = utils.trimTrailingWhitespace(utils.trimLeadingWhitespace(buf_writer.items));
+            const text = utils.trimTrailingWhitespace(utils.trimLeadingWhitespace(alloc_writer.writer.buffered()));
             try cells.append(.{ .text = text });
         }
 
@@ -956,11 +955,12 @@ pub const FormatRenderer = struct {
 // Tests
 //////////////////////////////////////////////////////////
 
-fn testRender(alloc: Allocator, input: []const u8, out_stream: std.io.AnyWriter, width: usize) !void {
+fn testRender(alloc: Allocator, input: []const u8, out_stream: *std.io.Writer, width: usize) !void {
     var p = @import("../parser.zig").Parser.init(alloc, .{});
     try p.parseMarkdown(input);
     var r = FormatRenderer.init(alloc, .{ .out_stream = out_stream, .width = width });
     try r.renderBlock(p.document);
+    try out_stream.flush();
 }
 
 test "FormatRenderer" {
@@ -1146,9 +1146,9 @@ test "FormatRenderer" {
     for (test_data) |data| {
         var arena = std.heap.ArenaAllocator.init(alloc);
         defer arena.deinit();
-        var buf_array = ArrayList(u8).init(arena.allocator());
+        var writer = std.Io.Writer.Allocating.init(arena.allocator());
 
-        try testRender(arena.allocator(), data.input, buf_array.writer().any(), data.width);
-        try std.testing.expectEqualSlices(u8, data.output, buf_array.items);
+        try testRender(arena.allocator(), data.input, &writer.writer, data.width);
+        try std.testing.expectEqualSlices(u8, data.output, writer.writer.buffered());
     }
 }

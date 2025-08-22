@@ -17,7 +17,7 @@ const wasm = @import("../wasm.zig");
 pub const Renderer = @import("Renderer.zig");
 
 const Allocator = std.mem.Allocator;
-const AnyWriter = std.io.AnyWriter;
+const Writer = *std.io.Writer;
 
 const Block = blocks.Block;
 const Container = blocks.Container;
@@ -33,8 +33,8 @@ const google_fonts =
 // Render a Markdown document to HTML to the given output stream
 pub const HtmlRenderer = struct {
     const Self = @This();
-    const RenderError = AnyWriter.Error || Allocator.Error || Block.Error;
-    stream: AnyWriter,
+    const RenderError = Allocator.Error || Block.Error;
+    stream: Writer,
     alloc: Allocator,
     root: ?Block = null,
     css: Css = .{},
@@ -44,7 +44,7 @@ pub const HtmlRenderer = struct {
     footer: []const u8 = "",
 
     /// Create a new HtmlRenderer
-    pub fn init(stream: AnyWriter, alloc: Allocator) Self {
+    pub fn init(stream: Writer, alloc: Allocator) Self {
         if (!wasm.is_wasm) {
             ts_queries.init(alloc);
         }

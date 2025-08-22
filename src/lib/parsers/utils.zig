@@ -9,7 +9,7 @@ const leaves = @import("../ast/leaves.zig");
 const inls = @import("../ast/inlines.zig");
 
 const Allocator = std.mem.Allocator;
-const ArrayList = std.ArrayList;
+const ArrayList = std.array_list.Managed;
 
 const TokenType = toks.TokenType;
 const Token = toks.Token;

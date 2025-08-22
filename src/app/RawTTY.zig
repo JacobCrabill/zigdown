@@ -2,7 +2,6 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const Allocator = std.mem.Allocator;
-const ArrayList = std.ArrayList;
 const Dir = std.fs.Dir;
 const File = std.fs.File;
 const os = std.os;
@@ -11,12 +10,12 @@ const Self = @This();
 
 tty: File = undefined,
 orig_termios: std.c.termios = undefined,
-writer: std.io.Writer(File, File.WriteError, File.write) = undefined,
+writer: *std.io.Writer = undefined,
 
-pub fn init() !Self {
+pub fn init(writer: *std.io.Writer) !Self {
     // Store the original terminal settings for later
     // Apply the settings to enable raw TTY ('uncooked' terminal input)
-    const tty = std.io.getStdIn();
+    const tty = std.fs.File.stdin();
 
     var orig_termios: std.c.termios = undefined;
     _ = std.c.tcgetattr(tty.handle, &orig_termios);
@@ -41,12 +40,11 @@ pub fn init() !Self {
     raw.cc[@intFromEnum(std.c.V.MIN)] = 1;
     _ = std.c.tcsetattr(tty.handle, .FLUSH, &raw);
 
-    const writer = std.io.getStdOut().writer(); // tty.writer();
-
     try writer.writeAll("\x1B[?25l"); // Hide the cursor
     try writer.writeAll("\x1B[s"); // Save cursor position
     try writer.writeAll("\x1B[?47h"); // Save screen
     try writer.writeAll("\x1B[?1049h"); // Enable alternative buffer
+    try writer.flush();
 
     return Self{
         .tty = tty,
@@ -62,6 +60,7 @@ pub fn deinit(self: Self) void {
     self.writer.writeAll("\x1B[?47l") catch {}; // Restore screen
     self.writer.writeAll("\x1B[u") catch {}; // Restore cursor position
     self.writer.writeAll("\x1B[?25h") catch {}; // Show the cursor
+    self.writer.flush() catch {};
 
     self.tty.close();
 }

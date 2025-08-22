@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const Build = std.Build;
 const Allocator = std.mem.Allocator;
 
+const ArrayList = std.array_list.Managed;
 const Target = std.Build.ResolvedTarget;
 const OptimizeMode = std.builtin.OptimizeMode;
 const Options = std.Build.Step.Options;
@@ -28,6 +29,7 @@ const BuildOpts = struct {
     dependencies: ?[]Dependency = null,
     options: *Options,
     use_llvm: bool = false,
+    no_bin: bool = false,
 };
 
 pub fn build(b: *std.Build) !void {
@@ -39,6 +41,7 @@ pub fn build(b: *std.Build) !void {
     const build_lua = b.option(bool, "lua", "[WIP] Build Zigdown as a Lua module") orelse false;
     const build_test_exes = b.option(bool, "build-test-exes", "Build the custom test executables") orelse false;
     const do_extra_tests = b.option(bool, "extra-tests", "Run extra (non-standard) tests") orelse false;
+    const no_bin = b.option(bool, "no-bin", "Just check compilation (don't emit binaries)") orelse false;
 
     const use_llvm = b.option(bool, "llvm", "Use the LLVM linker in Debug mode (instead of the Zig native backend)") orelse blk: {
         const host_target: std.Target = b.graph.host.result;
@@ -59,7 +62,7 @@ pub fn build(b: *std.Build) !void {
     options.addOption(bool, "extra_tests", do_extra_tests);
 
     // Split the comma-separated list of builtin languages to a list of languages for our config struct
-    var ts_language_list = std.ArrayList([]const u8).init(b.allocator);
+    var ts_language_list = ArrayList([]const u8).init(b.allocator);
     var iter = std.mem.tokenizeScalar(u8, ts_parser_list, ',');
     while (iter.next()) |name| {
         try ts_language_list.append(name);
@@ -77,7 +80,7 @@ pub fn build(b: *std.Build) !void {
     mod.addOptions("config", options);
 
     // Get all of our dependencies, both from build.zig.zon and our TreeSitter module
-    var deps: std.ArrayList(Dependency) = try getDependencies(b, target, optimize, ts_language_list.items);
+    var deps: ArrayList(Dependency) = try getDependencies(b, target, optimize, ts_language_list.items);
 
     // Add all dependencies to our "root" Zigdown module, then add that to the dependencies list
     for (deps.items) |dep| {
@@ -91,6 +94,7 @@ pub fn build(b: *std.Build) !void {
         .dependencies = deps.items,
         .options = options,
         .use_llvm = use_llvm,
+        .no_bin = no_bin,
     };
 
     // Compile the main executable
@@ -129,12 +133,14 @@ pub fn build(b: *std.Build) !void {
         const ziglua_dep = Dependency{ .name = "luajit", .module = ziglua.module("zlua") };
 
         // Compile Zigdown as a Lua module compatible with Neovim / LuaJIT 5.1
-        const lua_mod = b.addSharedLibrary(.{
+        const lua_mod = b.addLibrary(.{
             .name = "zigdown_lua",
-            .root_source_file = b.path("src/app/lua_api.zig"),
-            .target = target,
-            .optimize = optimize,
-            .pic = true,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/app/lua_api.zig"),
+                .target = target,
+                .optimize = optimize,
+            }),
+            .linkage = .dynamic,
         });
         if (exe_opts.dependencies) |deplist| {
             for (deplist) |dep| {
@@ -198,7 +204,7 @@ pub fn build(b: *std.Build) !void {
         .abi = .musl,
     });
 
-    var wasm_deps: std.ArrayList(Dependency) = try getDependencies(b, wasm_target, wasm_optimize, ts_language_list.items);
+    var wasm_deps: ArrayList(Dependency) = try getDependencies(b, wasm_target, wasm_optimize, ts_language_list.items);
 
     const wasm_mod = b.addModule("zigdown_wasm", .{
         .root_source_file = b.path("src/lib/zigdown.zig"),
@@ -216,21 +222,25 @@ pub fn build(b: *std.Build) !void {
 
     const wasm = b.addExecutable(.{
         .name = "zigdown-wasm",
-        .root_source_file = b.path("src/app/wasm_main.zig"),
-        .optimize = .ReleaseSmall,
-        .target = wasm_target,
-        .link_libc = true,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/app/wasm_main.zig"),
+            .optimize = .ReleaseSmall,
+            .target = wasm_target,
+        }),
     });
     wasm.entry = .disabled;
     wasm.rdynamic = true;
 
     // // [WIP] An attempt to bring in the minimal set of functions from libC
     // // in order to build TreeSitter for WASM
-    // const wasm_libc = b.addStaticLibrary(.{
+    // const wasm_libc = b.addLibrary(.{
     //     .name = "wasm-libc",
-    //     .root_source_file = b.path("src/wasm/stdlib.zig"),
-    //     .target = wasm_target,
-    //     .optimize = wasm_optimize,
+    //     .root_module = b.createModule(.{
+    //         .root_source_file = b.path("src/wasm/stdlib.zig"),
+    //         .target = wasm_target,
+    //         .optimize = wasm_optimize,
+    //     }),
+    //     .linkage = .static,
     //     .link_libc = true,
     // });
     // wasm_libc.addCSourceFile(.{ .file = b.path("src/wasm/stdlib.c") });
@@ -241,16 +251,24 @@ pub fn build(b: *std.Build) !void {
         wasm.root_module.addImport(dep.name, dep.module);
     }
 
-    b.installArtifact(wasm);
     const wasm_step = b.step("wasm", "Build Zigdown as a WASM library");
     wasm_step.dependOn(&wasm.step);
-    b.getInstallStep().dependOn(wasm_step);
+
+    if (!no_bin) {
+        b.installArtifact(wasm);
+        b.getInstallStep().dependOn(wasm_step);
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // Add unit tests
     ////////////////////////////////////////////////////////////////////////////
 
-    const test_opts = BuildOpts{ .optimize = optimize, .dependencies = deps.items, .options = options };
+    const test_opts = BuildOpts{
+        .target = target,
+        .optimize = optimize,
+        .dependencies = deps.items,
+        .options = options,
+    };
     addTest(b, "test", "Run all unit tests", "src/lib/test.zig", test_opts);
 
     // Add custom test executables
@@ -275,16 +293,14 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
     // Compile the executable
     const exe = b.addExecutable(.{
         .name = config.name,
-        .root_source_file = b.path(config.root_path),
         .version = config.version,
-        .optimize = opts.optimize,
-        .target = opts.target orelse b.graph.host,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path(config.root_path),
+            .optimize = opts.optimize,
+            .target = opts.target orelse b.graph.host,
+        }),
         .use_llvm = if (opts.use_llvm) true else opts.optimize != .Debug,
     });
-
-    // Add the executable to the default 'zig build' command
-    b.installArtifact(exe);
-    const install_step = b.addInstallArtifact(exe, .{});
 
     // Add dependencies
     if (opts.dependencies) |deps| {
@@ -297,18 +313,26 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
     // Add a build-only step
     const build_step = b.step(config.build_cmd, config.build_description);
     build_step.dependOn(&exe.step);
-    build_step.dependOn(&install_step.step);
 
-    // Configure how the main executable should be run
-    const run_exe = b.addRunArtifact(exe);
-    const exe_install = b.addInstallArtifact(exe, .{});
-    run_exe.step.dependOn(&exe_install.step);
-    if (b.args) |args| {
-        run_exe.addArgs(args);
+    // Create an installation step (nothing depends on it immediately)
+    const install_step = b.addInstallArtifact(exe, .{});
+
+    if (!opts.no_bin) {
+        // Add the executable to the default 'zig build' command
+        b.installArtifact(exe);
+
+        build_step.dependOn(&install_step.step);
+
+        // Configure how the main executable should be run
+        const run_exe = b.addRunArtifact(exe);
+        run_exe.step.dependOn(&install_step.step);
+        if (b.args) |args| {
+            run_exe.addArgs(args);
+        }
+
+        const step = b.step(config.run_cmd, config.run_description);
+        step.dependOn(&run_exe.step);
     }
-
-    const step = b.step(config.run_cmd, config.run_description);
-    step.dependOn(&run_exe.step);
 }
 
 /// Add a unit test step using the given file
@@ -320,12 +344,12 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
 /// @param[in] opts: Build target and optimization settings, along with any dependencies needed
 fn addTest(b: *std.Build, cmd: []const u8, description: []const u8, path: []const u8, opts: BuildOpts) void {
     const test_exe = b.addTest(.{
-        .root_source_file = b.path(path),
-        .optimize = opts.optimize,
-        .target = opts.target,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path(path),
+            .optimize = opts.optimize,
+            .target = opts.target,
+        }),
         .test_runner = .{ .path = b.path("tools/test_runner.zig"), .mode = .simple },
-        // CI doesn't seem to like this
-        //.use_llvm = false,
     });
 
     if (opts.dependencies) |deps| {
@@ -351,8 +375,8 @@ fn isWasm(target: std.Build.ResolvedTarget) bool {
     return false;
 }
 
-fn getDependencies(b: *std.Build, target: Target, optimize: OptimizeMode, ts_language_list: []const []const u8) !std.ArrayList(Dependency) {
-    var dependencies = std.ArrayList(Dependency).init(b.allocator);
+fn getDependencies(b: *std.Build, target: Target, optimize: OptimizeMode, ts_language_list: []const []const u8) !ArrayList(Dependency) {
+    var dependencies = ArrayList(Dependency).init(b.allocator);
 
     // Module for baked-in data and files
     const asset_mod = b.addModule("assets", .{

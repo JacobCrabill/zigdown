@@ -14,77 +14,58 @@ pub const Imports = struct {
     extern fn jsHtmlBufferFlush() void;
 };
 
-/// Provides console logging functionality in the browser
-pub const Console = struct {
-    pub const Logger = struct {
-        fn writeFn(bytes: []const u8) anyerror!usize {
-            Imports.jsConsoleLogWrite(bytes.ptr, bytes.len);
-            return bytes.len;
-        }
+fn drainLog(_: *std.Io.Writer, data: []const []const u8, splat: usize) !usize {
+    _ = splat;
 
-        /// Returns an AnyWriter suitable for use in the Zigdown render APIs
-        pub inline fn any(self: *const Logger) std.io.AnyWriter {
-            return .{
-                .context = self,
-                .writeFn = typeErasedWriteFn,
-            };
-        }
-
-        fn typeErasedWriteFn(_: *const anyopaque, bytes: []const u8) anyerror!usize {
-            return writeFn(bytes);
-        }
-    };
-    const logger = Logger{};
-
-    /// Write formatted data to the JS buffer
-    pub fn write(bytes: []const u8) void {
-        logger.any().write(bytes) catch return;
+    var count: usize = 0;
+    if (data.len == 0) return 0;
+    for (data) |bytes| {
+        Imports.jsConsoleLogWrite(bytes.ptr, bytes.len);
+        count += bytes.len;
     }
 
-    /// Write formatted data to the JS buffer
-    pub fn print(comptime format: []const u8, args: anytype) void {
-        logger.any().print(format, args) catch return;
-    }
+    return count;
+}
 
-    /// Flush the stream (tell JS to dump the buffer to the console)
-    pub fn flush() void {
-        Imports.jsConsoleLogFlush();
-    }
+fn flushLog(_: *std.Io.Writer) !void {
+    Imports.jsConsoleLogFlush();
+}
 
-    /// Write to the JS buffer and immediately flush the stream
-    pub fn log(comptime format: []const u8, args: anytype) void {
-        Console.print(format, args);
-        Console.flush();
-    }
+/// Writer to write to the console log
+pub var logger: std.Io.Writer = .{
+    .vtable = &.{
+        .drain = drainLog,
+        .flush = flushLog,
+    },
+    .buffer = &.{},
 };
 
-pub const Renderer = struct {
-    pub const Impl = struct {
-        fn writeFn(bytes: []const u8) anyerror!usize {
-            Imports.jsHtmlBufferWrite(bytes.ptr, bytes.len);
-            return bytes.len;
-        }
+pub fn log(comptime fmt: []const u8, args: anytype) void {
+    logger.print(fmt, args) catch {};
+}
 
-        /// Returns an AnyWriter suitable for use in the Zigdown render APIs
-        pub inline fn any(self: *const Impl) std.io.AnyWriter {
-            return .{
-                .context = self,
-                .writeFn = typeErasedWriteFn,
-            };
-        }
+fn drainHtml(_: *std.Io.Writer, data: []const []const u8, splat: usize) !usize {
+    _ = splat;
 
-        fn typeErasedWriteFn(_: *const anyopaque, bytes: []const u8) anyerror!usize {
-            return Impl.writeFn(bytes);
-        }
-    };
-    pub const writer = Impl{};
-
-    pub fn log(comptime format: []const u8, args: anytype) void {
-        writer.any().print(format, args) catch return;
-        Imports.jsHtmlBufferFlush();
+    var count: usize = 0;
+    if (data.len == 0) return 0;
+    for (data) |bytes| {
+        Imports.jsHtmlBufferWrite(bytes.ptr, bytes.len);
+        count += bytes.len;
     }
 
-    pub fn flush() void {
-        Imports.jsConsoleLogFlush();
-    }
+    return count;
+}
+
+fn flushHtml(_: *std.Io.Writer) !void {
+    Imports.jsConsoleLogFlush();
+}
+
+/// Writer to write rendered HTML output
+pub var writer: std.Io.Writer = .{
+    .vtable = &.{
+        .drain = drainHtml,
+        .flush = flushHtml,
+    },
+    .buffer = &.{},
 };

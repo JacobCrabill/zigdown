@@ -27,7 +27,7 @@ pub fn main() !void {
     var skip: usize = 0;
     var leak: usize = 0;
 
-    const printer = Printer.init();
+    var printer = Printer.init();
     printer.fmt("\r\x1b[0K", .{}); // beginning of line and clear to end of line
 
     for (builtin.test_functions, 0..) |t, idx| {
@@ -120,7 +120,7 @@ pub fn main() !void {
         printer.status(.fail, "{d} test{s} leaked\n", .{ leak, if (leak != 1) "s" else "" });
     }
     printer.fmt("\n", .{});
-    try slowest.display(printer);
+    try slowest.display(&printer);
     printer.fmt("\n", .{});
     std.posix.exit(if (fail == 0) 0 else 1);
 }
@@ -137,29 +137,34 @@ fn friendlyName(name: []const u8) []const u8 {
 }
 
 const Printer = struct {
-    out: std.fs.File.Writer,
+    buf: [1024 * 1024]u8 = undefined,
+    file_writer: std.fs.File.Writer = undefined,
+    writer: *std.Io.Writer = undefined,
 
     fn init() Printer {
-        return .{
-            .out = std.io.getStdErr().writer(),
-        };
+        var p: Printer = .{};
+        p.file_writer = std.fs.File.stderr().writer(&p.buf);
+        p.writer = &p.file_writer.interface;
+        return p;
     }
 
-    fn fmt(self: Printer, comptime format: []const u8, args: anytype) void {
-        std.fmt.format(self.out, format, args) catch unreachable;
+    fn fmt(self: *Printer, comptime format: []const u8, args: anytype) void {
+        self.writer.print(format, args) catch unreachable;
+        self.writer.flush() catch unreachable;
     }
 
-    fn status(self: Printer, s: Status, comptime format: []const u8, args: anytype) void {
+    fn status(self: *Printer, s: Status, comptime format: []const u8, args: anytype) void {
         const color = switch (s) {
             .pass => "\x1b[32m",
             .fail => "\x1b[31m",
             .skip => "\x1b[33m",
             else => "",
         };
-        const out = self.out;
-        out.writeAll(color) catch @panic("writeAll failed?!");
-        std.fmt.format(out, format, args) catch @panic("std.fmt.format failed?!");
-        self.fmt("\x1b[0m", .{});
+        self.writer.writeAll(color) catch @panic("writeAll failed?!");
+        self.writer.print(format, args) catch @panic("std.fmt.format failed?!");
+        self.writer.flush() catch unreachable;
+        self.writer.writeAll("\x1b[0m") catch @panic("write failed?!");
+        self.writer.flush() catch unreachable;
     }
 };
 
@@ -229,7 +234,7 @@ const SlowTracker = struct {
         return ns;
     }
 
-    fn display(self: *SlowTracker, printer: Printer) !void {
+    fn display(self: *SlowTracker, printer: *Printer) !void {
         var slowest = self.slowest;
         const count = slowest.count();
         printer.fmt("Slowest {d} test{s}: \n", .{ count, if (count != 1) "s" else "" });

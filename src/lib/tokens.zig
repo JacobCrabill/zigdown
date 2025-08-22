@@ -2,7 +2,7 @@
 /// Defines all possible Markdown tokens used by Zigdown.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const ArrayList = std.ArrayList;
+const ArrayList = std.array_list.Managed;
 
 const utils = @import("utils.zig");
 const debug = @import("debug.zig");
@@ -128,7 +128,7 @@ pub const WordTokenizer = struct {
     pub fn peek(text: []const u8) ?Token {
         var end = text.len; // TODO: Should be '0'?
         for (text, 0..) |c, i| {
-            if (!std.ascii.isASCII(c) or std.ascii.isWhitespace(c) or utils.isPunctuation(c)) {
+            if (!std.ascii.isAscii(c) or std.ascii.isWhitespace(c) or utils.isPunctuation(c)) {
                 end = i;
                 break;
             }

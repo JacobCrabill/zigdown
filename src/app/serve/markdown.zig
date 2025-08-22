@@ -4,6 +4,7 @@ const zd = @import("zigdown");
 const html = @import("assets").html;
 
 const Allocator = std.mem.Allocator;
+const ArrayList = std.array_list.Managed;
 
 pub const Self = @This();
 
@@ -89,11 +90,10 @@ fn renderMarkdownImpl(path: []const u8) ?[]const u8 {
     };
 
     // Create the output buffe catch returnr
-    var buf = std.ArrayList(u8).init(alloc);
-    defer buf.deinit();
+    var alloc_writer = std.Io.Writer.Allocating.init(alloc);
 
     // Render slide
-    var h_renderer = zd.HtmlRenderer.init(buf.writer().any(), alloc);
+    var h_renderer = zd.HtmlRenderer.init(&alloc_writer.writer, alloc);
     defer h_renderer.deinit();
     h_renderer.css = css;
 
@@ -102,5 +102,5 @@ fn renderMarkdownImpl(path: []const u8) ?[]const u8 {
         return null;
     };
 
-    return buf.toOwnedSlice() catch return null;
+    return alloc_writer.toOwnedSlice() catch return null;
 }

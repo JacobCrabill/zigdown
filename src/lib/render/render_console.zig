@@ -22,8 +22,8 @@ const errorReturn = debug.errorReturn;
 const errorMsg = debug.errorMsg;
 
 const Allocator = std.mem.Allocator;
-const ArrayList = std.ArrayList;
-const AnyWriter = std.io.AnyWriter;
+const ArrayList = std.array_list.Managed;
+const Writer = *std.io.Writer;
 
 const Block = blocks.Block;
 const Container = blocks.Container;
@@ -56,13 +56,13 @@ const TreezError = error{
     InvalidLanguage,
 };
 
-const RenderError = Renderer.RenderError || TreezError;
+const RenderError = std.fs.File.WriteError || Renderer.RenderError || TreezError;
 
 /// Render a Markdown document to the console using ANSI escape characters
 pub const ConsoleRenderer = struct {
     const Self = @This();
     pub const RenderOpts = struct {
-        out_stream: AnyWriter,
+        out_stream: Writer,
         width: usize = 90, // Column at which to wrap all text
         indent: usize = 2, // Left indent for the entire document
         max_image_rows: usize = 30,
@@ -72,9 +72,8 @@ pub const ConsoleRenderer = struct {
         rendering_to_buffer: bool = false, // Whether we're rendering to a buffer or to the final output
         termsize: gfx.TermSize = .{},
     };
-    stream: AnyWriter,
-    prerender: ArrayList(u8) = undefined,
-    prerender_stream: ArrayList(u8).Writer = undefined,
+    stream: Writer,
+    prerender: std.Io.Writer.Allocating = undefined,
     column: usize = 0,
     alloc: std.mem.Allocator,
     leader_stack: ArrayList(Text),
@@ -93,7 +92,7 @@ pub const ConsoleRenderer = struct {
             .alloc = alloc,
             .leader_stack = ArrayList(Text).init(alloc),
             .opts = opts,
-            .prerender = ArrayList(u8).initCapacity(alloc, 1024) catch @panic("OOM"),
+            .prerender = std.Io.Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
         };
     }
 
@@ -219,15 +218,15 @@ pub const ConsoleRenderer = struct {
 
     /// Write an array of bytes to the underlying writer, and update the current column
     fn write(self: *Self, bytes: []const u8) void {
-        self.prerender_stream.writeAll(bytes) catch |err| {
+        self.prerender.writer.writeAll(bytes) catch |err| {
             errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
         };
         self.column += std.unicode.utf8CountCodepoints(bytes) catch bytes.len;
     }
 
     /// Write an array of bytes to the underlying writer, without updating the current column
-    fn writeno(self: Self, bytes: []const u8) void {
-        self.prerender_stream.writeAll(bytes) catch |err| {
+    fn writeno(self: *Self, bytes: []const u8) void {
+        self.prerender.writer.writeAll(bytes) catch |err| {
             errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
         };
     }
@@ -244,7 +243,7 @@ pub const ConsoleRenderer = struct {
 
     /// Print the format and args to the output stream, without updating the current column
     fn printno(self: *Self, comptime fmt: []const u8, args: anytype) void {
-        self.prerender_stream.print(fmt, args) catch |err| {
+        self.prerender.writer.print(fmt, args) catch |err| {
             errorMsg(@src(), "Unable to print! {s}\n", .{@errorName(err)});
         };
     }
@@ -264,7 +263,7 @@ pub const ConsoleRenderer = struct {
             self.printno(cons.move_left, .{1000});
             self.writeno(cons.clear_line);
         }
-        self.stream.writeAll(self.prerender.items) catch unreachable;
+        self.stream.writeAll(self.prerender.written()) catch unreachable;
         self.prerender.clearRetainingCapacity();
         self.column = 0;
     }
@@ -423,10 +422,10 @@ pub const ConsoleRenderer = struct {
     }
 
     /// Render a generic Block (may be a Container or a Leaf)
-    pub fn renderBlock(self: *Self, block: Block) RenderError!void {
+    pub fn renderBlock(self: *Self, block: Block) anyerror!void { //RenderError!void {
         if (self.root == null) {
             self.root = block;
-            self.prerender_stream = self.prerender.writer();
+            self.prerender = std.Io.Writer.Allocating.init(self.alloc);
         }
         switch (block) {
             .Container => |c| try self.renderContainer(c),
@@ -636,10 +635,9 @@ pub const ConsoleRenderer = struct {
 
         for (table.children.items) |item| {
             // Render the table cell into a new buffer
-            var buf_writer = ArrayList(u8).init(self.alloc);
-            const stream = buf_writer.writer().any();
+            var alloc_writer = std.Io.Writer.Allocating.init(alloc);
             const sub_opts = RenderOpts{
-                .out_stream = stream,
+                .out_stream = &alloc_writer.writer,
                 .width = col_w - 1,
                 .indent = 1,
                 .max_image_rows = self.opts.max_image_rows,
@@ -653,7 +651,7 @@ pub const ConsoleRenderer = struct {
             try sub_renderer.renderBlock(item);
             sub_renderer.renderEnd();
 
-            try cells.append(.{ .text = buf_writer.items });
+            try cells.append(.{ .text = alloc_writer.writer.buffered() });
         }
 
         // Demultiplex the rendered text for every cell into
@@ -968,11 +966,10 @@ pub const ConsoleRenderer = struct {
 
         // Render the table cell into a new buffer
         const width: usize = self.opts.width - 2 * self.opts.indent - 2;
-        var buf_writer = ArrayList(u8).init(alloc);
-        const stream = buf_writer.writer().any();
+        var alloc_writer = std.Io.Writer.Allocating.init(alloc);
 
         const sub_opts = RenderOpts{
-            .out_stream = stream,
+            .out_stream = &alloc_writer.writer,
             .width = width,
             .indent = 1,
             .max_image_rows = self.opts.max_image_rows,
@@ -987,7 +984,7 @@ pub const ConsoleRenderer = struct {
         sub_renderer.renderEnd();
 
         // Get the rendered output
-        const source = buf_writer.items;
+        const source = alloc_writer.writer.buffered();
 
         const icon = theme.directiveToIcon(alert);
         const style: TextStyle = .{ .fg_color = theme.directiveToColor(alert), .bold = true };
@@ -1059,11 +1056,10 @@ pub const ConsoleRenderer = struct {
 
         // Render the table cell into a new buffer
         const width: usize = self.opts.width - 2 * self.opts.indent - 2;
-        var buf_writer = ArrayList(u8).init(alloc);
-        const stream = buf_writer.writer().any();
+        var alloc_writer = std.Io.Writer.Allocating.init(alloc);
 
         const sub_opts = RenderOpts{
-            .out_stream = stream,
+            .out_stream = &alloc_writer.writer,
             .width = width,
             .indent = 1,
             .max_image_rows = self.opts.max_image_rows,
@@ -1078,7 +1074,7 @@ pub const ConsoleRenderer = struct {
         sub_renderer.renderEnd();
 
         // Get the rendered output
-        const source = buf_writer.items;
+        const source = alloc_writer.writer.buffered();
 
         const icon = theme.directiveToIcon(directive);
         const style: TextStyle = .{ .fg_color = theme.directiveToColor(directive), .bold = true };
@@ -1217,15 +1213,15 @@ pub const ConsoleRenderer = struct {
             img_bytes = try img.readToEndAlloc(self.alloc, 1e9);
         } else blk: {
             // Assume the image src is a remote file to be downloaded
-            var buffer = ArrayList(u8).init(self.alloc);
-            defer buffer.deinit();
+            var writer = std.Io.Writer.Allocating.init(self.alloc);
+            defer writer.deinit();
 
-            utils.fetchFile(self.alloc, image.src, &buffer) catch |err| {
+            utils.fetchFile(self.alloc, image.src, &writer.writer) catch |err| {
                 debug.print("Error fetching '{s}': {any}\n", .{ image.src, err });
                 break :blk;
             };
 
-            img_bytes = try buffer.toOwnedSlice();
+            img_bytes = try writer.toOwnedSlice();
         }
 
         if (img_bytes) |bytes| {
@@ -1285,7 +1281,7 @@ pub const ConsoleRenderer = struct {
         // Center the image by setting the cursor appropriately
         self.writeNTimes(" ", (self.opts.width - width) / 2);
 
-        gfx.sendImagePNG(self.prerender_stream, self.alloc, bytes, width, height) catch |err| {
+        gfx.sendImagePNG(&self.prerender.writer, self.alloc, bytes, width, height) catch |err| {
             debug.print("Error rendering PNG image: {any}\n", .{err});
         };
         self.renderBreak();
@@ -1334,7 +1330,7 @@ pub const ConsoleRenderer = struct {
         self.writeNTimes(" ", (self.opts.width - width) / 2);
 
         if (img.nchan == 3) {
-            gfx.sendImageRGB2(self.prerender_stream, self.alloc, &img, width, height) catch |err2| {
+            gfx.sendImageRGB2(&self.prerender.writer, self.alloc, &img, width, height) catch |err2| {
                 debug.print("Error rendering RGB image: {any}\n", .{err2});
             };
         } else {

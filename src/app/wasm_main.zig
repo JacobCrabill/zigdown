@@ -3,13 +3,9 @@ const zd = @import("zigdown");
 const stdlib = @import("wasm/stdlib.zig");
 const wasm = zd.wasm;
 
-const ArrayList = std.ArrayList;
-
 const alloc = std.heap.wasm_allocator;
 
 const Imports = wasm.Imports;
-const Console = wasm.Console;
-const Renderer = wasm.Renderer;
 
 export fn allocUint8(n: usize) [*]u8 {
     const slice = alloc.alloc(u8, n) catch @panic("Unable to allocate memory!");
@@ -24,20 +20,19 @@ export fn renderToHtml(md_ptr: [*:0]u8) void {
         .copy_input = false,
         .verbose = false,
     };
-    Console.log("Parsing: {s}\n", .{md_text});
+    wasm.log("Parsing: {s}\n", .{md_text});
     var parser = zd.Parser.init(alloc, opts);
     defer parser.deinit();
     parser.parseMarkdown(md_text) catch |err| {
-        Console.log("[parse] Caught Zig error: {any}\n", .{err});
+        wasm.log("[parse] Caught Zig error: {any}\n", .{err});
     };
 
-    Console.log("Rendering...\n", .{});
+    wasm.log("Rendering...\n", .{});
 
-    var h_renderer = zd.HtmlRenderer.init(Renderer.writer.any(), alloc);
+    var h_renderer = zd.HtmlRenderer.init(&wasm.writer, alloc);
     defer h_renderer.deinit();
     h_renderer.renderBlock(parser.document) catch |err| {
-        Console.log("[render] Caught Zig error: {any}\n", .{err});
+        wasm.log("[render] Caught Zig error: {any}\n", .{err});
     };
-    Renderer.log("", .{});
-    Console.log("Rendered!\n", .{});
+    wasm.log("Rendered!\n", .{});
 }

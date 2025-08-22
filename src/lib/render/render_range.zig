@@ -22,8 +22,8 @@ const errorReturn = debug.errorReturn;
 const errorMsg = debug.errorMsg;
 
 const Allocator = std.mem.Allocator;
-const ArrayList = std.ArrayList;
-const AnyWriter = std.io.AnyWriter;
+const ArrayList = std.array_list.Managed;
+const Writer = *std.io.Writer;
 
 const Block = blocks.Block;
 const Container = blocks.Container;
@@ -63,7 +63,7 @@ const RenderError = Renderer.RenderError || TreezError;
 pub const RangeRenderer = struct {
     const Self = @This();
     pub const RenderOpts = struct {
-        out_stream: AnyWriter,
+        out_stream: Writer,
         width: usize = 90, // Column at which to wrap all text
         indent: usize = 2, // Left indent for the entire document
         max_image_rows: usize = 30,
@@ -78,7 +78,7 @@ pub const RangeRenderer = struct {
         end: usize = 0,
         style: TextStyle = undefined,
     };
-    stream: AnyWriter,
+    stream: Writer,
     prerender: ArrayList(u8) = undefined,
     prerender_stream: ArrayList(u8).Writer = undefined,
     alloc: std.mem.Allocator,
@@ -655,10 +655,9 @@ pub const RangeRenderer = struct {
 
         for (table.children.items) |item| {
             // Render the table cell into a new buffer
-            var buf_writer = ArrayList(u8).init(self.alloc);
-            const stream = buf_writer.writer().any();
+            var alloc_writer = std.Io.Writer.Allocating.init(alloc);
             const sub_opts = RenderOpts{
-                .out_stream = stream,
+                .out_stream = &alloc_writer.writer,
                 .width = col_w - 1,
                 .indent = 1,
                 .max_image_rows = self.opts.max_image_rows,
@@ -672,7 +671,7 @@ pub const RangeRenderer = struct {
             sub_renderer.renderEnd();
 
             try cells.append(.{
-                .text = buf_writer.items,
+                .text = alloc_writer.writer.buffered(),
                 .style_ranges = sub_renderer.style_ranges,
             });
         }
@@ -965,11 +964,10 @@ pub const RangeRenderer = struct {
 
         // Render the table cell into a new buffer
         const width: usize = self.opts.width - 2 * self.opts.indent - 2;
-        var buf_writer = ArrayList(u8).init(alloc);
-        const stream = buf_writer.writer().any();
+        var alloc_writer = std.Io.Writer.Allocating.init(alloc);
 
         const sub_opts = RenderOpts{
-            .out_stream = stream,
+            .out_stream = &alloc_writer.writer,
             .width = width,
             .indent = 1,
             .max_image_rows = self.opts.max_image_rows,
@@ -983,7 +981,7 @@ pub const RangeRenderer = struct {
         sub_renderer.renderEnd();
 
         // Get the rendered output
-        const source = buf_writer.items;
+        const source = alloc_writer.writer.buffered();
         const ranges = sub_renderer.style_ranges;
 
         const icon = theme.directiveToIcon(alert);
@@ -1071,11 +1069,10 @@ pub const RangeRenderer = struct {
 
         // Render the table cell into a new buffer
         const width: usize = self.opts.width - 2 * self.opts.indent - 2;
-        var buf_writer = ArrayList(u8).init(alloc);
-        const stream = buf_writer.writer().any();
 
+        var alloc_writer = std.Io.Writer.Allocating.init(alloc);
         const sub_opts = RenderOpts{
-            .out_stream = stream,
+            .out_stream = &alloc_writer.writer,
             .width = width,
             .indent = 1,
             .max_image_rows = self.opts.max_image_rows,
@@ -1089,7 +1086,7 @@ pub const RangeRenderer = struct {
         sub_renderer.renderEnd();
 
         // Get the rendered output
-        const source = buf_writer.items;
+        const source = alloc_writer.writer.buffered();
         const ranges = sub_renderer.style_ranges;
 
         const icon = theme.directiveToIcon(directive);
@@ -1367,7 +1364,7 @@ pub const RangeRenderer = struct {
 // Tests
 //////////////////////////////////////////////////////////
 
-fn testRender(alloc: Allocator, input: []const u8, out_stream: std.io.AnyWriter, width: usize) !void {
+fn testRender(alloc: Allocator, input: []const u8, out_stream: *std.io.Writer, width: usize) !void {
     var p = @import("../parser.zig").Parser.init(alloc, .{});
     try p.parseMarkdown(input);
     var r = RangeRenderer.init(alloc, .{ .out_stream = out_stream, .width = width });
@@ -1397,9 +1394,9 @@ test "RangeRenderer" {
     for (test_data) |data| {
         var arena = std.heap.ArenaAllocator.init(alloc);
         defer arena.deinit();
-        var buf_array = ArrayList(u8).init(arena.allocator());
+        var alloc_writer = std.Io.Writer.Allocating.init(arena.allocator());
 
-        try testRender(arena.allocator(), data.input, buf_array.writer().any(), data.width);
-        try std.testing.expectEqualSlices(u8, data.output, buf_array.items);
+        try testRender(arena.allocator(), data.input, &alloc_writer.writer, data.width);
+        try std.testing.expectEqualSlices(u8, data.output, alloc_writer.writer.buffered());
     }
 }

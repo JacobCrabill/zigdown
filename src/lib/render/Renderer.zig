@@ -18,10 +18,10 @@ pub const VTable = struct {
     deinit: *const fn (*anyopaque) void,
 };
 
-pub const RenderError = SystemError || AnyWriter.Error || Block.Error;
+pub const RenderError = SystemError || Writer.Error || Block.Error;
 
 const Block = blocks.Block;
-const AnyWriter = std.io.AnyWriter;
+const Writer = std.io.Writer;
 
 const SystemError = error{
     OutOfMemory,

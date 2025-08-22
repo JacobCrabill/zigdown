@@ -10,7 +10,7 @@ const theme = @import("theme.zig");
 const utils = @import("utils.zig");
 const wasm = @import("wasm.zig");
 
-const ArrayList = std.ArrayList;
+const ArrayList = std.array_list.Managed;
 const Allocator = std.mem.Allocator;
 
 pub const Range = struct {

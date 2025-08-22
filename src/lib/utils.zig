@@ -10,7 +10,7 @@ const inls = @import("ast/inlines.zig");
 const debug = @import("debug.zig");
 
 const Allocator = std.mem.Allocator;
-const ArrayList = std.ArrayList;
+const ArrayList = std.array_list.Managed;
 
 const Block = blocks.Block;
 
@@ -202,7 +202,7 @@ pub fn headingToUri(alloc: Allocator, htext: []const u8) ![]const u8 {
         .query = null,
         .fragment = null,
     };
-    const uri_s = try std.fmt.allocPrint(alloc, "#{/#}", .{uri});
+    const uri_s = try std.fmt.allocPrint(alloc, "#{f}", .{uri});
     return uri_s;
 }
 
@@ -330,24 +330,31 @@ pub fn readFile(alloc: Allocator, file_path: []const u8) ![]u8 {
 
 /// Fetch a remote file from an HTTP server at the given URL.
 /// Caller owns the returned memory.
-pub fn fetchFile(alloc: Allocator, url_s: []const u8, storage: *std.ArrayList(u8)) !void {
+pub fn fetchFile(alloc: Allocator, url_s: []const u8, writer: *std.Io.Writer) !void {
     var client = std.http.Client{ .allocator = alloc };
     defer client.deinit();
 
+    // TODO: What's the difference in use case between 'fetch' and 'request'?
+    // The 'request' code was copied from: https://ziglang.org/download/0.15.1/release-notes.html#HTTP-Client-and-Server
     // Perform a one-off request and wait for the response.
     // Returns an http.Status.
     const status = client.fetch(.{
         .location = .{ .url = url_s },
         .method = .GET,
         .headers = .{ .authorization = .omit },
-        .response_storage = .{ .dynamic = storage },
+        .response_writer = writer,
     }) catch |err| {
         std.debug.print("Error fetching {s}: {any}\n", .{ url_s, err });
         return err;
     };
 
-    if (status.status != .ok or storage.items.len == 0) {
+    if (status.status != .ok) {
         std.debug.print("Error fetching {s} (!ok)\n", .{url_s});
+        return error.NoReply;
+    }
+
+    if (writer.buffered().len == 0) {
+        std.debug.print("Error fetching {s} (no bytes returned)\n", .{url_s});
         return error.NoReply;
     }
 }
@@ -355,9 +362,9 @@ pub fn fetchFile(alloc: Allocator, url_s: []const u8, storage: *std.ArrayList(u8
 test "fetchFile" {
     if (!config.extra_tests) return error.SkipZigTest;
     const url = "https://picsum.photos/id/237/200/300";
-    var buffer = ArrayList(u8).init(std.testing.allocator);
+    var buffer = std.Io.Writer.Allocating.init(std.testing.allocator);
     defer buffer.deinit();
-    fetchFile(std.testing.allocator, url, &buffer) catch return error.SkipZigTest;
+    fetchFile(std.testing.allocator, url, &buffer.writer) catch return error.SkipZigTest;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -410,9 +417,10 @@ test "Table Of Contents" {
     toc.close();
     defer toc.deinit();
 
-    var buf = ArrayList(u8).init(alloc);
-    defer buf.deinit();
-    debug.setStream(buf.writer().any());
+    var writer = std.Io.Writer.Allocating.init(alloc);
+    defer writer.deinit();
+
+    debug.setStream(&writer.writer);
     toc.print(1);
 
     const expected =
@@ -449,5 +457,5 @@ test "Table Of Contents" {
         \\│ │ │ │ │ │ Text: 'Heading 1-2' [line: 0, col: 0]
         \\
     ;
-    try std.testing.expectEqualStrings(expected, buf.items);
+    try std.testing.expectEqualStrings(expected, writer.written());
 }

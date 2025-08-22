@@ -7,6 +7,7 @@ const debug = @import("debug.zig");
 const toks = @import("tokens.zig");
 const utils = @import("utils.zig");
 
+const ArrayList = std.array_list.Managed;
 const Allocator = std.mem.Allocator;
 const GPA = std.heap.GeneralPurposeAllocator;
 
@@ -28,10 +29,10 @@ pub const Lexer = struct {
     }
 
     /// Tokenize the given input text
-    pub fn tokenize(self: *Lexer, alloc: Allocator, text: []const u8) !std.ArrayList(Token) {
+    pub fn tokenize(self: *Lexer, alloc: Allocator, text: []const u8) !ArrayList(Token) {
         self.setText(text);
 
-        var tokens = std.ArrayList(Token).init(alloc);
+        var tokens = ArrayList(Token).init(alloc);
         var token = self.next();
         try tokens.append(token);
         while (token.kind != .EOF) {

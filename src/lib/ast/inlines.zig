@@ -4,7 +4,7 @@ const theme = @import("../theme.zig");
 const debug = @import("../debug.zig");
 const tokens = @import("../tokens.zig");
 
-const ArrayList = std.ArrayList;
+const ArrayList = std.array_list.Managed;
 const Allocator = std.mem.Allocator;
 
 const TextStyle = theme.TextStyle;

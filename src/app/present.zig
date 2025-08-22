@@ -3,7 +3,7 @@ const zd = @import("zigdown");
 const RawTTY = @import("RawTTY.zig");
 
 const Allocator = std.mem.Allocator;
-const ArrayList = std.ArrayList;
+const ArrayList = std.array_list.Managed;
 const Dir = std.fs.Dir;
 const File = std.fs.File;
 
@@ -25,7 +25,7 @@ pub const Source = struct {
 /// alloc:   The allocator to use for all file reading, parsing, and rendering
 /// source:  Struct specifying the location of the slides (.md files) to render
 /// recurse: If true, all *.md files in all child directories of {dir}/{dirname} will be used
-pub fn present(alloc: Allocator, writer: std.io.AnyWriter, source: Source, recurse: bool) !void {
+pub fn present(alloc: Allocator, writer: *std.io.Writer, source: Source, recurse: bool) !void {
     // Store all of the Markdown file paths, in iterator order
     var slides = ArrayList([]const u8).init(alloc);
     defer {
@@ -49,7 +49,7 @@ pub fn present(alloc: Allocator, writer: std.io.AnyWriter, source: Source, recur
         return error.NoSlidesFound;
     }
 
-    const raw_tty = try RawTTY.init();
+    const raw_tty = try RawTTY.init(writer);
     defer raw_tty.deinit();
 
     // Begin the presentation, using stdin to go forward/backward
@@ -116,7 +116,7 @@ pub fn present(alloc: Allocator, writer: std.io.AnyWriter, source: Source, recur
 /// The given directory is used as the 'root_dir' option for the renderer -
 /// this is used to determine the path to relative includes such as images
 /// and links
-fn renderFile(alloc: Allocator, writer: anytype, dir: []const u8, file: File, slide_no: usize, n_slides: usize) !void {
+fn renderFile(alloc: Allocator, writer: *std.io.Writer, dir: []const u8, file: File, slide_no: usize, n_slides: usize) !void {
     var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
 
@@ -147,7 +147,7 @@ fn renderFile(alloc: Allocator, writer: anytype, dir: []const u8, file: File, sl
         .root_dir = dir,
         .indent = 2,
         .width = columns - 2,
-        .out_stream = std.io.getStdOut().writer().any(),
+        .out_stream = writer,
         .max_image_cols = columns - 4,
         .termsize = tsize,
     };
@@ -158,6 +158,7 @@ fn renderFile(alloc: Allocator, writer: anytype, dir: []const u8, file: File, sl
     // Display slide number
     try writer.print(cons.set_row_col, .{ tsize.rows - 1, tsize.cols - 8 });
     try writer.print("{d}/{d}", .{ slide_no, n_slides });
+    try writer.flush();
 }
 
 /// Load all *.md files in the given directory; append their absolute paths to the 'slides' array
@@ -175,7 +176,7 @@ fn loadSlidesFromDirectory(alloc: Allocator, dir: Dir, recurse: bool, slides: *A
                     return err;
                 };
                 if (std.mem.eql(u8, ".md", std.fs.path.extension(realpath))) {
-                    std.debug.print("Adding slide: {s}\n", .{realpath});
+                    // std.debug.print("Adding slide: {s}\n", .{realpath});
                     const slide: []const u8 = try alloc.dupe(u8, realpath);
                     try slides.append(slide);
                 }

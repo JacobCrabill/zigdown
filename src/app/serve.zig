@@ -5,7 +5,7 @@ const md = @import("serve/markdown.zig");
 const html = @import("assets").html;
 
 const Allocator = std.mem.Allocator;
-const ArrayList = std.ArrayList;
+const ArrayList = std.array_list.Managed;
 const Dir = std.fs.Dir;
 
 const MimeMap = std.StringHashMap([]const u8);
@@ -43,7 +43,7 @@ const Context = struct {
     }
 };
 
-pub fn serve(alloc: std.mem.Allocator, config: ServeOpts) !void {
+pub fn serve(alloc: Allocator, config: ServeOpts) !void {
     var context = try Context.init(alloc);
     defer context.deinit();
     context.dir = std.fs.cwd();
@@ -106,8 +106,14 @@ fn accept(
     defer connection.stream.close();
 
     var read_buffer: [8000]u8 = undefined;
-    var server = std.http.Server.init(connection, &read_buffer);
-    while (server.state == .ready) {
+    var write_buffer: [8000]u8 = undefined;
+    //var br: std.io.Reader = .fixed(&read_buffer);
+    var net_reader = connection.stream.reader(&read_buffer);
+    var net_writer = connection.stream.writer(&write_buffer);
+    const reader: *std.Io.Reader = net_reader.interface();
+    const writer: *std.Io.Writer = &net_writer.interface;
+    var server = std.http.Server.init(reader, writer);
+    while (server.reader.state == .ready) {
         var request = server.receiveHead() catch |err| switch (err) {
             error.HttpConnectionClosing => return,
             else => {

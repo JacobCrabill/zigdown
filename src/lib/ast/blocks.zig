@@ -9,7 +9,7 @@ const leaves = @import("leaves.zig");
 const containers = @import("containers.zig");
 
 const Allocator = std.mem.Allocator;
-const ArrayList = std.ArrayList;
+const ArrayList = std.array_list.Managed;
 
 const Lexer = lexer.Lexer;
 const TokenType = toks.TokenType;
@@ -431,9 +431,10 @@ test "Print basic AST" {
     var root = try createTestAst(alloc);
     defer root.deinit();
 
-    var buf = std.ArrayList(u8).init(alloc);
-    defer buf.deinit();
-    debug.setStream(buf.writer().any());
+    var alloc_writer = std.Io.Writer.Allocating.init(alloc);
+    defer alloc_writer.deinit();
+
+    debug.setStream(&alloc_writer.writer);
 
     debug.print("Print basic AST result:\n", .{});
     root.print(1);
@@ -460,5 +461,5 @@ test "Print basic AST" {
         \\│ │ │ │ │ Text: 'World' [line: 0, col: 0]
         \\
     ;
-    try std.testing.expectEqualStrings(expected, buf.items);
+    try std.testing.expectEqualStrings(expected, alloc_writer.writer.buffered());
 }

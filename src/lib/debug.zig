@@ -8,32 +8,41 @@ const Token = @import("tokens.zig").Token;
 
 /// Global debug stream instance.
 /// Intended to be set once from main() via setStream().
-var stream: ?std.io.AnyWriter = null;
+var stream: ?*std.io.Writer = null;
+var file_stream: std.fs.File.Writer = undefined;
+var write_buf: [1024]u8 = undefined;
 
 /// Set the global debug output stream.
 ///
 /// This can be, for example, a buffered writer for use in tests.
-pub fn setStream(out_stream: std.io.AnyWriter) void {
+pub fn setStream(out_stream: *std.io.Writer) void {
     stream = out_stream;
 }
 
 /// Get the global debug output stream.
 ///
 /// This should be used by all debug printing, e.g. from Block types.
-pub fn getStream() std.io.AnyWriter {
-    if (stream == null) {
+pub fn getStream() *std.io.Writer {
+    if (stream) |s| {
+        return s;
+    } else {
         @branchHint(.cold);
         if (!wasm.is_wasm) {
-            stream = std.io.getStdErr().writer().any();
+            file_stream = std.fs.File.stderr().writer(&write_buf);
+            stream = &file_stream.interface;
+            return stream.?;
         } else {
             @panic("Unable to debug.print in WASM!");
         }
     }
-    return stream.?;
 }
 
 pub fn print(comptime fmt: []const u8, args: anytype) void {
     getStream().print(fmt, args) catch @panic("Unable to write to debug stream!");
+}
+
+pub fn flush() void {
+    getStream().flush() catch @panic("Can't flush debug stream!");
 }
 
 pub fn errorReturn(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) !void {
@@ -71,7 +80,7 @@ pub const Logger = struct {
     pub fn raw(self: Self, comptime fmt: []const u8, args: anytype) void {
         if (self.enabled) {
             if (wasm.is_wasm) {
-                wasm.Console.log(fmt, args);
+                wasm.logger.print(fmt, args) catch {};
             } else {
                 print(fmt, args);
             }

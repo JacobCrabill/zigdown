@@ -2,7 +2,6 @@ const std = @import("std");
 const zd = @import("zigdown");
 const flags = @import("flags");
 
-const ArrayList = std.ArrayList;
 const File = std.fs.File;
 const os = std.os;
 
@@ -25,6 +24,10 @@ fn printHelpAndExit(command: []const u8, err: anyerror) noreturn {
 }
 
 /// Command-line flags common to all render-type commands
+/// TODO: Split by renderer to enable renderer-specific options.
+/// Console: allow disabling of web image fetch
+/// HTML: Allow setting CSS like for Serve
+/// Format: --inplace
 pub const RenderCmdOpts = struct {
     stdin: bool = false,
     width: ?usize = null,
@@ -162,7 +165,10 @@ pub fn main() !void {
         // Windows needs special handling for UTF-8
         _ = std.os.windows.kernel32.SetConsoleOutputCP(65001);
     }
-    zd.debug.setStream(std.io.getStdErr().writer().any());
+    var buf: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&buf);
+    const stdout: *std.io.Writer = &stdout_writer.interface;
+    zd.debug.setStream(stdout);
 
     var gpa = std.heap.GeneralPurposeAllocator(.{
         .never_unmap = true,
@@ -268,7 +274,14 @@ fn handleRender(
     method: zd.render.RenderMethod,
     r_opts: RenderCmdOpts,
 ) !void {
-    const stdout = std.io.getStdOut().writer().any();
+    var write_buf: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&write_buf);
+    const stdout: *std.io.Writer = &stdout_writer.interface;
+
+    var read_buf: [1024]u8 = undefined;
+    var stdin_reader = std.fs.File.stdin().reader(&read_buf);
+    const stdin: *std.io.Reader = &stdin_reader.interface;
+
     const filename: ?[]const u8 = r_opts.positional.file;
 
     // Read the Markdown document to be rendered
@@ -279,8 +292,7 @@ fn handleRender(
     var realpath: ?[]const u8 = null;
     if (r_opts.stdin) {
         // Read document from stdin
-        const stdin = std.io.getStdIn().reader();
-        md_text = try stdin.readAllAlloc(alloc, 1e9);
+        md_text = try stdin.readAlloc(alloc, 1e9);
     } else {
         if (filename == null) {
             printHelpAndExit(@tagName(method), error.NoFilenameProvided);
@@ -299,7 +311,9 @@ fn handleRender(
     defer parsed.parser.deinit();
 
     // Get the output stream
-    var out_stream: std.io.AnyWriter = undefined;
+    var out_buf: [1024]u8 = undefined;
+    var out_stream: *std.io.Writer = undefined;
+    var file_writer: std.fs.File.Writer = undefined;
     var outfile: ?File = null;
     defer if (outfile) |f| f.close();
 
@@ -310,14 +324,16 @@ fn handleRender(
                 return error.InvalidArgument;
             }
             outfile = try std.fs.cwd().createFile(realpath.?, .{ .truncate = true });
-            out_stream = outfile.?.writer().any();
+            file_writer = outfile.?.writer(&out_buf);
+            out_stream = &file_writer.interface;
         } else {
             out_stream = stdout;
         }
     } else {
         if (r_opts.output) |f| {
             outfile = try std.fs.cwd().createFile(f, .{ .truncate = true });
-            out_stream = outfile.?.writer().any();
+            file_writer = outfile.?.writer(&out_buf);
+            out_stream = &file_writer.interface;
         } else {
             out_stream = stdout;
         }
@@ -338,6 +354,7 @@ fn handleRender(
     if (r_opts.timeit) {
         cons.printColor(stdout, .Green, "  Parsed in:   {d:.3} ms\n", .{parsed.time_s * 1000});
         cons.printColor(stdout, .Green, "  Rendered in: {d:.3} ms\n", .{rtime_s * 1000});
+        stdout.flush() catch {};
     }
 }
 
@@ -377,7 +394,9 @@ pub fn handlePresent(
     };
 
     const recurse: bool = p_opts.recurse;
-    const stdout = std.io.getStdOut().writer().any();
+    var buf: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&buf);
+    const stdout: *std.io.Writer = &stdout_writer.interface;
     present.present(alloc, stdout, source, recurse) catch |err| {
         _ = stdout.write(zd.cons.clear_screen) catch unreachable;
         std.debug.print("\nError encountered during presentation: {any}\n", .{err});

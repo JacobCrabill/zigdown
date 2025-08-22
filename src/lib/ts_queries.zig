@@ -14,7 +14,7 @@ const treez = @import("treez");
 const config = @import("config");
 const wasm = @import("wasm.zig");
 
-const ArrayList = std.ArrayList;
+const ArrayList = std.array_list.Managed;
 const Allocator = std.mem.Allocator;
 const Self = @This();
 
@@ -96,16 +96,16 @@ pub fn free(string: []const u8) void {
 
 /// Emplace a new language alias, copying the key and value strings
 pub fn putAlias(key: []const u8, value: []const u8) void {
-    const k = allocator.dupe(u8, key) catch unreachable;
-    const v = allocator.dupe(u8, value) catch unreachable;
-    aliases.put(k, v) catch unreachable;
+    const k = allocator.dupe(u8, key) catch @panic("OOM");
+    const v = allocator.dupe(u8, value) catch @panic("OOM");
+    aliases.put(k, v) catch @panic("OOM");
 }
 
 /// Emplace a new language alias, copying the key and value strings
 pub fn putQuery(key: []const u8, value: []const u8) void {
-    const k = allocator.dupe(u8, key) catch unreachable;
-    const v = allocator.dupe(u8, value) catch unreachable;
-    queries.put(k, v) catch unreachable;
+    const k = allocator.dupe(u8, key) catch @panic("OOM");
+    const v = allocator.dupe(u8, value) catch @panic("OOM");
+    queries.put(k, v) catch @panic("OOM");
 }
 
 /// Return the alias for the given language
@@ -270,7 +270,7 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
     // Handle any language aliases
     const lang_alias = aliases.get(language) orelse language;
 
-    std.debug.print("Fetching repo for {s}\n", .{lang_alias});
+    // std.debug.print("Fetching repo for {s}\n", .{lang_alias});
 
     // Open our config directory
     const config_dir: []const u8 = try getTsConfigDir();
@@ -296,15 +296,15 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
         git_ref,
     });
 
-    var response_storage = ArrayList(u8).init(allocator);
+    var response_storage = std.Io.Writer.Allocating.init(allocator);
     defer response_storage.deinit();
-    utils.fetchFile(allocator, url_s, &response_storage) catch |err| {
+    utils.fetchFile(allocator, url_s, &response_storage.writer) catch |err| {
         std.debug.print("Error fetching {s} at {s}: {any}\n", .{ lang_alias, url_s, err });
         return err;
     };
 
     // The response is the *.tar.gz file stream
-    const body: []const u8 = response_storage.items;
+    const body: []const u8 = response_storage.written();
 
     // Ensure we start with an empty directory for the parser we downloaded
     try configd.deleteTree(parser_subdir);
@@ -313,10 +313,12 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
     const out_dir: std.fs.Dir = try configd.openDir(parser_subdir, .{});
 
     // Decompress the tarball to the parser directory we created
-    var stream = std.io.fixedBufferStream(body);
-    var decompress = std.compress.gzip.decompressor(stream.reader());
+    var stream = std.io.Reader.fixed(body);
+    // var decompress = std.compress.gzip.decompressor(stream.reader());
+    var flate_buffer: [std.compress.flate.max_window_len]u8 = undefined;
+    var decompress: std.compress.flate.Decompress = .init(&stream, .gzip, &flate_buffer);
 
-    try std.tar.pipeToFileSystem(out_dir, decompress.reader(), .{
+    try std.tar.pipeToFileSystem(out_dir, &decompress.reader, .{
         .strip_components = 1,
         .mode_mode = .ignore,
     });
@@ -362,9 +364,14 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
 
 test "Fetch C parser" {
     if (!config.extra_tests) return error.SkipZigTest;
+    initialized = false;
 
-    Self.init(std.testing.allocator);
-    defer Self.deinit();
+    init(std.testing.allocator);
+    defer deinit();
+
+    try std.testing.expect(initialized);
+    try std.testing.expect(alias("c") == null);
+    try std.testing.expectEqualStrings(alias("c++").?, "cpp");
 
     try fetchParserRepo("c", "tree-sitter", "master");
 }

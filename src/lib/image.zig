@@ -47,7 +47,7 @@ pub fn isPNG(data: []const u8) bool {
 
 /// Send a PNG image file to the terminal using the Kitty terminal graphics protocol
 /// 'width' and 'height' are in terms of terminal cells, not pixels!
-pub fn sendImagePNG(stream: anytype, alloc: Allocator, bytes: []const u8, width: ?usize, height: ?usize) !void {
+pub fn sendImagePNG(stream: *std.Io.Writer, alloc: Allocator, bytes: []const u8, width: ?usize, height: ?usize) !void {
     // Read the image into memory
     // Check that the image is a PNG file
     if (!isPNG(bytes)) {
@@ -262,14 +262,13 @@ test "Get window size" {
 // 'zig test src/image.zig' works, but 'zig build test-image' just hangs
 test "Display image" {
     const alloc = std.testing.allocator;
-    var buf = std.ArrayList(u8).init(alloc);
-    defer buf.deinit();
-    const stream = buf.writer().any();
-    debug.setStream(stream);
+    var stream = std.Io.Writer.Allocating.init(alloc);
+    defer stream.deinit();
+    debug.setStream(&stream.writer);
     debug.print("Rendering Zero the Ziguana here:\n", .{});
     const bytes = try utils.readFile(alloc, "src/assets/img/zig-zero.png");
     defer alloc.free(bytes);
-    try sendImagePNG(stream, alloc, bytes, 100, 60);
+    try sendImagePNG(&stream.writer, alloc, bytes, 100, 60);
     debug.print("\n--------------------------------\n", .{});
     // TODO: Can check for expected output in buf.items if I really want to
 }

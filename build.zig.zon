@@ -1,8 +1,8 @@
 .{
     .name = .zigdown,
     .fingerprint = 0xec26eaf34f894e33,
-    .version = "0.1.0",
-    .minimum_zig_version = "0.14.0",
+    .version = "0.2.0",
+    .minimum_zig_version = "0.15.1",
     .paths = .{
         "lua",
         "plugin",
@@ -13,28 +13,28 @@
     },
     .dependencies = .{
         .stbi = .{
-            .url = "https://github.com/JacobCrabill/zig-stb-image/archive/5a650f9439b2b2d8ca5e498b349e25bb7308f7bb.tar.gz",
-            .hash = "zig_stb_image-2.28.0-9dD1dTgdBQBDRqd8_8qNHlT62Ox8Gfh3qbbBtvbufjom",
+            .url = "https://github.com/JacobCrabill/zig-stb-image/archive/db40631ef191d3692a706b142f524022c6be80d7.tar.gz",
+            .hash = "zig_stb_image-2.28.0-2-9dD1dfoYBQCzF7IA9_-tSbsF1PgN7HGfzDzGVRG2BoUY",
         },
         .plutosvg = .{
-            .url = "https://github.com/JacobCrabill/zig-plutosvg/archive/518e00df9412df30eea6a1934a7edd2658cdd2d9.tar.gz",
-            .hash = "plutosvg-0.0.6-LyMxgbMuAADqe6_HVbOOBTtsmMVlb-ar-iOc7pRrPQYc",
+            .url = "https://github.com/JacobCrabill/zig-plutosvg/archive/b2dcac090852c9b26f16798dbbb35c3da1f65773.tar.gz",
+            .hash = "plutosvg-0.0.6-1-LyMxgYguAABq-4Xf7BWKdsl27x3fq5EUgsYS1LmGq9bW",
         },
         .flags = .{
-            .url = "https://github.com/n0s4/flags/archive/2839f30a02485f863f5780170eef290c8ccf8d53.tar.gz",
-            .hash = "flags-0.10.0-a_9h3uhzAAAmWXi1xd_xfZIIJqh3HFwsTMlfx5aVggCS",
+            .url = "https://github.com/JacobCrabill/zig-flags/archive/1a5e7569bda623129da212d9fb1215994245fce4.tar.gz",
+            .hash = "flags-0.11.0-a_9h3n91AADWgYorJsmzcIfiM_shhK8S7ObK4MlDGqSP",
         },
         .treez = .{
-            .url = "https://github.com/JacobCrabill/treez/archive/640de7530c4567a0cadf3f701d1c315724eed4c3.tar.gz",
-            .hash = "treez-0.1.0-4JX9hQSlAAAR1_cQTapcK9qGwbVI4bHrnwFMGQOafXXL",
+            .url = "https://github.com/JacobCrabill/treez/archive/980316cb4fd0da6075a6a8f86bd1a3927bf68ad3.tar.gz",
+            .hash = "treez-0.2.0-4JX9hV6mAAA-T-vae75m4eZSgIxKsv6uUae21-Dzhh8l",
         },
         .known_folders = .{
-            .url = "git+https://github.com/ziglibs/known-folders.git#aa24df42183ad415d10bc0a33e6238c437fc0f59",
-            .hash = "known_folders-0.0.0-Fy-PJtLDAADGDOwYwMkVydMSTp_aN-nfjCZw6qPQ2ECL",
+            .url = "git+https://github.com/ziglibs/known-folders.git#ab5cf5feb936fa3b72c95d3ad0c0c67791937ba1",
+            .hash = "known_folders-0.0.0-Fy-PJtTTAADUOhGKM0sxzG4eMkNQxRvx9e5dfHVyaeA3",
         },
         .ziglua = .{
-            .url = "https://github.com/JacobCrabill/ziglua/archive/f273f4ff8cd58ca238896b61aa8348dd67b74c7d.tar.gz",
-            .hash = "zlua-0.1.0-hGRpCzDfBADxeCzhxWsbcatYQnS5FeXWUsZdkWBZoANl",
+            .url = "https://github.com/JacobCrabill/ziglua/archive/011758bab2c2b5a4b6e678e33a8dbb24570d4394.tar.gz",
+            .hash = "zlua-0.2.0-hGRpC2sYBQCawPfqP3rxM95KUN3IYdRNKTAeSussl7kM",
             .lazy = true,
         },
 

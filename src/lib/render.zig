@@ -24,7 +24,7 @@ pub const RenderOptions = struct {
     alloc: Allocator,
     method: RenderMethod = .console,
     document: blocks.Block,
-    out_stream: std.io.AnyWriter,
+    out_stream: *std.io.Writer,
     document_dir: ?[]const u8 = null,
     width: ?usize = null,
 };

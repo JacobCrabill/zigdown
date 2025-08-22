@@ -1,7 +1,7 @@
 const std = @import("std");
 const theme = @import("theme.zig");
 
-const AnyWriter = std.io.AnyWriter;
+const Writer = *std.io.Writer;
 
 const Color = theme.Color;
 const Style = theme.Style;
@@ -156,17 +156,17 @@ pub fn getBgColor(color: Color) []const u8 {
 }
 
 /// Configure the terminal to start printing with the given foreground color
-pub fn startFgColor(stream: AnyWriter, color: Color) void {
+pub fn startFgColor(stream: Writer, color: Color) void {
     stream.print("{s}", .{getFgColor(color)}) catch unreachable;
 }
 
 /// Configure the terminal to start printing with the given background color
-pub fn startBgColor(stream: AnyWriter, color: Color) void {
+pub fn startBgColor(stream: Writer, color: Color) void {
     stream.print("{s}", .{getBgColor(color)}) catch unreachable;
 }
 
 /// Configure the terminal to start printing with the given (single) style
-pub fn startStyle(stream: AnyWriter, style: Style) void {
+pub fn startStyle(stream: Writer, style: Style) void {
     switch (style) {
         .Bold => stream.print(text_bold, .{}) catch unreachable,
         .Italic => stream.print(text_italic, .{}) catch unreachable,
@@ -180,7 +180,7 @@ pub fn startStyle(stream: AnyWriter, style: Style) void {
 }
 
 /// Configure the terminal to start printing one or more styles with color
-pub fn startStyles(stream: AnyWriter, style: TextStyle) void {
+pub fn startStyles(stream: Writer, style: TextStyle) void {
     if (style.bold) stream.print(text_bold, .{}) catch unreachable;
     if (style.italic) stream.print(text_italic, .{}) catch unreachable;
     if (style.underline) stream.print(text_underline, .{}) catch unreachable;
@@ -200,19 +200,19 @@ pub fn startStyles(stream: AnyWriter, style: TextStyle) void {
 }
 
 /// Reset all style in the terminal
-pub fn resetStyle(stream: AnyWriter) void {
+pub fn resetStyle(stream: Writer) void {
     stream.print(ansi_end, .{}) catch unreachable;
 }
 
 /// Print the text using the given color
-pub fn printColor(stream: AnyWriter, color: Color, comptime fmt: []const u8, args: anytype) void {
+pub fn printColor(stream: Writer, color: Color, comptime fmt: []const u8, args: anytype) void {
     startFgColor(stream, color);
     stream.print(fmt, args) catch unreachable;
     resetStyle(stream);
 }
 
 /// Print the text using the given style description
-pub fn printStyled(stream: AnyWriter, style: TextStyle, comptime fmt: []const u8, args: anytype) void {
+pub fn printStyled(stream: Writer, style: TextStyle, comptime fmt: []const u8, args: anytype) void {
     startStyles(stream, style);
     stream.print(fmt, args) catch unreachable;
     resetStyle(stream);
