@@ -2,12 +2,34 @@
 
 ![CI Status](https://github.com/JacobCrabill/zigdown/actions/workflows/main.yml/badge.svg)
 
-```{toctree}
-This block will be rendered as a Table of Contents, but not by Github.
-```
-
 > [!TIP]
 > Zig 0.15.1 Required
+
+- [Tools & Features](#tools-&-features)
+  - [Command-Line Tools](#command-line-tools)
+  - [Lua / Neovim Tools](#lua-/-neovim-tools)
+  - [Parser Features](#parser-features)
+  - [Renderer Features](#renderer-features)
+  - [Future Work / Missing Pieces](#future-work-/-missing-pieces)
+- [Caveats](#caveats)
+  - [Things I Will Not Support](#things-i-will-not-support)
+- [Usage](#usage)
+- [Enabling Syntax Highlighting](#enabling-syntax-highlighting)
+  - [Built-In Parsers](#built-in-parsers)
+  - [Installing Parsers Using Zigdown](#installing-parsers-using-zigdown)
+  - [Installing Parsers Manually](#installing-parsers-manually)
+- [Neovim Integration](#neovim-integration)
+  - [Rendering (Markdown Preview Pane)](#rendering-(markdown-preview-pane))
+  - [Formatting](#formatting)
+- [Sample Renders](#sample-renders)
+  - [Console](#console)
+  - [HTML](#html)
+  - [Presentations](#presentations)
+- [Tools & Features](#zigdown:-markdown-toolset-in-zig)
+
+> [!NOTE]
+> Github does not support this, but the above Table of Contents can be auto-generated using the
+> `{toctree}` directive!
 
 ![Zig is Awesome!](src/assets/img/zig-zero.png)
 
