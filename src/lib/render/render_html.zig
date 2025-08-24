@@ -218,9 +218,7 @@ pub const HtmlRenderer = struct {
         const h: leaves.Heading = leaf.content.Heading;
 
         // Generate the link name for the heading
-        const id_s = std.ascii.allocLowerString(self.alloc, h.text) catch unreachable;
-        defer self.alloc.free(id_s);
-        std.mem.replaceScalar(u8, id_s, ' ', '-');
+        const id_s = try utils.headingToUri(self.alloc, h.text, false);
 
         if (h.level == 1) {
             self.write("<div class=\"title\">");

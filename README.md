@@ -25,7 +25,6 @@
   - [Console](#console)
   - [HTML](#html)
   - [Presentations](#presentations)
-- [Tools & Features](#zigdown:-markdown-toolset-in-zig)
 
 > [!NOTE]
 > Github does not support this, but the above Table of Contents can be auto-generated using the

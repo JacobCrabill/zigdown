@@ -161,12 +161,15 @@ fn getListItemForHeading(alloc: Allocator, H: leaves.Heading, depth: usize) !Blo
     var block = Block.initContainer(alloc, .ListItem, depth);
     var text = Block.initLeaf(alloc, .Paragraph, depth);
 
+    // HTML-encode the text, and swap out the text already in the Heading
+    const new_text = try htmlEncode(alloc, H.text);
+
     // Create the Link object
     var link = inls.Link.init(alloc);
     link.heap_url = true;
-    link.url = try headingToUri(alloc, H.text);
+    link.url = try headingToUri(alloc, H.text, true);
     link.text = ArrayList(inls.Text).init(alloc);
-    try link.text.append(inls.Text{ .text = H.text, .style = .{ .bold = true } });
+    try link.text.append(inls.Text{ .alloc = alloc, .text = new_text, .style = .{ .bold = true } });
 
     // Create an Inline to hold the Link; add it to the Paragraph and the ListItem
     const inl = inls.Inline.initWithContent(alloc, .{ .link = link });
@@ -176,10 +179,10 @@ fn getListItemForHeading(alloc: Allocator, H: leaves.Heading, depth: usize) !Blo
     return block;
 }
 
-/// Convert the raw text of a heading to an HTML-safe URI string
-/// We also replace ' ' with '-' and convert all ASCII characters to lowercase
+/// Convert the raw text of a heading to an HTML-safe URI string.
+/// We also replace ' ' with '-' and convert all ASCII characters to lowercase.
 /// This will be the expected format for links in rendered HTML
-pub fn headingToUri(alloc: Allocator, htext: []const u8) ![]const u8 {
+pub fn headingToUri(alloc: Allocator, htext: []const u8, fragment: bool) ![]const u8 {
     const link_1: []u8 = try alloc.dupe(u8, htext);
     defer alloc.free(link_1);
 
@@ -202,8 +205,14 @@ pub fn headingToUri(alloc: Allocator, htext: []const u8) ![]const u8 {
         .query = null,
         .fragment = null,
     };
-    const uri_s = try std.fmt.allocPrint(alloc, "#{f}", .{uri.fmt(.{ .path = true })});
-    return uri_s;
+
+    const uri_s = if (fragment)
+        try std.fmt.allocPrint(alloc, "#{f}", .{uri.fmt(.{ .path = true })})
+    else
+        try std.fmt.allocPrint(alloc, "{f}", .{uri.fmt(.{ .path = true })});
+    defer alloc.free(uri_s);
+
+    return try htmlEncode(alloc, uri_s);
 }
 
 /// Return whether a directive string declares a Table of Contents
@@ -283,6 +292,7 @@ pub fn htmlEncode(alloc: Allocator, bytes: []const u8) ![]const u8 {
     for (bytes) |c| {
         switch (c) {
             '<', '>' => new_size += 4,
+            '&' => new_size += 5,
             else => new_size += 1,
         }
     }
@@ -293,6 +303,7 @@ pub fn htmlEncode(alloc: Allocator, bytes: []const u8) ![]const u8 {
         switch (c) {
             '<' => writer.writeAll("&lt;") catch unreachable,
             '>' => writer.writeAll("&gt;") catch unreachable,
+            '&' => writer.writeAll("&amp;") catch unreachable,
             else => writer.writeByte(c) catch unreachable,
         }
     }
@@ -308,6 +319,7 @@ test htmlEncode {
         .{ .in = "hi", .out = "hi" },
         .{ .in = "<hi", .out = "&lt;hi" },
         .{ .in = "<hi>", .out = "&lt;hi&gt;" },
+        .{ .in = "foo&bar", .out = "foo&amp;bar" },
     };
 
     const alloc = std.testing.allocator;
