@@ -22,27 +22,52 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: ghcr.io/jacobcrabill/alpine-zig:0.14.1
+      image: ghcr.io/jacobcrabill/alpine-zig:0.15.1
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Change if you need git info
 
-      - name: Build x86 Linux
-        run: zig build -Dllvm -Dtarget=x86_64-linux-musl
+      - name: Run All Tests
+        run: zig build test
 
-      - name: Test
-        run: zig build -Dllvm -Dtarget=x86_64-linux-musl test
+      # TODO: Consider packaging Lua plugin alongside the zigdown binary
+      # TODO: Still need to enable cross-compilation and musl libC in ziglua
+      - name: Build x86 Linux gnu
+        run: zig build -Dtarget=x86_64-linux-gnu -Doptimize=ReleaseFast --prefix x86-linux-gnu
 
-      - name: Build aarch64 Linux
-        run: zig build -Dllvm -Dtarget=aarch64-linux
+      - name: Build x86 Linux musl
+        run: zig build -Dtarget=x86_64-linux-musl -Doptimize=ReleaseFast --prefix x86-linux-musl
+
+      - name: Build aarch64 Linux musl
+        run: zig build -Dtarget=aarch64-linux-musl -Doptimize=ReleaseFast --prefix aarch64-linux-musl
 
       - name: Build x86 MacOS
-        run: zig build -Dllvm -Dtarget=x86_64-macos
+        run: zig build -Dtarget=x86_64-macos -Doptimize=ReleaseFast --prefix x86-macos
 
       - name: Build aarch64 MacOS
-        run: zig build -Dllvm -Dtarget=aarch64-macos
+        run: zig build -Dtarget=aarch64-macos -Doptimize=ReleaseFast --prefix aarch64-macos
 
       - name: Build Windows
-        run: zig build -Dllvm -Dtarget=x86_64-windows
+        run: zig build -Dtarget=x86_64-windows -Doptimize=ReleaseFast --prefix x86-windows
+
+      - name: Create Tarballs
+        run: |
+          tar -czf x86_64-linux-gnu.tar.gz   x86-linux-gnu
+          tar -czf x86_64-linux-musl.tar.gz  x86-linux-musl
+          tar -czf aarch64-linux-musl.tar.gz aarch64-linux-musl
+          tar -czf x86_64-macos.tar.gz       x86-macos
+          tar -czf aarch64-macos.tar.gz      aarch64-macos
+          tar -czf x86_64-windows.tar.gz     x86-windows
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux builds
+          path: |
+            x86_64-linux-gnu.tar.gz
+            x86_64-linux-musl.tar.gz
+            aarch64-linux-musl.tar.gz
+            x86_64-macos.tar.gz
+            aarch64-macos.tar.gz
+            x86_64-windows.tar.gz

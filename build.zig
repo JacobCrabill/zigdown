@@ -152,6 +152,8 @@ pub fn build(b: *std.Build) !void {
         const luajit_lib = ziglua.artifact("lua");
         lua_mod.linkLibrary(luajit_lib);
 
+        b.installArtifact(lua_mod);
+
         // "Install" to the output dir using the correct naming convention to load with lua
         const lib_name = b.fmt("zigdown_lua{s}", .{target.result.dynamicLibSuffix()});
         const copy_step = b.addInstallFileWithDir(lua_mod.getEmittedBin(), .{ .custom = "../lua/" }, lib_name);
@@ -161,8 +163,7 @@ pub fn build(b: *std.Build) !void {
         step.dependOn(&copy_step.step);
     }
 
-    // -------- TODO: This fails on the first try - WHY?!?! --------
-    // Generate documentation for Zigdown and its dependencies by building a library
+    // Generate documentation for Zigdown and its dependencies by building a library.
     // Note that the main page of the generated documentation will be the root_source_file
     // of the library target.
     const lib = b.addLibrary(.{
@@ -195,7 +196,7 @@ pub fn build(b: *std.Build) !void {
     ////////////////////////////////////////////////////////////////////////////
     // Add WASM Target
     // Requires a 'wasm32-freestanding' copy of all necessary dependencies
-    // TODO: Still requires some implementation of most of libC to link
+    // TODO: Still requires some implementation of much of libC to link.
     // See: https://github.com/floooh/pacman.zig/blob/main/build.zig for an
     // example of using Emscripten as the linker
     ////////////////////////////////////////////////////////////////////////////
