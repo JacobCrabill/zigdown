@@ -18,7 +18,7 @@ const errorMsg = debug.errorMsg;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.array_list.Managed;
-const Writer = *std.io.Writer;
+const Writer = std.io.Writer;
 
 const Block = blocks.Block;
 const Container = blocks.Container;
@@ -40,7 +40,7 @@ const task_list_indent = Text{ .style = .{}, .text = "      " };
 pub const FormatRenderer = struct {
     const Self = @This();
     pub const RenderOpts = struct {
-        out_stream: Writer,
+        out_stream: *Writer,
         width: usize = 90, // Column at which to wrap all text
         indent: usize = 0, // Left indent for the entire document
         root_dir: ?[]const u8 = null,
@@ -56,7 +56,7 @@ pub const FormatRenderer = struct {
         italic,
         strike,
     };
-    stream: Writer,
+    stream: *Writer,
     opts: RenderOpts = undefined,
     column: usize = 0,
     alloc: std.mem.Allocator,
@@ -78,8 +78,8 @@ pub const FormatRenderer = struct {
             .stream = opts.out_stream,
             .alloc = alloc,
             .leader_stack = ArrayList(Text).init(alloc),
-            .scratch = std.Io.Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
-            .prerender = std.Io.Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
+            .scratch = Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
+            .prerender = Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
             .style_stack = ArrayList(StyleFlag).init(alloc),
         };
     }
@@ -198,79 +198,61 @@ pub const FormatRenderer = struct {
 
     /// Write an array of bytes to the underlying writer, and update the current column
     fn write(self: *Self, bytes: []const u8) void {
-        switch (self.mode) {
-            .prerender => {
-                self.prerender.writer.writeAll(bytes) catch |err| {
-                    errorMsg(@src(), "Unable to write to prerender buffer! {s}\n", .{@errorName(err)});
-                };
-                self.column += std.unicode.utf8CountCodepoints(bytes) catch bytes.len;
-            },
-            .scratch => {
-                self.scratch.writer.writeAll(bytes) catch |err| {
-                    errorMsg(@src(), "Unable to write to scratch! {s}\n", .{@errorName(err)});
-                };
-                // don't increment the column here; we may write to the scratch buffer at
-                // any time, and it gets wrapped later.
-            },
-            .final => {
-                self.stream.writeAll(bytes) catch |err| {
-                    errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
-                };
-                self.column += std.unicode.utf8CountCodepoints(bytes) catch bytes.len;
-            },
-        }
+        const stream: *Writer = switch (self.mode) {
+            .prerender => &self.prerender.writer,
+            .scratch => &self.scratch.writer,
+            .final => self.stream,
+        };
+        stream.writeAll(bytes) catch |err| {
+            errorMsg(@src(), "Unable to write to {t} writer! {s}\n", .{ self.mode, @errorName(err) });
+        };
+
+        if (self.mode != .scratch)
+            self.column += std.unicode.utf8CountCodepoints(bytes) catch bytes.len;
     }
 
     /// Write an array of bytes to the underlying writer, without updating the current column
     fn writeno(self: *Self, bytes: []const u8) void {
-        switch (self.mode) {
-            .prerender => {
-                self.prerender.writer.writeAll(bytes) catch |err| {
-                    errorMsg(@src(), "Unable to write to prerender buffer! {s}\n", .{@errorName(err)});
-                };
-            },
-            .scratch => {
-                self.scratch.writer.writeAll(bytes) catch |err| {
-                    errorMsg(@src(), "Unable to write to scratch! {s}\n", .{@errorName(err)});
-                };
-            },
-            .final => {
-                self.stream.writeAll(bytes) catch |err| {
-                    errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
-                };
-            },
-        }
+        const stream: *Writer = switch (self.mode) {
+            .prerender => &self.prerender.writer,
+            .scratch => &self.scratch.writer,
+            .final => self.stream,
+        };
+        stream.writeAll(bytes) catch |err| {
+            errorMsg(@src(), "Unable to write to {t} writer! {s}\n", .{ self.mode, @errorName(err) });
+        };
     }
 
     /// Print the format and args to the output stream, updating the current column
     fn print(self: *Self, comptime fmt: []const u8, args: anytype) void {
-        const text: []const u8 = std.fmt.allocPrint(self.alloc, fmt, args) catch |err| blk: {
-            errorMsg(@src(), "Unable to print! {s}\n", .{@errorName(err)});
-            break :blk "";
+        const stream: *Writer = switch (self.mode) {
+            .prerender => &self.prerender.writer,
+            .scratch => &self.prerender.writer,
+            .final => self.stream,
         };
-        defer self.alloc.free(text);
-        self.write(text);
+
+        // Keep track of the bytes written after formatting in order to increment the column
+        const end0 = stream.end;
+        stream.print(fmt, args) catch |err| {
+            errorMsg(@src(), "Unable to print to {t} buffer! {s}\n", .{ self.mode, @errorName(err) });
+        };
+        const end1 = stream.end;
+        if (self.mode != .scratch and end1 > end0) {
+            const bytes = stream.buffer[end0 + 1 .. end1];
+            self.column += std.unicode.utf8CountCodepoints(bytes) catch bytes.len;
+        }
     }
 
     /// Print the format and args to the output stream, without updating the current column
     fn printno(self: *Self, comptime fmt: []const u8, args: anytype) void {
-        switch (self.mode) {
-            .prerender => {
-                self.prerender.writer.print(fmt, args) catch |err| {
-                    errorMsg(@src(), "Unable to print to prerender buffer! {s}\n", .{@errorName(err)});
-                };
-            },
-            .scratch => {
-                self.scratch.writer.print(fmt, args) catch |err| {
-                    errorMsg(@src(), "Unable to print to scratch! {s}\n", .{@errorName(err)});
-                };
-            },
-            .final => {
-                self.stream.print(fmt, args) catch |err| {
-                    errorMsg(@src(), "Unable to print! {s}\n", .{@errorName(err)});
-                };
-            },
-        }
+        const stream: *Writer = switch (self.mode) {
+            .prerender => &self.prerender.writer,
+            .scratch => &self.prerender.writer,
+            .final => self.stream,
+        };
+        stream.print(fmt, args) catch |err| {
+            errorMsg(@src(), "Unable to print to {t} buffer! {s}\n", .{ self.mode, @errorName(err) });
+        };
     }
 
     ////////////////////////////////////////////////////////////////////////
@@ -282,8 +264,7 @@ pub const FormatRenderer = struct {
 
     /// Complete the rendering
     fn renderEnd(self: *Self) void {
-        // TODO: reaching into the Writer internals feels hacky. This used to operate on an ArrayList.
-        var w: *std.Io.Writer = &self.prerender.writer;
+        var w: *Writer = &self.prerender.writer;
 
         // We might have trailing whitespace(s) due to how we wrapped text
         // Remove it before dumping the final buffer to the output stream
@@ -301,7 +282,7 @@ pub const FormatRenderer = struct {
             }
         }
 
-        if (w.buffered().len > 0) {
+        if (w.end > 0) {
             i = w.end - 1;
             while ((w.buffer[i] == ' ' or w.buffer[i] == '\n') and i >= 0) : (i -= 1) {
                 w.end -= 1;
@@ -622,7 +603,7 @@ pub const FormatRenderer = struct {
 
         for (table.children.items) |item| {
             // Render the table cell into a new buffer
-            var alloc_writer = std.Io.Writer.Allocating.init(alloc);
+            var alloc_writer = Writer.Allocating.init(alloc);
             const sub_opts = RenderOpts{
                 .out_stream = &alloc_writer.writer,
                 .width = 256, // col_w,
@@ -965,7 +946,7 @@ pub const FormatRenderer = struct {
 // Tests
 //////////////////////////////////////////////////////////
 
-fn testRender(alloc: Allocator, input: []const u8, out_stream: *std.io.Writer, width: usize) !void {
+fn testRender(alloc: Allocator, input: []const u8, out_stream: *Writer, width: usize) !void {
     var p = @import("../parser.zig").Parser.init(alloc, .{});
     try p.parseMarkdown(input);
     defer p.deinit();
