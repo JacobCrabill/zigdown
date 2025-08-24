@@ -79,8 +79,7 @@ pub const RangeRenderer = struct {
         style: TextStyle = undefined,
     };
     stream: Writer,
-    prerender: ArrayList(u8) = undefined,
-    prerender_stream: ArrayList(u8).Writer = undefined,
+    prerender: std.Io.Writer.Allocating = undefined,
     alloc: std.mem.Allocator,
     leader_stack: ArrayList(Text),
     needs_leaders: bool = true,
@@ -107,7 +106,7 @@ pub const RangeRenderer = struct {
             .alloc = alloc,
             .leader_stack = ArrayList(Text).init(alloc),
             .opts = opts,
-            .prerender = ArrayList(u8).initCapacity(alloc, 1024) catch @panic("OOM"),
+            .prerender = std.Io.Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
             .style_ranges = ArrayList(StyleRange).initCapacity(alloc, 1024) catch @panic("OOM"),
         };
     }
@@ -209,7 +208,7 @@ pub const RangeRenderer = struct {
 
     /// Write an array of bytes to the underlying writer, and update the current column
     fn write(self: *Self, bytes: []const u8) void {
-        self.prerender_stream.writeAll(bytes) catch |err| {
+        self.prerender.writer.writeAll(bytes) catch |err| {
             errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
         };
         self.column += std.unicode.utf8CountCodepoints(bytes) catch bytes.len;
@@ -217,8 +216,8 @@ pub const RangeRenderer = struct {
     }
 
     /// Write an array of bytes to the underlying writer, without updating the current column
-    fn writeno(self: Self, bytes: []const u8) void {
-        self.prerender_stream.writeAll(bytes) catch |err| {
+    fn writeno(self: *Self, bytes: []const u8) void {
+        self.prerender.writer.writeAll(bytes) catch |err| {
             errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
         };
     }
@@ -235,7 +234,7 @@ pub const RangeRenderer = struct {
 
     /// Print the format and args to the output stream, without updating the current column
     fn printno(self: *Self, comptime fmt: []const u8, args: anytype) void {
-        self.prerender_stream.print(fmt, args) catch |err| {
+        self.prerender.writer.print(fmt, args) catch |err| {
             errorMsg(@src(), "Unable to print! {s}\n", .{@errorName(err)});
         };
     }
@@ -254,7 +253,7 @@ pub const RangeRenderer = struct {
 
     /// Complete the rendering
     fn renderEnd(self: *Self) void {
-        self.stream.writeAll(self.prerender.items) catch unreachable;
+        self.stream.writeAll(self.prerender.written()) catch unreachable;
         self.prerender.clearRetainingCapacity();
         self.column = 0;
         self.col_byte = 0;
@@ -444,7 +443,6 @@ pub const RangeRenderer = struct {
     pub fn renderBlock(self: *Self, block: Block) RenderError!void {
         if (self.root == null) {
             self.root = block;
-            self.prerender_stream = self.prerender.writer();
         }
         switch (block) {
             .Container => |c| try self.renderContainer(c),
@@ -1294,7 +1292,7 @@ pub const RangeRenderer = struct {
         // Center the image by setting the cursor appropriately
         self.writeNTimes(" ", (self.opts.width - width) / 2);
 
-        gfx.sendImagePNG(self.prerender_stream, self.alloc, bytes, width, height) catch |err| {
+        gfx.sendImagePNG(self.prerender.writer, self.alloc, bytes, width, height) catch |err| {
             debug.print("Error rendering PNG image: {any}\n", .{err});
         };
         self.renderBreak();
@@ -1343,7 +1341,7 @@ pub const RangeRenderer = struct {
         self.writeNTimes(" ", (self.opts.width - width) / 2);
 
         if (img.nchan == 3) {
-            gfx.sendImageRGB2(self.prerender_stream, self.alloc, &img, width, height) catch |err2| {
+            gfx.sendImageRGB2(self.prerender.writer, self.alloc, &img, width, height) catch |err2| {
                 debug.print("Error rendering RGB image: {any}\n", .{err2});
             };
         } else {

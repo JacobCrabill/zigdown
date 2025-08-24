@@ -293,10 +293,8 @@ pub const FormatRenderer = struct {
             const pc: u8 = buf[i - 1];
             const c: u8 = buf[i];
             if (c == '\n' and pc == ' ') {
-                // remove i-1, shift elements left
-                for (buf[i..buf.len], 0..) |cc, j| {
-                    w.buffer[i - 1 + j] = cc;
-                }
+                // remove last element, shifting elements left
+                @memmove(w.buffer[i .. w.end - 1], w.buffer[i + 1 .. w.end]);
                 w.end -= 1;
             } else {
                 i += 1;
@@ -863,7 +861,8 @@ pub const FormatRenderer = struct {
                 self.renderBreak();
                 self.writeLeaders();
             } else if (self.prerender.written().len > 0) {
-                const last_char = self.prerender.written()[self.prerender.written().len - 1];
+                const buf = self.prerender.written();
+                const last_char = buf[buf.len - 1];
                 if (std.mem.indexOfAny(u8, &.{last_char}, " ([{<") == null) {
                     // Add a space if we need one (not after an open bracket or another space)
                     self.write(" ");

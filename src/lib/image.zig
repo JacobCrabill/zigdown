@@ -75,7 +75,7 @@ pub fn sendImagePNG(stream: *std.Io.Writer, alloc: Allocator, bytes: []const u8,
 }
 
 /// Send an image file to the terminal as raw RGB pixel data using the Kitty terminal graphics protocol
-pub fn sendImageRGB(stream: anytype, alloc: Allocator, bytes: []const u8, width: ?usize, height: ?usize) !void {
+pub fn sendImageRGB(stream: *std.Io.Writer, alloc: Allocator, bytes: []const u8, width: ?usize, height: ?usize) !void {
     // Read the image into memory
     var img: stb.Image = try stb.load_image_from_memory(bytes);
     defer img.deinit();
@@ -115,7 +115,7 @@ pub fn sendImageRGB(stream: anytype, alloc: Allocator, bytes: []const u8, width:
 }
 
 /// Send raw RGB image data to the terminal using the Kitty terminal graphics protocol
-pub fn sendImageRGB2(stream: anytype, alloc: Allocator, img: *const stb.Image, width: ?usize, height: ?usize) !void {
+pub fn sendImageRGB2(stream: *std.Io.Writer, alloc: Allocator, img: *const stb.Image, width: ?usize, height: ?usize) !void {
     const size: usize = @intCast(img.width * img.height * img.nchan);
     const rgb: []u8 = img.data[0..size];
 
@@ -148,7 +148,7 @@ pub fn sendImageRGB2(stream: anytype, alloc: Allocator, img: *const stb.Image, w
 }
 
 /// Send a chunk of PNG image data in a single '_G' command
-fn sendImageChunkPNG(stream: anytype, data: []const u8, last_chunk: bool, width: ?usize, height: ?usize) !void {
+fn sendImageChunkPNG(stream: *std.Io.Writer, data: []const u8, last_chunk: bool, width: ?usize, height: ?usize) !void {
     var m: u8 = 1;
     if (last_chunk)
         m = 0;
@@ -174,7 +174,7 @@ fn sendImageChunkPNG(stream: anytype, data: []const u8, last_chunk: bool, width:
 
 /// Send a chunk of RGB image data in a single '_G' command
 fn sendImageChunkRGB(
-    stream: anytype,
+    stream: *std.Io.Writer,
     data: []const u8,
     last_chunk: bool,
     display_width: ?usize,
