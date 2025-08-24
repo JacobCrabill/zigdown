@@ -294,7 +294,7 @@ pub const FormatRenderer = struct {
             const c: u8 = buf[i];
             if (c == '\n' and pc == ' ') {
                 // remove last element, shifting elements left
-                @memmove(w.buffer[i .. w.end - 1], w.buffer[i + 1 .. w.end]);
+                @memmove(w.buffer[i - 1 .. w.end - 1], w.buffer[i..w.end]);
                 w.end -= 1;
             } else {
                 i += 1;
@@ -793,6 +793,9 @@ pub const FormatRenderer = struct {
         const tag = c.tag orelse dir;
         const fence = c.opener orelse "```";
 
+        if (self.column > self.opts.indent) {
+            self.renderBreak();
+        }
         self.writeLeaders();
         self.print("{s}{s}", .{ fence, tag });
         self.renderBreak();
@@ -1150,6 +1153,22 @@ test "FormatRenderer" {
         .{
             .input = "![](foo.bar)",
             .output = "![](foo.bar)\n",
+        },
+        .{
+            .input =
+            \\![](foo.bar)
+            \\```
+            \\foo
+            \\```
+            ,
+            .output =
+            \\![](foo.bar)
+            \\
+            \\```
+            \\foo
+            \\```
+            \\
+            ,
         },
     };
 

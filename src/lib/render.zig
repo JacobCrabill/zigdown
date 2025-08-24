@@ -103,6 +103,8 @@ pub fn render(opts: RenderOptions) !void {
             try formatter.renderBlock(opts.document);
         },
     }
+
+    opts.out_stream.flush() catch @panic("Can't flush output stream");
 }
 
 //////////////////////////////////////////////////////////

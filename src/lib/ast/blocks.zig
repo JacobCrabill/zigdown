@@ -205,6 +205,8 @@ pub const Container = struct {
         for (self.children.items) |child| {
             child.print(depth + 1);
         }
+
+        debug.flush();
     }
 };
 
@@ -292,6 +294,8 @@ pub const Leaf = struct {
                 });
             }
         }
+
+        debug.flush();
     }
 };
 
