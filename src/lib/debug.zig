@@ -83,6 +83,7 @@ pub const Logger = struct {
                 wasm.logger.print(fmt, args) catch {};
             } else {
                 print(fmt, args);
+                flush();
             }
         }
     }

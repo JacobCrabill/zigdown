@@ -202,7 +202,7 @@ pub fn headingToUri(alloc: Allocator, htext: []const u8) ![]const u8 {
         .query = null,
         .fragment = null,
     };
-    const uri_s = try std.fmt.allocPrint(alloc, "#{f}", .{uri});
+    const uri_s = try std.fmt.allocPrint(alloc, "#{f}", .{uri.fmt(.{ .path = true })});
     return uri_s;
 }
 

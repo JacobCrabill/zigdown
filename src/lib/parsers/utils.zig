@@ -520,36 +520,82 @@ pub fn appendSingleToken(alloc: Allocator, inlines: *ArrayList(Inline), token: T
     try inlines.append(Inline.initWithContent(alloc, InlineData{ .text = text }));
 }
 
-/// Check if the token slice contains a valid link of the form: [text](url)
+/// Check if the token slice contains a valid link of the form: [text](url).
+/// TODO: Return ?LinkParts containing indices of '[', ']', '(', ')'.
+/// TODO: Handle escaped characters and inline code (e.g. "`]`" or "\]")
 pub fn validateLink(in_line: []const Token) bool {
     const line: []const Token = getLine(in_line, 0) orelse return false;
     if (line[0].kind != .LBRACK) return false;
 
-    var i: usize = 1;
-    // var have_rbrack: bool = false;
-    // var have_lparen: bool = false;
-    var have_rparen: bool = false;
-    while (i < line.len) : (i += 1) {
-        if (line[i].kind == .RBRACK) {
-            // have_rbrack = true;
-            break;
+    // Find the ']' corresponding to the first '['
+    const rb_idx: usize = blk: {
+        var bcount: i32 = 0;
+        for (line, 0..) |tok, i| {
+            switch (tok.kind) {
+                .RBRACK => bcount -= 1,
+                .LBRACK => bcount += 1,
+                else => {},
+            }
+            if (bcount == 0) break :blk @intCast(i);
         }
-    }
-    if (i >= line.len - 2) return false;
+        // This is an error.
+        break :blk 0;
+    };
+    if (rb_idx <= 0 or rb_idx + 2 >= line.len) return false;
 
-    i += 1;
-    if (line[i].kind != .LPAREN)
-        return false;
-    i += 1;
+    // Check that the next character is '('
+    if (line[rb_idx + 1].kind != .LPAREN) return false;
 
-    while (i < line.len) : (i += 1) {
-        if (line[i].kind == .RPAREN) {
-            have_rparen = true;
-            return true;
+    // Find the matching ')', accounting for nested "()"
+    const rp_idx: usize = blk: {
+        var pcount: i32 = 1; // Start with one '(' immediately behind us
+        for (line[rb_idx + 2 ..], rb_idx + 2..) |tok, i| {
+            switch (tok.kind) {
+                .RPAREN => pcount -= 1,
+                .LPAREN => pcount += 1,
+                else => {},
+            }
+            if (pcount == 0) break :blk @intCast(i);
         }
-    }
+        // This is an error.
+        break :blk 0;
+    };
+    if (rp_idx <= rb_idx + 1) return false;
 
-    return false;
+    return true;
+}
+
+test "validateLink" {
+    const TestData = struct {
+        link: []const u8,
+        valid: bool,
+    };
+
+    // TODO: There are more rules about what constitutes a valid link
+    const test_data: []const TestData = &.{
+        .{ .link = "[]()", .valid = true },
+        .{ .link = "[foo](bar)", .valid = true },
+        .{ .link = "[foo (bar)](bar (baz))", .valid = true },
+        .{ .link = "[()", .valid = false },
+        .{ .link = "[])", .valid = false },
+        .{ .link = "[](", .valid = false },
+        .{ .link = "]()", .valid = false },
+        .{ .link = "[[]()", .valid = false },
+        .{ .link = "[](()", .valid = false },
+        // FIXME: These should NOT be valid, but currently are
+        .{ .link = "[foo`](`bar)", .valid = true },
+        .{ .link = "[foo\\](`bar)", .valid = true },
+    };
+
+    const Lexer = @import("../lexer.zig").Lexer;
+
+    for (test_data) |data| {
+        var lex = Lexer{};
+        var tokens = try lex.tokenize(std.testing.allocator, data.link);
+        defer tokens.deinit();
+
+        try std.testing.expectEqual(validateLink(tokens.items), data.valid);
+    }
 }
 
 pub fn countKind(line: []const Token, kind: TokenType) usize {

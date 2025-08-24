@@ -284,9 +284,38 @@ pub const InlineParser = struct {
         // The Alt text lies between '[' and ']'
         // The URI lies between '(' and ')'
         const alt_start: usize = 1;
-        const rb_idx: usize = utils.findFirstOf(line, 0, &.{.RBRACK}).?;
+
+        // Find the right square bracket corresponding to the first left square bracket
+        const rb_idx: usize = blk: {
+            var bcount: i32 = 0;
+            for (line, 0..) |tok, i| {
+                switch (tok.kind) {
+                    .RBRACK => bcount -= 1,
+                    .LBRACK => bcount += 1,
+                    else => {},
+                }
+                if (bcount == 0) break :blk i;
+            }
+            // This is an error.
+            break :blk line.len - 1;
+        };
+
+        // Find the right paren corresponding to the first left paren
         const lp_idx: usize = rb_idx + 2;
-        const rp_idx: usize = utils.findFirstOf(line, lp_idx, &.{.RPAREN}).?;
+        const rp_idx: usize = blk: {
+            var pcount: i32 = 1; // start with 1 lparen immediately behind us
+            for (line[lp_idx..], lp_idx..) |tok, i| {
+                switch (tok.kind) {
+                    .RPAREN => pcount -= 1,
+                    .LPAREN => pcount += 1,
+                    else => {},
+                }
+                if (pcount == 0) break :blk i;
+            }
+            // This is an error.
+            break :blk line.len - 1;
+        };
+
         const alt_text: []const Token = utils.trimTrailingWhitespace(utils.trimLeadingWhitespace(line[alt_start..rb_idx]));
         const uri_text: []const Token = utils.trimTrailingWhitespace(utils.trimLeadingWhitespace(line[lp_idx..rp_idx]));
 

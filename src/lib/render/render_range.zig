@@ -945,7 +945,6 @@ pub const RangeRenderer = struct {
     }
 
     fn renderAlert(self: *Self, b: blocks.Leaf) !void {
-        // TODO: Enum for builtin alert types w/ string aliases mapped to them
         const alert = b.content.Alert.alert orelse "NOTE";
 
         // Create a new renderer to render all of our inlines into
@@ -961,7 +960,7 @@ pub const RangeRenderer = struct {
         item.Leaf.inlines = b.inlines;
 
         // Render the table cell into a new buffer
-        const width: usize = self.opts.width - 2 * self.opts.indent - 2;
+        const width: usize = self.opts.width - 2 * self.opts.indent - 3;
         var alloc_writer = std.Io.Writer.Allocating.init(alloc);
 
         const sub_opts = RenderOpts{
@@ -1005,7 +1004,7 @@ pub const RangeRenderer = struct {
             self.writeLeaders();
 
             // Write line
-            self.write(utils.trimLeadingWhitespace(line));
+            self.write(utils.trimLeadingWhitespace(utils.trimTrailingWhitespace(line)));
 
             // Write trailer
             const end_col: usize = self.opts.width - 2 * self.opts.indent;
