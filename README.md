@@ -3,7 +3,7 @@
 ![CI Status](https://github.com/JacobCrabill/zigdown/actions/workflows/main.yml/badge.svg)
 
 ```{toctree}
-This block will be rendered as a Table of Contents
+This block will be rendered as a Table of Contents, but not by Github.
 ```
 
 > [!TIP]
@@ -22,7 +22,9 @@ Markdown files.
 > [!WARNING]
 > This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
 
-## Tools
+## Tools & Features
+
+### Command-Line Tools
 
 - **Console Renderer:** `zigdown console {file}`
 - **HTML Renderer:** `zigdown html {file}`
@@ -30,7 +32,10 @@ Markdown files.
 - **In-Terminal Slide Shows:** `zigdown present -d {directory}`
 - **HTTP Document Server:** `zigdown serve -f {file}`
 
-## Features & Future Work
+### Lua / Neovim Tools
+
+- Markdown preview side-pane
+- Markdown auto-formatter
 
 ### Parser Features
 
@@ -172,6 +177,84 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.local/lib/
 In addition to having the parser libraries available for `dlopen`, you will also need the highlight
 queries. For this, use the provided bash script `./tools/fetch_queries.sh`. This will install the
 queries to `$TS_CONFIG_DIR/queries`, which defaults to `$HOME/.config/tree-sitter/queries`.
+
+## Neovim Integration
+
+Zigdown plays well with all the typical Neovim packages managers. For example, with Lazy.nvim:
+
+```lua
+require('lazy').setup({
+  -- ... all your other packages here ...
+  'jacobcrabill/zigdown',
+})
+```
+
+After first being downloaded, Zigdown will download the correct version of the Zig compiler and
+build itself. This might take a minute, but only needs to be done once (or whenever you pull a new
+version of Zigdown). The output binary is the shared library at `./lua/zigdown_lua.so` (or `.dll` or
+`.dylib`, depending on your OS). If you need to, you can manually build and place the library in
+that directory.
+
+To trigger a rebuild from within Neovim, do `:ZigdownRebuild`. This is generally needed after
+updating Zigdown (pulling the latest changes), e.g. via Lazy.nvim.
+
+To manually build the Zigdown Lua plugin yourself for Neovim, do:
+
+```bash
+zig build -Dlua zigdown-lua -Doptimize=ReleaseFast
+```
+
+### Rendering (Markdown Preview Pane)
+
+Rendering a Markdown buffer to a preview pane (the right-most window; if only one editable window is
+open, a new one will be added as a vsplit) is done with the Vim command `:Zigdown`. This will also
+create an autocommand to re-render on save. If you want to cancel this autocommand, do
+`:ZigdownCancel`.
+
+### Formatting
+
+> [!CAUTION]
+> Zigdown is an experimental project, and the Neovim auto-formatter will modify your files in-place.
+> Use at your own risk!
+
+To change the default formatter column width (the default is 100), do:
+
+```lua
+require('zigdown').setup({ format_width = 100 })
+```
+
+To enable auto-formatting of Markdown files on save, I recommend first adding a global option to
+enable/disable auto-formatting in case something goes wrong, or you're working in a Git repo that
+does not use formatters:
+
+```lua
+-- Globally enable/disable auto-formatting
+-- (Useful in Git repos you don't own, or when you encounter formatter bugs)
+vim.g.autoformat_enabled = true
+
+-- Enable/Disable format-on-save for all auto-formatters
+function DisableAutoFmt()
+  vim.g.autoformat_enabled = false
+end
+function EnableAutoFmt()
+  vim.g.autoformat_enabled = true
+end
+```
+
+The actual autocommand to format-on-save is very simple:
+
+```lua
+-- Markdown auto-formatter
+vim.api.nvim_create_autocmd('BufWritePre', {
+  pattern = { '*.md' },
+  group = 'AutoFmt',
+  callback = function()
+    if vim.g.autoformat_enabled then
+      vim.api.nvim_command([[ZigdownFormat]])
+    end
+  end
+})
+```
 
 ## Sample Renders
 

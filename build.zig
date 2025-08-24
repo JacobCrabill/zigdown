@@ -153,7 +153,8 @@ pub fn build(b: *std.Build) !void {
         lua_mod.linkLibrary(luajit_lib);
 
         // "Install" to the output dir using the correct naming convention to load with lua
-        const copy_step = b.addInstallFileWithDir(lua_mod.getEmittedBin(), .{ .custom = "../lua/" }, "zigdown_lua.so");
+        const lib_name = b.fmt("zigdown_lua{s}", .{target.result.dynamicLibSuffix()});
+        const copy_step = b.addInstallFileWithDir(lua_mod.getEmittedBin(), .{ .custom = "../lua/" }, lib_name);
         copy_step.step.dependOn(&lua_mod.step);
         b.getInstallStep().dependOn(&copy_step.step);
         const step = b.step("zigdown-lua", "Build Zigdown as a Lua module");
