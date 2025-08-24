@@ -94,7 +94,6 @@ pub fn render(opts: RenderOptions) !void {
         .format => {
             const render_opts = FormatRenderer.RenderOpts{
                 .out_stream = opts.out_stream,
-                .root_dir = opts.document_dir,
                 .indent = 0,
                 .width = opts.width orelse 90,
             };

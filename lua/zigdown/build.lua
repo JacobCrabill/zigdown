@@ -36,7 +36,6 @@ M.build_dir = ''
 M.root_dir = ''
 M.zig_binary = ''
 M.tarball = ''
-M.load_lib = false
 M.build_jobid = nil
 
 function M.install_zig()
@@ -58,9 +57,7 @@ function on_build_exit(obj)
     vim.notify("Finished building Zigdown", vim.log.levels.INFO)
   end)
 
-  if load_lib then
-    M.zigdown =  M.load_module()
-  end
+  M.zigdown =  M.load_module()
 
   -- Remove the archive after completion
   if vim.fn.filereadable(M.tarball) == 1 then
@@ -70,24 +67,17 @@ function on_build_exit(obj)
   M.build_jobid = nil
 end
 
--- Build the Zigdown binary, and optionally the Lua plugin module
----@param load_lib boolean Load the Lua module
-function M.build_zigdown(load_lib)
+-- Build the Zigdown Lua plugin module
+function M.build_zigdown()
   if M.build_jobid ~= nil then
-    vim.notify("ZigdownRebuild already in progress - Please wait!", vim.log.levels.INFO)
+    vim.notify("ZigdownRebuild already in progress - Please wait!", vim.log.levels.WARN)
     return
   end
 
-  M.load_lib = load_lib
   vim.notify("Building zigdown using:" .. table.concat(M.build_cmd, " "), vim.log.levels.INFO)
   vim.notify("Compiling zigdown - Please wait...", vim.log.levels.INFO)
 
-  local cmd = { M.zig_binary, "build", "-Doptimize=ReleaseSmall" }
-  if load_lib then
-    table.insert(cmd, "-Dlua")
-  end
-
-  M.build_jobid = vim.system(cmd, { cwd = M.root_dir }, on_build_exit)
+  M.build_jobid = vim.system(M.build_cmd, { cwd = M.root_dir }, on_build_exit)
 end
 
 -- Attempt to load the zigdown_lua module we just compiled
@@ -106,8 +96,7 @@ end
 -- Install the required version of Zig to do so
 ---@param zig_ver string Version of Zig to use, e.g. "0.12.1"
 ---@param root string Root directory of the package to build
----@param load_lib boolean Load the build shared lib as a Lua module
-function M.install(zig_ver, root, load_lib)
+function M.install(zig_ver, root)
   local raw_os = vim.loop.os_uname().sysname
   local raw_arch = jit.arch
 
@@ -131,7 +120,7 @@ function M.install(zig_ver, root, load_lib)
   -- Download to a temporary file in Neovim's tmp directory
   M.curl_cmd = { "curl", "-sL", "-o", M.build_dir .. "/" .. M.tarball, download_url }
   M.tar_cmd = { "tar", "-xvf", M.tarball, "-C", M.build_dir }
-  M.build_cmd = { M.zig_binary, "build", "-Doptimize=ReleaseSafe" }
+  M.build_cmd = { M.zig_binary, "build", "zigdown-lua", "-Dlua", "-Doptimize=ReleaseFast" }
 
   local callbacks = {
     on_sterr = vim.schedule_wrap(function(_, data, _)
@@ -142,13 +131,11 @@ function M.install(zig_ver, root, load_lib)
       -- Extract the zig compiler tarball
       M.install_zig()
 
-      -- Build the zigdown project
-      M.build_zigdown(load_lib)
+      -- Build the zigdown lua module
+      M.build_zigdown()
 
       -- Now that the module is built, import it
-      if load_lib then
-        M.zigdown = M.load_module()
-      end
+      M.zigdown = M.load_module()
     end),
   }
 

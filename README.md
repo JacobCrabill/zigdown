@@ -6,6 +6,9 @@
 This block will be rendered as a Table of Contents
 ```
 
+> [!TIP]
+> Zig 0.15.1 Required
+
 ![Zig is Awesome!](src/assets/img/zig-zero.png)
 
 Zigdown, inspired by [Glow](https://github.com/charmbracelet/glow) and
@@ -58,14 +61,16 @@ Markdown files.
 
 ### Future Work / Missing Pieces
 
+- [ ] Table of Contents generation from a directory tree of files
+- [ ] Deeper NeoVim integration:
+      - in-buffer image rendering
+      - auto-scrolling of preview/source wrt source/preview
+- [ ] [Link References](https://spec.commonmark.org/0.31.2/#link-reference-definition)
+- [ ] Color schemes for syntax highlighting
 - [ ] Enabling TreeSitter parsers to be used in WASM modules
       - Requires filling in some libC stub functions (the TS parsers use quite a few functions from
         the C standard library that are not available in WASM)
 - [ ] Character escaping
-- [ ] Deeper NeoVim integration: image rendering and auto-scrolling
-- [ ] [Link References](https://spec.commonmark.org/0.31.2/#link-reference-definition)
-- [ ] Color schemes for syntax highlighting
-- [ ] Table of Contents generation from a directory tree of files
 
 ## Caveats
 
@@ -82,8 +87,9 @@ subset of all Markdown syntax, and ignoring anything I personally find useless o
 
 - Setext headings
 - Thematic breaks
-- Embedded HTML
 - Indent-based code blocks (as opposed to fenced code blocks)
+- Embedded HTML
+  - I _might_ change my mind on this one
 
 ## Usage
 

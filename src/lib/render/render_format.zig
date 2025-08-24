@@ -43,8 +43,6 @@ pub const FormatRenderer = struct {
         out_stream: *Writer,
         width: usize = 90, // Column at which to wrap all text
         indent: usize = 0, // Left indent for the entire document
-        root_dir: ?[]const u8 = null,
-        rendering_to_buffer: bool = false, // Whether we're rendering to a buffer or to the final output
     };
     const RenderMode = enum(u8) {
         prerender,
@@ -227,7 +225,7 @@ pub const FormatRenderer = struct {
     fn print(self: *Self, comptime fmt: []const u8, args: anytype) void {
         const stream: *Writer = switch (self.mode) {
             .prerender => &self.prerender.writer,
-            .scratch => &self.prerender.writer,
+            .scratch => &self.scratch.writer,
             .final => self.stream,
         };
 
@@ -247,7 +245,7 @@ pub const FormatRenderer = struct {
     fn printno(self: *Self, comptime fmt: []const u8, args: anytype) void {
         const stream: *Writer = switch (self.mode) {
             .prerender => &self.prerender.writer,
-            .scratch => &self.prerender.writer,
+            .scratch => &self.scratch.writer,
             .final => self.stream,
         };
         stream.print(fmt, args) catch |err| {
@@ -608,8 +606,6 @@ pub const FormatRenderer = struct {
                 .out_stream = &alloc_writer.writer,
                 .width = 256, // col_w,
                 .indent = 1,
-                .root_dir = self.opts.root_dir,
-                .rendering_to_buffer = true,
             };
 
             // Create a new Document with our single item
@@ -1150,6 +1146,10 @@ test "FormatRenderer" {
             \\```
             \\
             ,
+        },
+        .{
+            .input = "foo bar <autolink>",
+            .output = "foo bar <autolink>\n",
         },
     };
 

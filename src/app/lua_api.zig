@@ -1,13 +1,9 @@
-//! Registering a Zig function to be called from Lua
+//! Registering Zig functions to be called from Lua.
 //! This creates a shared library that can be imported from a Lua program, e.g.:
-//! > mylib = require('zig-mod')
-//! > print( mylib.adder(40, 2) )
-//! 42
-
+//! > zigdown = require('zigdown_lua')
+//! > print(zigdown.render_markdown('# Hello, World!'))
 const std = @import("std");
 const zd = @import("zigdown");
-
-const ArrayList = std.array_list.Managed;
 
 // The code here is specific to Lua 5.1
 // This has been tested with LuaJIT 5.1, specifically
@@ -18,20 +14,34 @@ pub const c = @cImport({
     @cInclude("lauxlib.h");
 });
 
-// It can be convenient to store a short reference to the Lua struct when
-// it is used multiple times throughout a file.
+const ArrayList = std.array_list.Managed;
 const LuaState = c.lua_State;
 const FnReg = c.luaL_Reg;
 
-/// A Zig function called by Lua must accept a single ?*LuaState parameter and must
-/// return a c_int representing the number of return values pushed onto the stack
-export fn adder(lua: ?*LuaState) callconv(.c) c_int {
-    const a = c.lua_tointeger(lua, 1);
-    const b = c.lua_tointeger(lua, 2);
-    c.lua_pushinteger(lua, a + b);
+/// The list of function registrations for our library.
+/// Note that the last entry must be empty/null as a sentinel value to the luaL_register function
+const lib_fn_reg = [_]FnReg{
+    .{ .name = "render_markdown", .func = render_markdown },
+    .{ .name = "format_markdown", .func = format_markdown },
+    FnReg{},
+};
+
+/// Register the function with Lua using the special luaopen_x function.
+/// This is the entrypoint into the module from a Lua script.
+export fn luaopen_zigdown_lua(lua: ?*LuaState) callconv(.c) c_int {
+    c.luaL_register(lua.?, "zigdown_lua", @ptrCast(&lib_fn_reg[0]));
     return 1;
 }
 
+/// Render the given content using a RangeRenderer.
+///
+/// Lua arguments:
+/// - Markdown text to be rendered.
+/// - [optional] Render width (columns).
+///
+/// Returns two Lua values:
+/// - The raw text.
+/// - A table containing a list of style ranges to be applied to the text.
 export fn render_markdown(lua: ?*LuaState) callconv(.c) c_int {
     // Markdown text to render
     var len: usize = 0;
@@ -39,9 +49,10 @@ export fn render_markdown(lua: ?*LuaState) callconv(.c) c_int {
     const input: []const u8 = input_a[0..len];
     const alloc = std.heap.page_allocator;
 
-    // Number of columns to render (output width)
-    // TODO: luaL_checkinteger(), check for nil / nan
-    const columns: usize = @intCast(c.lua_tointeger(lua, 2));
+    // Number of columns to render (output width).
+    // We handle the case of the user not providing the argument by defaulting to 100.
+    const no_arg: bool = (c.lua_isnone(lua, 2) or c.lua_isnil(lua, 2));
+    const columns: usize = if (no_arg) 100 else @intCast(c.lua_tointeger(lua, 2));
 
     // Parse the input text
     const opts = zd.parser.ParserOpts{ .copy_input = false, .verbose = false };
@@ -52,7 +63,7 @@ export fn render_markdown(lua: ?*LuaState) callconv(.c) c_int {
     const md: zd.Block = parser.document;
 
     // Create a buffer to render into - Note that Lua creates its own copy internally
-    var alloc_writer = std.Io.Writer.Allocating.init(alloc);
+    var alloc_writer = std.Io.Writer.Allocating.initCapacity(alloc, len) catch @panic("OOM");
     defer alloc_writer.deinit();
 
     // Still need the terminal size; TODO: fix this...
@@ -88,6 +99,55 @@ export fn render_markdown(lua: ?*LuaState) callconv(.c) c_int {
     }
 
     return 2;
+}
+
+/// Format the given Markdown text.
+///
+/// Lua arguments:
+/// - Markdown text to be formatted.
+/// - [optional] Render width (columns).
+///
+/// Returns one Lua value:
+/// - The raw text.
+export fn format_markdown(lua: ?*LuaState) callconv(.c) c_int {
+    // Markdown text to render
+    var len: usize = 0;
+    const input_a: [*c]const u8 = c.lua_tolstring(lua, 1, &len);
+    const input: []const u8 = input_a[0..len];
+    const alloc = std.heap.page_allocator; // TODO: add leak check test somewhere using GPA
+
+    // Number of columns to render (output width).
+    // We handle the case of the user not providing the argument by defaulting to 100.
+    const no_arg: bool = (c.lua_isnone(lua, 2) or c.lua_isnil(lua, 2));
+    const columns: usize = if (no_arg) 100 else @intCast(c.lua_tointeger(lua, 2));
+
+    // Parse the input text
+    const opts = zd.parser.ParserOpts{ .copy_input = false, .verbose = false };
+    var parser = zd.Parser.init(alloc, opts);
+    defer parser.deinit();
+
+    parser.parseMarkdown(input) catch @panic("Parse error!"); // TODO: better error handling?
+    const md: zd.Block = parser.document;
+
+    // Create a buffer to render into - Note that Lua creates its own copy internally
+    var alloc_writer = std.Io.Writer.Allocating.initCapacity(alloc, len) catch @panic("OOM");
+    defer alloc_writer.deinit();
+
+    // Render the document
+    const render_opts = zd.render.FormatRenderer.RenderOpts{
+        .out_stream = &alloc_writer.writer,
+        .width = columns,
+        .indent = 0,
+    };
+    var formatter = zd.render.FormatRenderer.init(alloc, render_opts);
+    defer formatter.deinit();
+    formatter.renderBlock(md) catch @panic("Render error!");
+
+    // Push the rendered string to the Lua stack
+    const buffer = alloc_writer.written();
+    c.lua_pushlstring(lua, @ptrCast(buffer), buffer.len);
+
+    return 1;
 }
 
 /// Create a Lua table representation of a StyleRange.
@@ -143,71 +203,4 @@ fn convertStyleToTable(lua: ?*LuaState, style: zd.theme.TextStyle) void {
 
     c.lua_pushinteger(lua, if (style.strike) 1 else 0);
     c.lua_setfield(lua, -2, "strikethrough");
-}
-
-/// I recommend using ZLS (the Zig language server) for autocompletion to help
-/// find relevant Lua function calls like pushstring, tostring, etc.
-export fn hello(lua: ?*LuaState) callconv(.c) c_int {
-    c.lua_pushstring(lua, "Hello, LuaJIT!");
-    return 1;
-}
-
-export fn table_test(lua: ?*LuaState) callconv(.c) c_int {
-    const narr: c_int = 0;
-    const nfield: c_int = 2;
-    c.lua_createtable(lua, narr, nfield);
-
-    c.lua_pushstring(lua, "somebody"); // Pushes table value on top of Lua stack
-    c.lua_setfield(lua, -2, "name"); // table["name"] = "somebody". Pops key value
-
-    c.lua_pushinteger(lua, 42); // Pushes table value on top of Lua stack
-    c.lua_setfield(lua, -2, "meaning"); // table["name"] = "somebody". Pops key value
-
-    // Create a table as a field of the table
-    c.lua_createtable(lua, 0, 1);
-    c.lua_pushnumber(lua, -123.45);
-    c.lua_setfield(lua, -2, "subvalue");
-
-    // Push the new table as a field
-    c.lua_setfield(lua, -2, "subkey");
-
-    // Create an array as a field of the table
-    c.lua_createtable(lua, 3, 0);
-    // item 0
-    c.lua_pushstring(lua, "foo");
-    c.lua_rawseti(lua, -2, 0);
-    // item 1
-    c.lua_pushstring(lua, "bar");
-    c.lua_rawseti(lua, -2, 1);
-    // item 2
-    c.lua_pushstring(lua, "baz");
-    c.lua_rawseti(lua, -2, 2);
-
-    // Push the new table as a field
-    c.lua_setfield(lua, -2, "data");
-
-    return 1;
-}
-
-/// Function registration struct for the 'adder' function
-const adder_reg: FnReg = .{ .name = "adder", .func = adder };
-const hello_reg: FnReg = .{ .name = "hello", .func = hello };
-const render_reg: FnReg = .{ .name = "render_markdown", .func = render_markdown };
-const table_reg: FnReg = .{ .name = "table_test", .func = table_test };
-
-/// The lit of function registrations for our library
-/// Note that the last entry must be empty/null as a sentinel value to the luaL_register function
-const lib_fn_reg = [_]FnReg{
-    adder_reg,
-    hello_reg,
-    render_reg,
-    table_reg,
-    FnReg{},
-};
-
-/// Register the function with Lua using the special luaopen_x function
-/// This is the entrypoint into the library from a Lua script
-export fn luaopen_zigdown_lua(lua: ?*LuaState) callconv(.c) c_int {
-    c.luaL_register(lua.?, "zigdown_lua", @ptrCast(&lib_fn_reg[0]));
-    return 1;
 }
