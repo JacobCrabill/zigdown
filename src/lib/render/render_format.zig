@@ -64,10 +64,8 @@ pub const FormatRenderer = struct {
     needs_leaders: bool = true,
     cur_style: TextStyle = .{},
     root: ?Block = null,
-    scratch: ArrayList(u8), // Scratch buffer for pre-rendering (to find length)
-    prerender: ArrayList(u8) = undefined,
-    scratch_stream: ArrayList(u8).Writer = undefined,
-    prerender_stream: ArrayList(u8).Writer = undefined,
+    scratch: std.Io.Writer.Allocating = undefined,
+    prerender: std.Io.Writer.Allocating = undefined,
     mode: RenderMode = .prerender,
     /// In order to track the order in which to start/end each style,
     /// we need a stack to push/pop each modification from
@@ -80,8 +78,8 @@ pub const FormatRenderer = struct {
             .stream = opts.out_stream,
             .alloc = alloc,
             .leader_stack = ArrayList(Text).init(alloc),
-            .scratch = ArrayList(u8).init(alloc),
-            .prerender = ArrayList(u8).init(alloc),
+            .scratch = std.Io.Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
+            .prerender = std.Io.Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
             .style_stack = ArrayList(StyleFlag).init(alloc),
         };
     }
@@ -202,13 +200,13 @@ pub const FormatRenderer = struct {
     fn write(self: *Self, bytes: []const u8) void {
         switch (self.mode) {
             .prerender => {
-                self.prerender_stream.writeAll(bytes) catch |err| {
+                self.prerender.writer.writeAll(bytes) catch |err| {
                     errorMsg(@src(), "Unable to write to prerender buffer! {s}\n", .{@errorName(err)});
                 };
                 self.column += std.unicode.utf8CountCodepoints(bytes) catch bytes.len;
             },
             .scratch => {
-                self.scratch_stream.writeAll(bytes) catch |err| {
+                self.scratch.writer.writeAll(bytes) catch |err| {
                     errorMsg(@src(), "Unable to write to scratch! {s}\n", .{@errorName(err)});
                 };
                 // don't increment the column here; we may write to the scratch buffer at
@@ -224,15 +222,15 @@ pub const FormatRenderer = struct {
     }
 
     /// Write an array of bytes to the underlying writer, without updating the current column
-    fn writeno(self: Self, bytes: []const u8) void {
+    fn writeno(self: *Self, bytes: []const u8) void {
         switch (self.mode) {
             .prerender => {
-                self.prerender_stream.writeAll(bytes) catch |err| {
+                self.prerender.writer.writeAll(bytes) catch |err| {
                     errorMsg(@src(), "Unable to write to prerender buffer! {s}\n", .{@errorName(err)});
                 };
             },
             .scratch => {
-                self.scratch_stream.writeAll(bytes) catch |err| {
+                self.scratch.writer.writeAll(bytes) catch |err| {
                     errorMsg(@src(), "Unable to write to scratch! {s}\n", .{@errorName(err)});
                 };
             },
@@ -258,12 +256,12 @@ pub const FormatRenderer = struct {
     fn printno(self: *Self, comptime fmt: []const u8, args: anytype) void {
         switch (self.mode) {
             .prerender => {
-                self.prerender_stream.print(fmt, args) catch |err| {
+                self.prerender.writer.print(fmt, args) catch |err| {
                     errorMsg(@src(), "Unable to print to prerender buffer! {s}\n", .{@errorName(err)});
                 };
             },
             .scratch => {
-                self.scratch_stream.print(fmt, args) catch |err| {
+                self.scratch.writer.print(fmt, args) catch |err| {
                     errorMsg(@src(), "Unable to print to scratch! {s}\n", .{@errorName(err)});
                 };
             },
@@ -284,30 +282,38 @@ pub const FormatRenderer = struct {
 
     /// Complete the rendering
     fn renderEnd(self: *Self) void {
+        // TODO: reaching into the Writer internals feels hacky. This used to operate on an ArrayList.
+        var w: *std.Io.Writer = &self.prerender.writer;
+
         // We might have trailing whitespace(s) due to how we wrapped text
         // Remove it before dumping the final buffer to the output stream
         var i: usize = 1;
-        while (i < self.prerender.items.len) {
-            const pc: u8 = self.prerender.items[i - 1];
-            const c: u8 = self.prerender.items[i];
+        while (i < w.end) {
+            const buf = self.prerender.written();
+            const pc: u8 = buf[i - 1];
+            const c: u8 = buf[i];
             if (c == '\n' and pc == ' ') {
-                _ = self.prerender.orderedRemove(i - 1);
+                // remove i-1, shift elements left
+                for (buf[i..buf.len], 0..) |cc, j| {
+                    w.buffer[i - 1 + j] = cc;
+                }
+                w.end -= 1;
             } else {
                 i += 1;
             }
         }
 
-        if (self.prerender.items.len > 0) {
-            i = self.prerender.items.len - 1;
-            while ((self.prerender.items[i] == ' ' or self.prerender.items[i] == '\n') and i >= 0) : (i -= 1) {
-                _ = self.prerender.pop();
+        if (w.buffered().len > 0) {
+            i = w.end - 1;
+            while ((w.buffer[i] == ' ' or w.buffer[i] == '\n') and i >= 0) : (i -= 1) {
+                w.end -= 1;
             }
         }
-        self.prerender.append('\n') catch unreachable;
+        w.writeByte('\n') catch unreachable;
 
         self.column = 0;
         self.mode = .final;
-        self.write(self.prerender.items);
+        self.write(self.prerender.written());
         self.prerender.clearRetainingCapacity();
     }
 
@@ -407,8 +413,6 @@ pub const FormatRenderer = struct {
     pub fn renderBlock(self: *Self, block: Block) RenderError!void {
         if (self.root == null) {
             self.root = block;
-            self.prerender_stream = self.prerender.writer();
-            self.scratch_stream = self.scratch.writer();
         }
         switch (block) {
             .Container => |c| try self.renderContainer(c),
@@ -778,7 +782,7 @@ pub const FormatRenderer = struct {
             self.renderInline(item);
         }
         self.mode = .prerender;
-        self.wrapText(self.scratch.items);
+        self.wrapText(self.scratch.written());
         self.scratch.clearRetainingCapacity();
 
         _ = self.leader_stack.pop();
@@ -806,8 +810,8 @@ pub const FormatRenderer = struct {
                 self.renderInline(item);
             }
             self.mode = .prerender;
-            const needs_break: bool = (self.scratch.items.len > 0);
-            self.wrapText(self.scratch.items);
+            const needs_break: bool = (self.scratch.written().len > 0);
+            self.wrapText(self.scratch.written());
             self.scratch.clearRetainingCapacity();
             if (needs_break) self.renderBreak();
         }
@@ -822,7 +826,7 @@ pub const FormatRenderer = struct {
             self.renderInline(item);
         }
         self.mode = .prerender;
-        self.wrapText(self.scratch.items);
+        self.wrapText(self.scratch.written());
         self.scratch.clearRetainingCapacity();
     }
 
@@ -858,9 +862,12 @@ pub const FormatRenderer = struct {
             if (self.column + code.text.len + 3 + self.opts.indent > self.opts.width) {
                 self.renderBreak();
                 self.writeLeaders();
-            } else if (std.mem.indexOfAny(u8, &.{self.prerender.getLast()}, " ([{<") == null) {
-                // Add a space if we need one (not after an open bracket or another space)
-                self.write(" ");
+            } else if (self.prerender.written().len > 0) {
+                const last_char = self.prerender.written()[self.prerender.written().len - 1];
+                if (std.mem.indexOfAny(u8, &.{last_char}, " ([{<") == null) {
+                    // Add a space if we need one (not after an open bracket or another space)
+                    self.write(" ");
+                }
             }
         }
 
@@ -903,11 +910,12 @@ pub const FormatRenderer = struct {
             indent += leader.text.len;
         }
         if (self.column > indent) {
-            if (self.column + self.scratch.items.len + 1 + self.opts.indent > self.opts.width) {
+            if (self.column + self.scratch.written().len + 1 + self.opts.indent > self.opts.width) {
                 self.renderBreak();
                 self.writeLeaders();
             } else {
-                const c = self.prerender.getLast();
+                const buf = self.prerender.written();
+                const c = buf[buf.len - 1];
                 switch (c) {
                     ' ', '(', '[', '{' => {},
                     else => self.write(" "),
@@ -915,7 +923,7 @@ pub const FormatRenderer = struct {
             }
         }
 
-        self.write(self.scratch.items);
+        self.write(self.scratch.written());
 
         // Reset
         self.scratch.clearRetainingCapacity();
@@ -941,10 +949,10 @@ pub const FormatRenderer = struct {
     }
 
     fn dumpScratchBuffer(self: *Self) void {
-        if (self.scratch.items.len == 0) return;
+        if (self.scratch.written().len == 0) return;
         self.mode = .prerender;
 
-        self.wrapText(self.scratch.items);
+        self.wrapText(self.scratch.written());
 
         self.scratch.clearRetainingCapacity();
         self.mode = .scratch;
@@ -958,8 +966,12 @@ pub const FormatRenderer = struct {
 fn testRender(alloc: Allocator, input: []const u8, out_stream: *std.io.Writer, width: usize) !void {
     var p = @import("../parser.zig").Parser.init(alloc, .{});
     try p.parseMarkdown(input);
+    defer p.deinit();
+
     var r = FormatRenderer.init(alloc, .{ .out_stream = out_stream, .width = width });
+    defer r.deinit();
     try r.renderBlock(p.document);
+
     try out_stream.flush();
 }
 
@@ -1143,12 +1155,21 @@ test "FormatRenderer" {
     };
 
     const alloc = std.testing.allocator;
-    for (test_data) |data| {
-        var arena = std.heap.ArenaAllocator.init(alloc);
-        defer arena.deinit();
-        var writer = std.Io.Writer.Allocating.init(arena.allocator());
 
-        try testRender(arena.allocator(), data.input, &writer.writer, data.width);
+    // We _could_ use an arena for speed, and simply clear it between tests.
+    // That would be significantly faster.
+    // However, checking for leaks is valuable, so I'll stick to the testing allocator for now.
+    // var arena = std.heap.ArenaAllocator.init(alloc);
+    // defer arena.deinit();
+    // const alloc = arena.allocator();
+
+    for (test_data) |data| {
+        var writer = std.Io.Writer.Allocating.init(alloc);
+        defer writer.deinit();
+
+        try testRender(alloc, data.input, &writer.writer, data.width);
         try std.testing.expectEqualSlices(u8, data.output, writer.writer.buffered());
+
+        // _ = arena.reset(.retain_capacity);
     }
 }

@@ -96,8 +96,8 @@ pub fn getLeafNode(block: *Block) ?*Block {
     return null;
 }
 
-/// Create a Table of Contents from a Markdown AST
-/// The returned Block is a List of plain text containing the text for each heading
+/// Create a Table of Contents from a Markdown AST.
+/// The returned Block is a List of plain text containing the text for each heading.
 pub fn generateTableOfContents(alloc: Allocator, block: *const Block) !Block {
     std.debug.assert(block.isContainer());
     std.debug.assert(block.Container.content == .Document);
@@ -372,9 +372,7 @@ test "fetchFile" {
 ////////////////////////////////////////////////////////////////////////////////
 
 test "Table Of Contents" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const alloc = arena.allocator();
+    const alloc = std.testing.allocator;
 
     // Create the Document root
     var root = Block.initContainer(alloc, .Document, 0);

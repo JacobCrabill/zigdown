@@ -6,6 +6,6 @@ pub const InlineParser = @import("parsers/inlines.zig").InlineParser;
 // Tests
 //////////////////////////////////////////////////////////
 
-test "All Renderer Tests" {
+test "All Parser Tests" {
     @import("std").testing.refAllDecls(@This());
 }
