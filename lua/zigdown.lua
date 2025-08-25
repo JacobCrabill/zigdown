@@ -13,7 +13,6 @@ M.opts = {
   format_width = 100,
 }
 M.root = plugin_root
-M.zigdown_bin = M.root .. "/zig-out/bin/zigdown"
 
 -- Required version of the Zig compiler
 local zig_ver = "0.15.1"
@@ -23,8 +22,9 @@ function M.setup(opts)
   M.opts = vim.tbl_deep_extend("force", M.opts, opts or {})
 
   -- Check if the plugin has been built yet. Build it if not.
-  if not utils.file_exists(M.zigdown_bin) then
-    build.install(zig_ver, M.root)
+  local lib_file = build.get_plugin_name()
+  if not utils.file_exists(lib_file) then
+    M.install()
   end
 
   -- Setup any default values on options, if any

@@ -33,7 +33,7 @@ M.curl_cmd = { "echo", "Hello" }
 M.tar_cmd = { "echo", "World" }
 M.build_cmd = {}
 M.build_dir = ''
-M.root_dir = ''
+M.root_dir = utils.get_zigdown_root()
 M.zig_binary = ''
 M.tarball = ''
 M.build_jobid = nil
@@ -78,6 +78,15 @@ function M.build_zigdown()
   vim.notify("Compiling zigdown - Please wait...", vim.log.levels.INFO)
 
   M.build_jobid = vim.system(M.build_cmd, { cwd = M.root_dir }, on_build_exit)
+end
+
+-- Get the library name for the Zigdown plugin
+function M.get_plugin_name()
+  local raw_os = vim.loop.os_uname().sysname
+  local lib_ext = lib_patterns[raw_os]
+  local lib_name = 'zigdown_lua' .. lib_ext
+  local lib_dir = utils.path_append(M.root_dir, "lua")
+  return utils.path_append(lib_dir, lib_name)
 end
 
 -- Attempt to load the zigdown_lua module we just compiled
