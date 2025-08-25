@@ -34,11 +34,8 @@
 
 Zigdown, inspired by [Glow](https://github.com/charmbracelet/glow) and
 [mdcat](https://github.com/swsnr/mdcat), is a tool to parse and render Markdown-like content to the
-terminal or to HTML. It can also serve up a directory of files to your browser like a psuedo-static
-web site, or present a set of files interactively as an in-terminal slide show.
-
-This will likely forever be a WIP, but it currently supports the the most common features of simple
-Markdown files.
+terminal, to HTML, or inside Neovim. It can also serve up a directory of files to your browser like
+a psuedo-static web site, or present a set of files interactively as an in-terminal slide show.
 
 > [!WARNING]
 > This is not a CommonMark-compliant Markdown parser, nor will it ever be one!
@@ -96,6 +93,7 @@ Markdown files.
 - [ ] Enabling TreeSitter parsers to be used in WASM modules
       - Requires filling in some libC stub functions (the TS parsers use quite a few functions from
         the C standard library that are not available in WASM)
+      - To run the exising WASM demo, do `./tools/run_wasm_demo.sh`.
 - [ ] Character escaping
 
 ## Caveats
