@@ -170,13 +170,7 @@ pub fn main() !void {
     const stdout: *std.io.Writer = &stdout_writer.interface;
     zd.debug.setStream(stdout);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{
-        .never_unmap = true,
-        .thread_safe = true,
-    }){};
-
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.heap.smp_allocator;
 
     const args = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, args);
