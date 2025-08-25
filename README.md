@@ -130,8 +130,7 @@ zig build -Dtarget=x86_64-linux-musl # Compile for x86-64 Linux using
 ```
 
 `zig build` will create a `zigdown` binary at `zig-out/bin/zigdown`. Add `-Doptimize=ReleaseSafe` to
-enable optimizations while keeping safety checks and backtraces upon errors. The shorthand options
-`-Dsafe` and `-Dfast` also enable ReleaseSafe and ReleaseFast, respectively.
+enable optimizations while keeping safety checks and backtraces upon errors.
 
 ## Enabling Syntax Highlighting
 
