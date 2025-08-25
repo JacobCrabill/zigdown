@@ -59,7 +59,7 @@ jobs:
           tar -czf aarch64-linux-musl.tar.gz -C aarch64-linux-musl/bin zigdown
           tar -czf x86_64-macos.tar.gz       -C x86-macos/bin          zigdown
           tar -czf aarch64-macos.tar.gz      -C aarch64-macos/bin      zigdown
-          tar -czf x86_64-windows.tar.gz     -C x86-windows/bin        zigdown
+          tar -czf x86_64-windows.tar.gz     -C x86-windows/bin        zigdown.exe
 
       # Note: All artifacts will get bundled together into one tarball on the Actions page
       - uses: actions/upload-artifact@v4
