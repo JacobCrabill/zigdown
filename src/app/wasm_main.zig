@@ -34,5 +34,9 @@ export fn renderToHtml(md_ptr: [*:0]u8) void {
     h_renderer.renderBlock(parser.document) catch |err| {
         wasm.log("[render] Caught Zig error: {any}\n", .{err});
     };
+    wasm.writer.flush() catch {
+        wasm.log("Can't flush!\n", .{});
+        @panic("unable to flush!");
+    };
     wasm.log("Rendered!\n", .{});
 }

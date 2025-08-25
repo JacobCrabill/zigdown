@@ -42,6 +42,7 @@ pub var logger: std.Io.Writer = .{
 
 pub fn log(comptime fmt: []const u8, args: anytype) void {
     logger.print(fmt, args) catch {};
+    logger.flush() catch {};
 }
 
 fn drainHtml(_: *std.Io.Writer, data: []const []const u8, splat: usize) !usize {
@@ -58,7 +59,7 @@ fn drainHtml(_: *std.Io.Writer, data: []const []const u8, splat: usize) !usize {
 }
 
 fn flushHtml(_: *std.Io.Writer) !void {
-    Imports.jsConsoleLogFlush();
+    Imports.jsHtmlBufferFlush();
 }
 
 /// Writer to write rendered HTML output
