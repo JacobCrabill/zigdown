@@ -17,8 +17,6 @@ const Text = inlines.Text;
 const Link = inlines.Link;
 // const Image = inlines.Image;
 
-const printIndent = utils.printIndent;
-
 /// All types of Leaf blocks that can be contained in Container blocks
 pub const LeafType = enum(u8) {
     Alert,
@@ -76,7 +74,7 @@ pub const Heading = struct {
     }
 
     pub fn print(h: Heading, depth: u8) void {
-        printIndent(depth);
+        debug.printIndent(depth);
         debug.print("[H{d}] '{s}'\n", .{ h.level, h.text });
     }
 };
@@ -101,7 +99,7 @@ pub const Code = struct {
     }
 
     pub fn print(c: Code, depth: u8) void {
-        printIndent(depth);
+        debug.printIndent(depth);
         var tag: []const u8 = "";
         var text: []const u8 = "";
         if (c.tag) |ctag| tag = ctag;
@@ -127,7 +125,7 @@ pub const Directive = struct {
     }
 
     pub fn print(c: Directive, depth: u8) void {
-        printIndent(depth);
+        debug.printIndent(depth);
         var directive: []const u8 = "";
         if (c.directive) |d| directive = d;
         debug.print("directive: '{s}'\n", .{directive});
@@ -148,7 +146,7 @@ pub const Alert = struct {
     }
 
     pub fn print(a: Alert, depth: u8) void {
-        printIndent(depth);
+        debug.printIndent(depth);
         var alert: []const u8 = "";
         if (a.alert) |calert| alert = calert;
         debug.print("alert: '{s}'\n", .{alert});

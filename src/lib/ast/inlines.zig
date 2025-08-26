@@ -9,7 +9,6 @@ const Allocator = std.mem.Allocator;
 
 const TextStyle = theme.TextStyle;
 const Token = tokens.Token;
-const printIndent = utils.printIndent;
 
 /// Inlines are considered Phrasing content
 /// Phrasing content represents the text in a document, and its markup
@@ -55,11 +54,11 @@ pub const InlineData = union(InlineType) {
     pub fn print(self: InlineData, depth: u8) void {
         switch (self) {
             .codespan, .linebreak => {
-                printIndent(depth);
+                debug.printIndent(depth);
                 debug.print("Inline {s}\n", .{@tagName(self)});
             },
             .link => |link| {
-                printIndent(depth);
+                debug.printIndent(depth);
                 debug.print("Link:\n", .{});
                 for (link.text.items) |text| {
                     text.print(depth + 1);
@@ -111,9 +110,9 @@ pub const Text = struct {
     col: usize = 0, // Column number where this text starts
 
     pub fn print(self: Text, depth: u8) void {
-        printIndent(depth);
+        debug.printIndent(depth);
         debug.print("Text: '{s}' [line: {d}, col: {d}]\n", .{ self.text, self.line, self.col });
-        // printIndent(depth);
+        // debug.printIndent(depth);
         // debug.print("Style: ", .{});
         // if (self.style.fg_color) |fg| {
         //     debug.print("fg: {s}", .{@tagName(fg)});
@@ -165,7 +164,7 @@ pub const Link = struct {
     }
 
     pub fn print(self: Link, depth: u8) void {
-        printIndent(depth);
+        debug.printIndent(depth);
         //debug.print("Link to {s}\n", .{self.url});
         debug.print("Link:\n", .{});
         for (self.text.items) |text| {
@@ -232,7 +231,7 @@ pub const Image = struct {
     }
 
     pub fn print(self: Image, depth: u8) void {
-        printIndent(depth);
+        debug.printIndent(depth);
         debug.print("Image: {s}\n", .{self.src});
         for (self.alt.items) |text| {
             text.print(depth + 1);
@@ -247,7 +246,7 @@ pub const Autolink = struct {
     heap_url: bool = false, // Whether the url string has been heap-allocated
 
     pub fn print(self: Autolink, depth: u8) void {
-        printIndent(depth);
+        debug.printIndent(depth);
         debug.print("Autolink: {s}\n", .{self.url});
     }
 

@@ -14,17 +14,12 @@ const ArrayList = std.array_list.Managed;
 
 const Block = blocks.Block;
 
+const log = std.log.scoped(.utils);
+
 pub const Vec2i = struct {
     x: usize,
     y: usize,
 };
-
-pub fn printIndent(depth: u8) void {
-    var i: u8 = 0;
-    while (i < depth) : (i += 1) {
-        debug.print("│ ", .{});
-    }
-}
 
 /// Check if the character is a whitespace character
 pub fn isWhitespace(c: u8) bool {
@@ -356,17 +351,17 @@ pub fn fetchFile(alloc: Allocator, url_s: []const u8, writer: *std.Io.Writer) !v
         .headers = .{ .authorization = .omit },
         .response_writer = writer,
     }) catch |err| {
-        std.debug.print("Error fetching {s}: {any}\n", .{ url_s, err });
+        log.err("Error fetching {s}: {any}", .{ url_s, err });
         return err;
     };
 
     if (status.status != .ok) {
-        std.debug.print("Error fetching {s} (!ok)\n", .{url_s});
+        log.err("Error fetching {s} (!ok)", .{url_s});
         return error.NoReply;
     }
 
     if (writer.buffered().len == 0) {
-        std.debug.print("Error fetching {s} (no bytes returned)\n", .{url_s});
+        log.err("Error fetching {s} (no bytes returned)", .{url_s});
         return error.NoReply;
     }
 }

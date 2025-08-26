@@ -23,15 +23,6 @@ const InlineData = inls.InlineData;
 const debug = @import("../debug.zig");
 const errorReturn = debug.errorReturn;
 const errorMsg = debug.errorMsg;
-const Logger = debug.Logger;
-
-/// Logger levels
-/// TODO: Make use of this
-pub const LogLevel = enum {
-    Verbose,
-    Normal,
-    Silent,
-};
 
 /// Options to configure the Parsers
 pub const ParserOpts = struct {

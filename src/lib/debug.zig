@@ -39,10 +39,18 @@ pub fn getStream() *std.io.Writer {
 
 pub fn print(comptime fmt: []const u8, args: anytype) void {
     getStream().print(fmt, args) catch @panic("Unable to write to debug stream!");
+    flush();
 }
 
 pub fn flush() void {
     getStream().flush() catch @panic("Can't flush debug stream!");
+}
+
+pub fn printIndent(depth: u8) void {
+    var i: u8 = 0;
+    while (i < depth) : (i += 1) {
+        print("│ ", .{});
+    }
 }
 
 pub fn errorReturn(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) !void {
@@ -70,7 +78,7 @@ pub fn errorMsg(comptime src: std.builtin.SourceLocation, comptime fmt: []const 
 pub const Logger = struct {
     const Self = @This();
     depth: usize = 0,
-    enabled: bool = true,
+    enabled: bool = false,
 
     pub fn log(self: Self, comptime fmt: []const u8, args: anytype) void {
         self.doIndent();

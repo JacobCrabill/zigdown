@@ -2,12 +2,8 @@ const std = @import("std");
 const treez = @import("treez");
 const builtin = @import("builtin");
 
-const cons = @import("console.zig");
-const debug = @import("debug.zig");
-const gfx = @import("image.zig");
 const ts_queries = @import("ts_queries.zig");
 const theme = @import("theme.zig");
-const utils = @import("utils.zig");
 const wasm = @import("wasm.zig");
 
 const ArrayList = std.array_list.Managed;
@@ -18,6 +14,8 @@ pub const Range = struct {
     content: []const u8,
     newline: bool = false,
 };
+
+const log = std.log.scoped(.syntax);
 
 /// Capture group name -> Color
 /// List taken from neovim's runtime/doc/treesitter.txt
@@ -134,8 +132,8 @@ fn getLanguage(_: Allocator, language: []const u8) ?*const treez.Language {
 
     if (wasm.is_wasm or builtin.os.tag == .windows) return null;
 
-    return treez.Language.loadFromDynLib(language) catch {
-        // debug.print("Error loading {s} language: {any}\n", .{ language, err });
+    return treez.Language.loadFromDynLib(language) catch |err| {
+        log.debug("Error loading {s} language: {any}", .{ language, err });
         return null;
     };
 }
@@ -150,71 +148,71 @@ pub fn getHighlights(alloc: Allocator, code: []const u8, lang_name: []const u8) 
 
     const lang: ?*const treez.Language = getLanguage(alloc, language);
 
+    if (lang == null) return error.LangNotFound;
+
     // Get the highlights query
     const highlights_opt: ?[]const u8 = ts_queries.get(alloc, language);
     defer if (highlights_opt) |h| alloc.free(h);
 
-    if (lang != null and highlights_opt != null) {
-        const tlang = lang.?;
-        const highlights = highlights_opt.?;
+    if (highlights_opt == null) return error.HighlightsNotFound;
 
-        var parser = try treez.Parser.create();
-        defer parser.destroy();
+    const tlang = lang.?;
+    const highlights = highlights_opt.?;
 
-        try parser.setLanguage(tlang);
+    var parser = try treez.Parser.create();
+    defer parser.destroy();
 
-        const tree = try parser.parseString(null, code);
-        defer tree.destroy();
+    try parser.setLanguage(tlang);
 
-        const query = try treez.Query.create(tlang, highlights);
-        defer query.destroy();
+    const tree = try parser.parseString(null, code);
+    defer tree.destroy();
 
-        const cursor = try treez.Query.Cursor.create();
-        defer cursor.destroy();
+    const query = try treez.Query.create(tlang, highlights);
+    defer query.destroy();
 
-        cursor.execute(query, tree.getRootNode());
+    const cursor = try treez.Query.Cursor.create();
+    defer cursor.destroy();
 
-        // For simplicity, append each range as we iterate the matches
-        // Any ranges not falling into a match will be set to the "Default" color
-        var ranges = ArrayList(Range).init(alloc);
-        defer ranges.deinit();
+    cursor.execute(query, tree.getRootNode());
 
-        var idx: usize = 0;
-        while (cursor.nextMatch()) |match| {
-            for (match.captures()) |capture| {
-                const node: treez.Node = capture.node;
-                const start = node.getStartByte();
-                const end = node.getEndByte();
-                const capture_name = query.getCaptureNameForId(capture.id);
-                const content = code[start..end];
-                const color = getHighlightFor(capture_name) orelse .Default;
+    // For simplicity, append each range as we iterate the matches
+    // Any ranges not falling into a match will be set to the "Default" color
+    var ranges = ArrayList(Range).init(alloc);
+    defer ranges.deinit();
 
-                if (start > idx) {
-                    // We've missed something in between captures
-                    try splitByLines(&ranges, color, code[idx..start]);
-                }
+    var idx: usize = 0;
+    while (cursor.nextMatch()) |match| {
+        for (match.captures()) |capture| {
+            const node: treez.Node = capture.node;
+            const start = node.getStartByte();
+            const end = node.getEndByte();
+            const capture_name = query.getCaptureNameForId(capture.id);
+            const content = code[start..end];
+            const color = getHighlightFor(capture_name) orelse .Default;
 
-                if (end > idx) {
-                    try splitByLines(&ranges, color, content);
-                    idx = end;
-                }
+            if (start > idx) {
+                // We've missed something in between captures
+                try splitByLines(&ranges, color, code[idx..start]);
+            }
+
+            if (end > idx) {
+                try splitByLines(&ranges, color, content);
+                idx = end;
             }
         }
-
-        if (idx < code.len) {
-            // We've missed something un-captured at the end; probably a '}\n'
-            // Skip the traiilng newline if it's present
-            var trailing_content = code[idx..];
-            if (trailing_content.len > 1 and std.mem.endsWith(u8, trailing_content, "\n")) {
-                trailing_content = trailing_content[0 .. trailing_content.len - 1];
-            }
-            try splitByLines(&ranges, .Default, trailing_content);
-        }
-
-        return ranges.toOwnedSlice();
     }
 
-    return error.LangNotFound;
+    if (idx < code.len) {
+        // We've missed something un-captured at the end; probably a '}\n'
+        // Skip the traiilng newline if it's present
+        var trailing_content = code[idx..];
+        if (trailing_content.len > 1 and std.mem.endsWith(u8, trailing_content, "\n")) {
+            trailing_content = trailing_content[0 .. trailing_content.len - 1];
+        }
+        try splitByLines(&ranges, .Default, trailing_content);
+    }
+
+    return ranges.toOwnedSlice();
 }
 
 /// Split a range of content by newlines

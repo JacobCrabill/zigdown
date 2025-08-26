@@ -12,6 +12,8 @@ const cons = zd.cons;
 const Parser = zd.Parser;
 const ConsoleRenderer = zd.ConsoleRenderer;
 
+const log = std.log.scoped(.present);
+
 /// Where the files to render come from
 pub const Source = struct {
     /// The directory which 'dirname' is relative to
@@ -45,7 +47,7 @@ pub fn present(alloc: Allocator, writer: *std.io.Writer, source: Source, recurse
     }
 
     if (slides.items.len == 0) {
-        errdefer std.debug.print("Error: No slides found!\n", .{});
+        errdefer log.err("Error: No slides found!", .{});
         return error.NoSlidesFound;
     }
 
@@ -172,11 +174,11 @@ fn loadSlidesFromDirectory(alloc: Allocator, dir: Dir, recurse: bool, slides: *A
             .file => {
                 var path_buf: [std.fs.max_path_bytes]u8 = undefined;
                 const realpath = dir.realpath(entry.name, &path_buf) catch |err| {
-                    std.debug.print("Error loading slide: {s}\n", .{entry.name});
+                    log.err("Error loading slide: {s}", .{entry.name});
                     return err;
                 };
                 if (std.mem.eql(u8, ".md", std.fs.path.extension(realpath))) {
-                    // std.debug.print("Adding slide: {s}\n", .{realpath});
+                    log.debug("Adding slide: {s}", .{realpath});
                     const slide: []const u8 = try alloc.dupe(u8, realpath);
                     try slides.append(slide);
                 }
@@ -203,11 +205,11 @@ fn loadSlidesFromFile(alloc: Allocator, dir: Dir, file: File, slides: *ArrayList
 
         var path_buf: [std.fs.max_path_bytes]u8 = undefined;
         const realpath = dir.realpath(name, &path_buf) catch |err| {
-            std.debug.print("Error loading slide: {s}\n", .{name});
+            log.err("Error loading slide: {s}", .{name});
             return err;
         };
         if (std.mem.eql(u8, ".md", std.fs.path.extension(realpath))) {
-            std.debug.print("Adding slide: {s}\n", .{realpath});
+            log.debug("Adding slide: {s}", .{realpath});
             const slide: []const u8 = try alloc.dupe(u8, realpath);
             try slides.append(slide);
         }

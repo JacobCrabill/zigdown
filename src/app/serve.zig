@@ -70,7 +70,7 @@ pub fn serve(alloc: Allocator, config: ServeOpts) !void {
     if (context.file) |file| {
         const url = try std.fmt.allocPrint(alloc, "http://localhost:{d}/{s}", .{ config.port, file });
         defer alloc.free(url);
-        std.debug.print("Serving at {s}\n", .{url});
+        log.info("Serving at {s}\n", .{url});
         var proc: std.process.Child = undefined;
         if (builtin.os.tag == .windows) {
             const argv = &[_][]const u8{ "start", url };
@@ -91,7 +91,7 @@ fn runServer(context: *Context, server: *std.net.Server) !void {
     while (true) {
         const connection = try server.accept();
         _ = std.Thread.spawn(.{}, accept, .{ context, connection }) catch |err| {
-            std.log.err("unable to accept connection: {s}", .{@errorName(err)});
+            log.err("unable to accept connection: {s}", .{@errorName(err)});
             connection.stream.close();
             continue;
         };
@@ -117,12 +117,12 @@ fn accept(
         var request = server.receiveHead() catch |err| switch (err) {
             error.HttpConnectionClosing => return,
             else => {
-                std.log.err("closing http connection: {s}", .{@errorName(err)});
+                log.err("closing http connection: {s}", .{@errorName(err)});
                 return;
             },
         };
         serveRequest(&request, context) catch |err| {
-            std.log.err("unable to serve {s}: {s}", .{ request.head.target, @errorName(err) });
+            log.err("unable to serve {s}: {s}", .{ request.head.target, @errorName(err) });
             return;
         };
     }

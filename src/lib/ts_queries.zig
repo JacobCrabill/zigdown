@@ -26,6 +26,8 @@ const TsParserPair = struct {
 const builtin_queries = @import("assets").queries.builtin_queries;
 pub var builtin_languages: std.StringHashMap(TsParserPair) = undefined;
 
+const log = std.log.scoped(.tree_sitter);
+
 var initialized: bool = false;
 var allocator: Allocator = undefined;
 var queries: std.StringHashMap([]const u8) = undefined;
@@ -129,7 +131,7 @@ pub fn getTsConfigDir() ![]const u8 {
             defer allocator.free(home);
             ts_config_dir = try std.fmt.allocPrint(allocator, "{s}/.config/tree-sitter/", .{home});
         } else {
-            debug.print("ERROR: Could not get home directory. Defaulting to current directory\n", .{});
+            log.err("ERROR: Could not get home directory. Defaulting to current directory", .{});
             ts_config_dir = try allocator.dupe(u8, "./tree-sitter/");
         }
     }
@@ -191,7 +193,7 @@ pub fn get(query_alloc: Allocator, language: []const u8) ?[]const u8 {
 
     var qd: std.fs.Dir = undefined;
     qd = std.fs.openDirAbsolute(query_dir, .{}) catch {
-        std.debug.print("Unable to open absolute directory: {s}\n", .{query_dir});
+        log.err("Unable to open absolute directory: {s}", .{query_dir});
         return null;
     };
     defer qd.close();
@@ -230,7 +232,7 @@ pub fn fetchStandardQuery(language: []const u8, github_user: []const u8, git_ref
     });
     const uri = try std.Uri.parse(url_s);
 
-    std.debug.print("Fetching highlights query for {s} from {s}\n", .{ lang_alias, url_s });
+    log.debug("Fetching highlights query for {s} from {s}", .{ lang_alias, url_s });
 
     var client = std.http.Client{ .allocator = allocator };
     defer client.deinit();
@@ -250,7 +252,7 @@ pub fn fetchStandardQuery(language: []const u8, github_user: []const u8, git_ref
     errdefer allocator.free(body);
 
     if (status.status != .ok or body.len == 0) {
-        std.debug.print("Error fetching {s} (!ok)\n", .{language});
+        log.err("Error fetching {s} (!ok)", .{language});
         return error.NoReply;
     }
 
@@ -270,7 +272,7 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
     // Handle any language aliases
     const lang_alias = aliases.get(language) orelse language;
 
-    // std.debug.print("Fetching repo for {s}\n", .{lang_alias});
+    log.debug("Fetching repo for {s}", .{lang_alias});
 
     // Open our config directory
     const config_dir: []const u8 = try getTsConfigDir();
@@ -299,7 +301,7 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
     var response_storage = std.Io.Writer.Allocating.init(allocator);
     defer response_storage.deinit();
     utils.fetchFile(allocator, url_s, &response_storage.writer) catch |err| {
-        std.debug.print("Error fetching {s} at {s}: {any}\n", .{ lang_alias, url_s, err });
+        log.err("Error fetching {s} at {s}: {any}", .{ lang_alias, url_s, err });
         return err;
     };
 
@@ -348,14 +350,14 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
     out_dir.copyFile(source_path, configd, query_sub, .{}) catch |err| {
         switch (err) {
             error.FileNotFound => {
-                std.debug.print("File {s} not found in downloaded repo; trying queries/{s}/highlights.scm instead\n", .{ source_path, lang_alias });
+                log.warn("File {s} not found in downloaded repo; trying queries/{s}/highlights.scm instead\n", .{ source_path, lang_alias });
                 const source_path2: []const u8 = try std.fs.path.join(allocator, &.{ "queries", lang_alias, "highlights.scm" });
                 defer Self.free(source_path2);
                 out_dir.copyFile(source_path2, configd, query_sub, .{}) catch |err2| {
-                    std.debug.print("File {s} not found in downloaded repo\n", .{source_path2});
+                    log.warn("File {s} not found in downloaded repo\n", .{source_path2});
                     return err2;
                 };
-                std.debug.print("Found file {s}\n", .{source_path2});
+                log.info("Found file {s}\n", .{source_path2});
             },
             else => return err,
         }

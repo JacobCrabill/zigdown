@@ -245,7 +245,7 @@ pub const HtmlRenderer = struct {
         const source = c.text orelse "";
 
         // Use TreeSitter to parse the code block and apply colors
-        // TODO: Escape HTML-specific characters like '<', '>', etc.
+        // TODO: Escape *ALL* HTML-specific characters like '<', '>', etc.
         //       https://mateam.net/html-escape-characters/
         if (syntax.getHighlights(self.alloc, source, language)) |ranges| {
             defer self.alloc.free(ranges);

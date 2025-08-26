@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const debug = @import("../debug.zig");
-const utils = @import("../utils.zig");
 const toks = @import("../tokens.zig");
 const lexer = @import("../lexer.zig");
 const inls = @import("inlines.zig");
@@ -26,8 +25,6 @@ const InlineType = inls.InlineType;
 
 const Text = inls.Text;
 const Link = inls.Link;
-
-const printIndent = utils.printIndent;
 
 /// Generic Block type. The AST is contructed from this type.
 pub const BlockType = enum(u8) {
@@ -186,7 +183,7 @@ pub const Container = struct {
     }
 
     pub fn print(self: Container, depth: u8) void {
-        printIndent(depth);
+        debug.printIndent(depth);
 
         debug.print("Container: open: {any}, type: {s} with {d} children\n", .{
             self.open,
@@ -196,7 +193,7 @@ pub const Container = struct {
 
         switch (self.content) {
             .List => |l| {
-                printIndent(depth + 1);
+                debug.printIndent(depth + 1);
                 debug.print("List Spacing: {d}\n", .{l.spacing});
             },
             else => {},
@@ -266,7 +263,7 @@ pub const Leaf = struct {
     }
 
     pub fn print(self: Leaf, depth: u8) void {
-        printIndent(depth);
+        debug.printIndent(depth);
 
         debug.print("Leaf: open: {any}, type: {s}\n", .{
             self.open,
@@ -277,7 +274,7 @@ pub const Leaf = struct {
 
         // For links and other structured inline elements, we want to show their structure
         if (self.inlines.items.len > 0) {
-            printIndent(depth + 1);
+            debug.printIndent(depth + 1);
             debug.print("Inline content:\n", .{});
             for (self.inlines.items) |inline_item| {
                 inline_item.print(depth + 2);
@@ -285,7 +282,7 @@ pub const Leaf = struct {
         } else {
             // Print each token with its line and column numbers
             for (self.raw_contents.items) |token| {
-                printIndent(depth + 1);
+                debug.printIndent(depth + 1);
                 debug.print("Token: {s}, text: \"{s}\", line: {d}, col: {d}\n", .{
                     toks.typeStr(token.kind),
                     token.text,
