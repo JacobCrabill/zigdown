@@ -536,7 +536,21 @@ pub const Parser = struct {
         self.logger.printText(line, false);
 
         var trimmed_line = utils.trimLeadingWhitespace(line);
-        if (isContinuationLineList(line) and trimmed_line.len > 0 and trimmed_line[0].src.col < block.start_col() + 2) {
+        var cblock = block.container();
+
+        // We need special handling for open child blocks whose leading whitespace
+        // is arbitrary - e.g, Code blocks.
+        // Check for this case before running checks on the trimmed line
+        const open_child_is_code: bool = blk: {
+            const nchildren = cblock.children.items.len;
+            if (nchildren == 0) break :blk false;
+            const child: *Block = &cblock.children.items[nchildren - 1];
+            if (!child.isOpen()) break :blk false;
+            if (!(child.isLeaf() and child.leaf().content == .Code)) break :blk false;
+            break :blk true;
+        };
+
+        if (!open_child_is_code and isContinuationLineList(line) and trimmed_line.len > 0 and trimmed_line[0].src.col < block.start_col() + 2) {
             self.logger.log("Line continues current list\n", .{});
             // TODO: This is all highly unoptimized...
             trimmed_line = trimContinuationMarkersList(line);
@@ -569,10 +583,9 @@ pub const Parser = struct {
         }
 
         // Check for an open child
-        var cblock = block.container();
         if (cblock.children.items.len > 0) {
             const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
-            if (self.handleLine(child, trimmed_line)) {
+            if (self.handleLine(child, utils.removeIndent(line, block.start_col()))) {
                 self.logger.log("ListItem's child handled line\n", .{});
                 return true;
             } else {

@@ -777,11 +777,13 @@ pub const FormatRenderer = struct {
         self.print("{s}{s}", .{ fence, tag });
         self.renderBreak();
 
+        try self.leader_stack.append(Text{ .style = .{}, .text = "" });
+
         self.writeLeaders();
 
         const has_raw_text: bool = if (c.text) |text| (text.len > 0) else false;
         if (has_raw_text) {
-            self.write(c.text.?);
+            self.wrapTextRaw(c.text.?);
         } else {
             self.mode = .scratch;
             for (block.inlines.items) |item| {
@@ -1150,6 +1152,25 @@ test "FormatRenderer" {
         .{
             .input = "foo bar <autolink>",
             .output = "foo bar <autolink>\n",
+        },
+        .{
+            .input =
+            \\- nested code block
+            \\  ```c
+            \\  int main() {
+            \\      printf("Hello!\n");
+            \\  }
+            \\  ```
+            ,
+            .output =
+            \\- nested code block
+            \\  ```c
+            \\  int main() {
+            \\      printf("Hello!\n");
+            \\  }
+            \\  ```
+            \\
+            ,
         },
     };
 
