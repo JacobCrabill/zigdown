@@ -341,8 +341,6 @@ pub fn fetchFile(alloc: Allocator, url_s: []const u8, writer: *std.Io.Writer) !v
     var client = std.http.Client{ .allocator = alloc };
     defer client.deinit();
 
-    // TODO: What's the difference in use case between 'fetch' and 'request'?
-    // The 'request' code was copied from: https://ziglang.org/download/0.15.1/release-notes.html#HTTP-Client-and-Server
     // Perform a one-off request and wait for the response.
     // Returns an http.Status.
     const status = client.fetch(.{

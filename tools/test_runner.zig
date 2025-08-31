@@ -137,34 +137,31 @@ fn friendlyName(name: []const u8) []const u8 {
 }
 
 const Printer = struct {
-    buf: [1024 * 1024]u8 = undefined,
-    file_writer: std.fs.File.Writer = undefined,
-    writer: *std.Io.Writer = undefined,
+    stdout: std.fs.File = undefined,
 
     fn init() Printer {
-        var p: Printer = .{};
-        p.file_writer = std.fs.File.stderr().writer(&p.buf);
-        p.writer = &p.file_writer.interface;
-        return p;
+        return .{
+            .stdout = std.fs.File.stdout(),
+        };
     }
 
     fn fmt(self: *Printer, comptime format: []const u8, args: anytype) void {
-        self.writer.print(format, args) catch unreachable;
-        self.writer.flush() catch unreachable;
+        var stdout_writer = self.stdout.writer(&.{});
+        stdout_writer.interface.print(format, args) catch unreachable;
     }
 
     fn status(self: *Printer, s: Status, comptime format: []const u8, args: anytype) void {
+        var stdout_writer = self.stdout.writer(&.{});
+        var writer = &stdout_writer.interface;
         const color = switch (s) {
             .pass => "\x1b[32m",
             .fail => "\x1b[31m",
             .skip => "\x1b[33m",
             else => "",
         };
-        self.writer.writeAll(color) catch @panic("writeAll failed?!");
-        self.writer.print(format, args) catch @panic("std.fmt.format failed?!");
-        self.writer.flush() catch unreachable;
-        self.writer.writeAll("\x1b[0m") catch @panic("write failed?!");
-        self.writer.flush() catch unreachable;
+        writer.writeAll(color) catch @panic("writeAll failed?!");
+        writer.print(format, args) catch @panic("std.fmt.format failed?!");
+        writer.writeAll("\x1b[0m") catch @panic("write failed?!");
     }
 };
 

@@ -441,9 +441,14 @@ pub const FormatRenderer = struct {
 
     /// Render a Quote block
     fn renderQuote(self: *Self, block: Container) !void {
+        if (self.needs_leaders) {
+            self.writeLeaders();
+            self.needs_leaders = false;
+        }
         try self.leader_stack.append(quote_indent);
-        self.writeLeaders();
-        self.needs_leaders = false;
+        defer _ = self.leader_stack.pop();
+
+        self.write(quote_indent.text);
 
         for (block.children.items, 0..) |child, i| {
             try self.renderBlock(child);
@@ -454,8 +459,6 @@ pub const FormatRenderer = struct {
                 self.needs_leaders = false;
             }
         }
-
-        _ = self.leader_stack.pop();
     }
 
     /// Render a List of Items (may be ordered or unordered)
@@ -570,6 +573,7 @@ pub const FormatRenderer = struct {
         for (list.children.items, 0..) |item, i| {
             if (i > 0) {
                 self.renderBreak();
+                self.needs_leaders = true;
             }
             try self.renderBlock(item);
         }
@@ -764,10 +768,7 @@ pub const FormatRenderer = struct {
         const tag = c.tag orelse dir;
         const fence = c.opener orelse "```";
 
-        if (self.column > self.opts.indent) {
-            self.renderBreak();
-        }
-        self.writeLeaders();
+        if (self.needs_leaders) self.writeLeaders();
         self.print("{s}{s}", .{ fence, tag });
         self.renderBreak();
 
@@ -1147,20 +1148,46 @@ test "FormatRenderer" {
         },
         .{
             .input =
+            \\```c
+            \\int main() {
+            \\    printf("Hello!\n");
+            \\}
+            \\```
+            \\> quote
+            ,
+            .output =
+            \\```c
+            \\int main() {
+            \\    printf("Hello!\n");
+            \\}
+            \\```
+            \\
+            \\> quote
+            \\
+            ,
+        },
+        .{
+            .input =
             \\- nested code block
-            \\  ```c
-            \\  int main() {
-            \\      printf("Hello!\n");
-            \\  }
-            \\  ```
+            \\  - in a nested list
+            \\    ```c
+            \\    int main() {
+            \\        printf("Hello!\n");
+            \\    }
+            \\    ```
+            \\    > nested quote
+            \\  - with another item after
             ,
             .output =
             \\- nested code block
-            \\  ```c
-            \\  int main() {
-            \\      printf("Hello!\n");
-            \\  }
-            \\  ```
+            \\  - in a nested list
+            \\    ```c
+            \\    int main() {
+            \\        printf("Hello!\n");
+            \\    }
+            \\    ```
+            \\    > nested quote
+            \\  - with another item after
             \\
             ,
         },
