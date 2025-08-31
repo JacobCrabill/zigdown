@@ -547,11 +547,12 @@ pub const Parser = struct {
             const child: *Block = &cblock.children.items[nchildren - 1];
             if (!child.isOpen()) break :blk false;
             if (!(child.isLeaf() and child.leaf().content == .Code)) break :blk false;
+            self.logger.log("ListItem contains open code block\n", .{});
             break :blk true;
         };
 
         if (!open_child_is_code and isContinuationLineList(line) and trimmed_line.len > 0 and trimmed_line[0].src.col < block.start_col() + 2) {
-            self.logger.log("Line continues current list\n", .{});
+            self.logger.log("Line continues current list at start_col {d}\n", .{block.start_col()});
             // TODO: This is all highly unoptimized...
             trimmed_line = trimContinuationMarkersList(line);
 
@@ -565,6 +566,7 @@ pub const Parser = struct {
 
             if (trimmed_line.len > 0 and trimmed_line[0].src.col > block.start_col() + 1) {
                 // Child / nested content - handled below
+                self.logger.log("useless if statement - ListItem child will handle line\n", .{});
             } else if (trimmed_line.len == 0) {
                 // Empty list item - just create an empty paragraph child
                 var child = Block.initLeaf(self.alloc, .Paragraph, block.start_col());
@@ -829,9 +831,10 @@ pub const Parser = struct {
         defer self.logger.depth -= 1;
 
         var b: Block = undefined;
-        self.logger.log("ParseNewBlock: ", .{});
-        self.logger.printText(line, false);
         const col: usize = line[0].src.col;
+
+        self.logger.log("ParseNewBlock at start_col {d}: ", .{col});
+        self.logger.printText(line, false);
 
         switch (line[0].kind) {
             .GT => {

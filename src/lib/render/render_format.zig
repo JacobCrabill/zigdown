@@ -442,14 +442,8 @@ pub const FormatRenderer = struct {
     /// Render a Quote block
     fn renderQuote(self: *Self, block: Container) !void {
         try self.leader_stack.append(quote_indent);
-        if (!self.needs_leaders) {
-            self.startStyle(quote_indent.style);
-            self.write(quote_indent.text);
-            self.resetStyle();
-        } else {
-            self.writeLeaders();
-            self.needs_leaders = false;
-        }
+        self.writeLeaders();
+        self.needs_leaders = false;
 
         for (block.children.items, 0..) |child, i| {
             try self.renderBlock(child);
@@ -776,8 +770,6 @@ pub const FormatRenderer = struct {
         self.writeLeaders();
         self.print("{s}{s}", .{ fence, tag });
         self.renderBreak();
-
-        try self.leader_stack.append(Text{ .style = .{}, .text = "" });
 
         self.writeLeaders();
 

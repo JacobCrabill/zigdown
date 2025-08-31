@@ -42,7 +42,8 @@
 
 1. Task List
    - [ ] Task Item
-   - [x] Checked Item * sub-item of task list
+   - [x] Checked Item
+         - sub-item of task list
 1. Not a Task List
    - [x]
    - ^ not a task item b/c empty
