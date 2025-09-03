@@ -154,6 +154,9 @@ pub const HtmlRenderer = struct {
         self.renderBegin();
         for (doc.children.items) |block| {
             try self.renderBlock(block);
+            // if (!isBreak(&block)) {
+            //     try self.renderBreak();
+            // }
         }
         self.renderEnd();
     }
@@ -255,7 +258,7 @@ pub const HtmlRenderer = struct {
             var need_newline: bool = true;
             for (ranges) |range| {
                 if (need_newline) {
-                    self.print("<tr><td><span style=\"color:var(--purple)\">{d}</span></td><td><pre>", .{lino});
+                    self.print("<tr><td class=\"rownum\">{d}</td><td><pre>", .{lino});
                     need_newline = false;
                 }
 
@@ -345,7 +348,7 @@ pub const HtmlRenderer = struct {
             .autolink => |l| try self.renderAutolink(l),
             .codespan => |c| try self.renderInlineCode(c),
             .image => |i| try self.renderImage(i),
-            .linebreak => try self.renderBreak(),
+            .linebreak => {},
             .link => |l| try self.renderLink(l),
             .text => |t| try self.renderText(t),
         }
@@ -451,3 +454,8 @@ pub const HtmlRenderer = struct {
         }
     }
 };
+
+fn isBreak(block: *const Block) bool {
+    if (!block.isLeaf()) return false;
+    return block.Leaf.content == .Break;
+}

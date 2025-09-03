@@ -197,6 +197,7 @@ pub const default_colors =
     \\  --purple: #7d6cf0;
     \\  --mediumgrey: #707070;
     \\  --darkgrey: #404040;
+    \\  --extradarkgrey: #333333;
     \\  --darkred: #802020;
     \\  --orange: #f07d6c;
     \\  --text: #d0e0ff;
@@ -221,11 +222,11 @@ pub const default_body_font =
 
 pub const default_body_padding =
     \\body {
-    \\  --padding-vertical: clamp(1.5em, 5vh, 2.5em);
+    \\  --padding-vertical: clamp(1.5em, 5vh, 1.5em);
     \\  margin: 0 auto;
     \\  max-width: min(90ch, 100%);
     \\  min-height: calc(100% - 2 * var(--padding-vertical));
-    \\  padding: var(--padding-vertical) clamp(1.5em, 5vw, 2.5em);
+    \\  padding: var(--padding-vertical) clamp(1.5em, 5vw, 1.5em);
     \\}
 ;
 
@@ -267,20 +268,20 @@ pub const default_heading_1 =
 
 pub const default_heading_2 =
     \\h2 {
-    \\  color: var(--green);
-    \\  margin-top: 0px;
-    \\  margin-bottom: 0px;
+    \\  color: var(--purple);
+    \\  margin-top: 1em;
+    \\  margin-bottom: 0em;
     \\  font-weight: normal;
     \\  font-family: "NovaFlatBook";
-    \\  border-bottom: 1px solid var(--green);
+    \\  border-bottom: 1px solid var(--purple);
     \\}
 ;
 
 pub const default_heading_3 =
     \\h3 {
     \\  color: var(--white);
-    \\  margin-top: 0px;
-    \\  margin-bottom: 0px;
+    \\  margin-top: 0em;
+    \\  margin-bottom: 0em;
     \\  font-weight: normal;
     \\  font-family: "NovaFlatBook";
     \\  border-bottom: 1px solid var(--white);
@@ -301,21 +302,27 @@ pub const default_heading_4 =
 pub const default_paragraph =
     \\p {
     \\  margin-top: 0px;
-    \\  margin-bottom: 10px;
+    \\  margin-bottom: 6px;
     \\}
 ;
 
 pub const default_ordered_list =
     \\ol {
-    \\  margin-top: 0px;
-    \\  margin-bottom: 0px;
+    \\  margin-top: 0em;
+    \\  margin-bottom: 1.5em;
+    \\}
+    \\li ol {
+    \\  margin-bottom: 0em;
     \\}
 ;
 
 pub const default_unordered_list =
     \\ul {
-    \\  margin-top: 0px;
-    \\  margin-bottom: 0px;
+    \\  margin-top: 0em;
+    \\  margin-bottom: 1.5em;
+    \\}
+    \\li ul {
+    \\  margin-bottom: 0em;
     \\}
 ;
 
@@ -415,10 +422,16 @@ pub const default_code_block_class =
     \\.code_block {
     \\  color: var(--purple);
     \\  font-family: monospace;
-    \\  background-color: var(--darkgrey);
+    \\  background-color: var(--extradarkgrey);
+    \\  border: 1px solid var(--purple);
     \\  padding: 10px 12px; /* top/bottom, left/right */
     \\  margin-top: 10px;
     \\  margin-bottom: 10px;
+    \\}
+    \\.rownum {
+    \\  color: var(--purple);
+    \\  padding-right: 10px;
+    \\  text-align: right;
     \\}
 ;
 
