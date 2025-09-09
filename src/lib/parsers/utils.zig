@@ -148,8 +148,8 @@ pub fn isEmptyLine(line: []const Token) bool {
     return false;
 }
 
-pub fn isWhitespace(token: Token) bool {
-    return switch (token.kind) {
+pub fn isWhitespace(kind: TokenType) bool {
+    return switch (kind) {
         .SPACE, .INDENT, .BREAK => true,
         else => false,
     };
@@ -158,7 +158,7 @@ pub fn isWhitespace(token: Token) bool {
 /// Find the column of the first non-whitespace token
 pub fn findStartColumn(line: []const Token) usize {
     for (line) |tok| {
-        if (isWhitespace(tok))
+        if (isWhitespace(tok.kind))
             continue;
         return tok.src.col;
     }

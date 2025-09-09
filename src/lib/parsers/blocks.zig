@@ -756,7 +756,7 @@ pub const Parser = struct {
             }
 
             // Don't append any leading whitespace prior to the start column of the block
-            if (utils.isWhitespace(tok) and tok.src.col < block.start_col()) {
+            if (utils.isWhitespace(tok.kind) and tok.src.col < block.start_col()) {
                 self.logger.log("Skipping token '{s}' in code block\n", .{tok.text});
                 continue;
             }
