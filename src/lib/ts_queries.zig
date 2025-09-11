@@ -131,7 +131,7 @@ pub fn getTsConfigDir() ![]const u8 {
             defer allocator.free(home);
             ts_config_dir = try std.fmt.allocPrint(allocator, "{s}/.config/tree-sitter/", .{home});
         } else {
-            log.err("ERROR: Could not get home directory. Defaulting to current directory", .{});
+            log.debug("ERROR: Could not get home directory. Defaulting to current directory", .{});
             ts_config_dir = try allocator.dupe(u8, "./tree-sitter/");
         }
     }
@@ -193,7 +193,7 @@ pub fn get(query_alloc: Allocator, language: []const u8) ?[]const u8 {
 
     var qd: std.fs.Dir = undefined;
     qd = std.fs.openDirAbsolute(query_dir, .{}) catch {
-        log.err("Unable to open absolute directory: {s}", .{query_dir});
+        log.debug("Unable to open absolute directory: {s}", .{query_dir});
         return null;
     };
     defer qd.close();
