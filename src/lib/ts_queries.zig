@@ -210,63 +210,6 @@ pub fn get(query_alloc: Allocator, language: []const u8) ?[]const u8 {
     return query;
 }
 
-/// Fetch a TreeSitter highlights query from Github
-/// This module's 'highlight_querieshighlight_queries owns the returned string; Call Self.deinit() to free
-///
-/// @param[in] language: The tree-sitter language name (e.g. "cpp" for C++)
-/// @param[in] github_user: The Github account hosting tree-sitter-{language}
-pub fn fetchStandardQuery(language: []const u8, github_user: []const u8, git_ref: []const u8) ![]const u8 {
-    // Handle any language aliases
-    const lang_alias = alias(language) orelse language;
-
-    // See if the query has already been cached
-    if (queries.get(lang_alias)) |query| {
-        return try allocator.dupe(u8, query);
-    }
-
-    var url_buf: [1024]u8 = undefined;
-    const url_s = try std.fmt.bufPrint(url_buf[0..], "https://raw.githubusercontent.com/{s}/tree-sitter-{s}/{s}/queries/highlights.scm", .{
-        github_user,
-        lang_alias,
-        git_ref,
-    });
-    const uri = try std.Uri.parse(url_s);
-
-    log.debug("Fetching highlights query for {s} from {s}", .{ lang_alias, url_s });
-
-    var client = std.http.Client{ .allocator = allocator };
-    defer client.deinit();
-
-    // Perform a one-off request and wait for the response
-    // Returns an http.Status
-    var response_buffer: [1024 * 1024]u8 = undefined;
-    var response_storage = std.ArrayListUnmanaged(u8).initBuffer(&response_buffer);
-    const status = try client.fetch(.{
-        .location = .{ .uri = uri },
-        .method = .GET,
-        .headers = .{ .authorization = .omit },
-        .response_storage = .{ .static = &response_storage },
-    });
-
-    const body = response_storage.items;
-    errdefer allocator.free(body);
-
-    if (status.status != .ok or body.len == 0) {
-        log.err("Error fetching {s} (!ok)", .{language});
-        return error.NoReply;
-    }
-
-    // Note that the std lib hash maps don't copy the given key and value strings
-    const lang = try allocator.dupe(u8, lang_alias);
-    const query = try allocator.dupe(u8, body);
-    errdefer allocator.free(lang);
-    errdefer allocator.free(body);
-
-    try queries.put(lang, query);
-
-    return query;
-}
-
 /// Fetch a TreeSitter parser repoo from Github
 pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: []const u8) !void {
     // Handle any language aliases
