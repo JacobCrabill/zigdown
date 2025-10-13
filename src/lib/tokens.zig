@@ -81,7 +81,7 @@ pub fn AnyOfTokenizer(comptime chars: []const u8, comptime kind: TokenType) type
                 return null;
 
             var i: usize = 0;
-            while (std.mem.indexOfScalar(u8, chars, text[i]) != null) : (i += 1) {}
+            while (i < text.len and std.mem.indexOfScalar(u8, chars, text[i]) != null) : (i += 1) {}
             if (i == 0) return null;
             return Token{
                 .kind = kind,

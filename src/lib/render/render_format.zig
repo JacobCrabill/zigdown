@@ -1191,6 +1191,10 @@ test "FormatRenderer" {
             \\
             ,
         },
+        .{
+            .input = "1",
+            .output = "1\n",
+        },
     };
 
     const alloc = std.testing.allocator;
