@@ -113,7 +113,6 @@ function M.install(zig_ver, root)
   local ext = file_patterns[raw_os]
   local arch = arch_patterns[raw_arch]
 
-  M.root_dir = root
   M.build_dir = utils.path_append(M.root_dir, "build")
   vim.fn.mkdir(M.build_dir, "p")
 
