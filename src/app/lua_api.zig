@@ -72,15 +72,14 @@ export fn render_markdown(lua: ?*LuaState) callconv(.c) c_int {
 
     // Render the document
     // TODO: Configure the cwd for the renderer (For use with evaluating links/paths)
-    const render_opts = zd.render.RangeRenderer.RenderOpts{
-        .out_stream = &alloc_writer.writer,
+    const render_opts = zd.render.RangeRenderer.Config{
         .root_dir = null, // TODO opts.document_dir,
         .indent = 2,
         .width = columns,
         .max_image_cols = if (columns > 4) columns - 4 else columns,
         .termsize = tsize,
     };
-    var r_renderer = zd.render.RangeRenderer.init(alloc, render_opts);
+    var r_renderer = zd.render.RangeRenderer.init(&alloc_writer.writer, alloc, render_opts);
     defer r_renderer.deinit();
     r_renderer.renderBlock(md) catch @panic("Render error!");
 
@@ -134,12 +133,11 @@ export fn format_markdown(lua: ?*LuaState) callconv(.c) c_int {
     defer alloc_writer.deinit();
 
     // Render the document
-    const render_opts = zd.render.FormatRenderer.RenderOpts{
-        .out_stream = &alloc_writer.writer,
+    const render_opts = zd.render.FormatRenderer.Config{
         .width = columns,
         .indent = 0,
     };
-    var formatter = zd.render.FormatRenderer.init(alloc, render_opts);
+    var formatter = zd.render.FormatRenderer.init(&alloc_writer.writer, alloc, render_opts);
     defer formatter.deinit();
     formatter.renderBlock(md) catch @panic("Render error!");
 

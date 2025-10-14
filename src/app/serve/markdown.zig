@@ -93,7 +93,7 @@ fn renderMarkdownImpl(path: []const u8) ?[]const u8 {
     var alloc_writer = std.Io.Writer.Allocating.init(alloc);
 
     // Render slide
-    var h_renderer = zd.HtmlRenderer.init(&alloc_writer.writer, alloc);
+    var h_renderer = zd.HtmlRenderer.init(&alloc_writer.writer, alloc, .{});
     defer h_renderer.deinit();
     h_renderer.css = css;
 

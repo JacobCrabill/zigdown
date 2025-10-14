@@ -56,14 +56,14 @@ const TreezError = error{
     InvalidLanguage,
 };
 
-const RenderError = Renderer.RenderError || TreezError;
-
 /// Render a Markdown document for later display, by outputting only
 /// raw text, with a separate array of range-based formatting to be applied.
 pub const RangeRenderer = struct {
     const Self = @This();
-    pub const RenderOpts = struct {
-        out_stream: Writer,
+    const RenderError = Renderer.RenderError || TreezError;
+
+    /// Range rendering configuration
+    pub const Config = struct {
         width: usize = 90, // Column at which to wrap all text
         indent: usize = 2, // Left indent for the entire document
         max_image_rows: usize = 30,
@@ -72,18 +72,20 @@ pub const RangeRenderer = struct {
         root_dir: ?[]const u8 = null,
         termsize: gfx.TermSize = .{},
     };
+
     pub const StyleRange = struct {
         line: usize = 0,
         start: usize = 0,
         end: usize = 0,
         style: TextStyle = undefined,
     };
+
     stream: Writer,
     prerender: std.Io.Writer.Allocating = undefined,
     alloc: std.mem.Allocator,
     leader_stack: ArrayList(Text),
     needs_leaders: bool = true,
-    opts: RenderOpts = undefined,
+    opts: Config = undefined,
     style_override: ?TextStyle = null,
     cur_style: TextStyle = .{},
     root: ?Block = null,
@@ -98,11 +100,11 @@ pub const RangeRenderer = struct {
     style_ranges: ArrayList(StyleRange) = undefined,
 
     /// Create a new RangeRenderer
-    pub fn init(alloc: Allocator, opts: RenderOpts) Self {
+    pub fn init(stream: Writer, alloc: Allocator, opts: Config) Self {
         // Initialize the TreeSitter query functionality in case we need it
         ts_queries.init(alloc);
         return Self{
-            .stream = opts.out_stream,
+            .stream = stream,
             .alloc = alloc,
             .leader_stack = ArrayList(Text).init(alloc),
             .opts = opts,
@@ -654,8 +656,7 @@ pub const RangeRenderer = struct {
         for (table.children.items) |item| {
             // Render the table cell into a new buffer
             var alloc_writer = std.Io.Writer.Allocating.init(alloc);
-            const sub_opts = RenderOpts{
-                .out_stream = &alloc_writer.writer,
+            const sub_opts = Config{
                 .width = col_w - 1,
                 .indent = 1,
                 .max_image_rows = self.opts.max_image_rows,
@@ -664,7 +665,7 @@ pub const RangeRenderer = struct {
                 .root_dir = self.opts.root_dir,
             };
 
-            var sub_renderer = RangeRenderer.init(alloc, sub_opts);
+            var sub_renderer = RangeRenderer.init(&alloc_writer.writer, alloc, sub_opts);
             try sub_renderer.renderBlock(item);
             sub_renderer.renderEnd();
 
@@ -963,8 +964,7 @@ pub const RangeRenderer = struct {
         const width: usize = self.opts.width - 2 * self.opts.indent - 3;
         var alloc_writer = std.Io.Writer.Allocating.init(alloc);
 
-        const sub_opts = RenderOpts{
-            .out_stream = &alloc_writer.writer,
+        const sub_opts = Config{
             .width = width,
             .indent = 1,
             .max_image_rows = self.opts.max_image_rows,
@@ -973,7 +973,7 @@ pub const RangeRenderer = struct {
             .root_dir = self.opts.root_dir,
         };
 
-        var sub_renderer = RangeRenderer.init(alloc, sub_opts);
+        var sub_renderer = RangeRenderer.init(&alloc_writer.writer, alloc, sub_opts);
         try sub_renderer.renderBlock(item);
         sub_renderer.renderEnd();
 
@@ -1068,8 +1068,7 @@ pub const RangeRenderer = struct {
         const width: usize = self.opts.width - 2 * self.opts.indent - 2;
 
         var alloc_writer = std.Io.Writer.Allocating.init(alloc);
-        const sub_opts = RenderOpts{
-            .out_stream = &alloc_writer.writer,
+        const sub_opts = Config{
             .width = width,
             .indent = 1,
             .max_image_rows = self.opts.max_image_rows,
@@ -1078,7 +1077,7 @@ pub const RangeRenderer = struct {
             .root_dir = self.opts.root_dir,
         };
 
-        var sub_renderer = RangeRenderer.init(alloc, sub_opts);
+        var sub_renderer = RangeRenderer.init(&alloc_writer.writer, alloc, sub_opts);
         try sub_renderer.renderBlock(item);
         sub_renderer.renderEnd();
 
@@ -1364,7 +1363,7 @@ pub const RangeRenderer = struct {
 fn testRender(alloc: Allocator, input: []const u8, out_stream: *std.io.Writer, width: usize) !void {
     var p = @import("../parser.zig").Parser.init(alloc, .{});
     try p.parseMarkdown(input);
-    var r = RangeRenderer.init(alloc, .{ .out_stream = out_stream, .width = width });
+    var r = RangeRenderer.init(out_stream, alloc, .{ .width = width });
     try r.renderBlock(p.document);
 }
 

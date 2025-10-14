@@ -56,39 +56,45 @@ const TreezError = error{
     InvalidLanguage,
 };
 
-const RenderError = std.fs.File.WriteError || Renderer.RenderError || TreezError;
-
 /// Render a Markdown document to the console using ANSI escape characters
 pub const ConsoleRenderer = struct {
     const Self = @This();
-    pub const RenderOpts = struct {
-        out_stream: Writer,
-        width: usize = 90, // Column at which to wrap all text
-        indent: usize = 2, // Left indent for the entire document
+    const RenderError = std.fs.File.WriteError || Renderer.RenderError || TreezError;
+
+    /// Console rendering configuration
+    pub const Config = struct {
+        /// Column at which to wrap all text
+        width: usize = 90,
+        /// Left indent for the entire document
+        indent: usize = 2,
         max_image_rows: usize = 30,
         max_image_cols: usize = 50,
         box_style: cons.Box = cons.BoldBox,
         root_dir: ?[]const u8 = null,
-        rendering_to_buffer: bool = false, // Whether we're rendering to a buffer or to the final output
+        /// Whether we're rendering to a buffer or to the final output
+        rendering_to_buffer: bool = false,
+        /// Disable fetching non-local images from the internet (just show links instead)
+        nofetch: bool = false,
         termsize: gfx.TermSize = .{},
     };
+
     stream: Writer,
     prerender: std.Io.Writer.Allocating = undefined,
     column: usize = 0,
     alloc: std.mem.Allocator,
     leader_stack: ArrayList(Text),
     needs_leaders: bool = true,
-    opts: RenderOpts = undefined,
+    opts: Config = undefined,
     style_override: ?TextStyle = null,
     cur_style: TextStyle = .{},
     root: ?Block = null,
 
     /// Create a new ConsoleRenderer
-    pub fn init(alloc: Allocator, opts: RenderOpts) Self {
+    pub fn init(stream: Writer, alloc: Allocator, opts: Config) Self {
         // Initialize the TreeSitter query functionality in case we need it
         ts_queries.init(alloc);
         return Self{
-            .stream = opts.out_stream,
+            .stream = stream,
             .alloc = alloc,
             .leader_stack = ArrayList(Text).init(alloc),
             .opts = opts,
@@ -636,8 +642,7 @@ pub const ConsoleRenderer = struct {
         for (table.children.items) |item| {
             // Render the table cell into a new buffer
             var alloc_writer = std.Io.Writer.Allocating.init(alloc);
-            const sub_opts = RenderOpts{
-                .out_stream = &alloc_writer.writer,
+            const sub_opts = Config{
                 .width = col_w - 1,
                 .indent = 1,
                 .max_image_rows = self.opts.max_image_rows,
@@ -647,7 +652,7 @@ pub const ConsoleRenderer = struct {
                 .rendering_to_buffer = true,
             };
 
-            var sub_renderer = ConsoleRenderer.init(alloc, sub_opts);
+            var sub_renderer = ConsoleRenderer.init(&alloc_writer.writer, alloc, sub_opts);
             try sub_renderer.renderBlock(item);
             sub_renderer.renderEnd();
 
@@ -968,8 +973,7 @@ pub const ConsoleRenderer = struct {
         const width: usize = self.opts.width - 2 * self.opts.indent - 2;
         var alloc_writer = std.Io.Writer.Allocating.init(alloc);
 
-        const sub_opts = RenderOpts{
-            .out_stream = &alloc_writer.writer,
+        const sub_opts = Config{
             .width = width,
             .indent = 1,
             .max_image_rows = self.opts.max_image_rows,
@@ -979,7 +983,7 @@ pub const ConsoleRenderer = struct {
             .rendering_to_buffer = true,
         };
 
-        var sub_renderer = ConsoleRenderer.init(alloc, sub_opts);
+        var sub_renderer = ConsoleRenderer.init(&alloc_writer.writer, alloc, sub_opts);
         try sub_renderer.renderBlock(item);
         sub_renderer.renderEnd();
 
@@ -1058,8 +1062,7 @@ pub const ConsoleRenderer = struct {
         const width: usize = self.opts.width - 2 * self.opts.indent - 2;
         var alloc_writer = std.Io.Writer.Allocating.init(alloc);
 
-        const sub_opts = RenderOpts{
-            .out_stream = &alloc_writer.writer,
+        const sub_opts = Config{
             .width = width,
             .indent = 1,
             .max_image_rows = self.opts.max_image_rows,
@@ -1069,7 +1072,7 @@ pub const ConsoleRenderer = struct {
             .rendering_to_buffer = true,
         };
 
-        var sub_renderer = ConsoleRenderer.init(alloc, sub_opts);
+        var sub_renderer = ConsoleRenderer.init(&alloc_writer.writer, alloc, sub_opts);
         try sub_renderer.renderBlock(item);
         sub_renderer.renderEnd();
 
@@ -1211,7 +1214,7 @@ pub const ConsoleRenderer = struct {
             };
             defer img.close();
             img_bytes = try img.readToEndAlloc(self.alloc, 1e9);
-        } else blk: {
+        } else if (!self.opts.nofetch) blk: {
             // Assume the image src is a remote file to be downloaded
             var writer = std.Io.Writer.Allocating.init(self.alloc);
             defer writer.deinit();

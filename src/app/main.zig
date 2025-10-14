@@ -5,6 +5,7 @@ const flags = @import("flags");
 const File = std.fs.File;
 const os = std.os;
 
+const cli = zd.cli;
 const Css = zd.assets.html.Css;
 const cons = zd.cons;
 const TextStyle = zd.utils.TextStyle;
@@ -23,120 +24,19 @@ fn printHelpAndExit(command: []const u8, err: anyerror) noreturn {
     std.process.exit(1);
 }
 
-/// Command-line flags common to all render-type commands
-/// TODO: Split by renderer to enable renderer-specific options.
-/// Console: allow disabling of web image fetch
-/// HTML: Allow setting CSS like for Serve
-/// Format: --inplace
-pub const RenderCmdOpts = struct {
-    stdin: bool = false,
-    width: ?usize = null,
-    output: ?[]const u8 = null,
-    inplace: bool = false,
-    verbose: bool = false,
-    timeit: bool = false,
-    positional: struct {
-        file: ?[]const u8,
-
-        pub const descriptions = .{
-            .file = "Markdown file to render",
-        };
-    },
-    pub const descriptions = .{
-        .stdin = "Read document from stdin (instead of from a file)",
-        .width = "Console width to render within (default: 90 chars)",
-        .output = "Output to a file, instead of to stdout",
-        .inplace = "Overwrite the input file, instead of writing to stdout (Formatter only)",
-        .timeit = "Time the parsing & rendering and display the results",
-        .verbose = "Enable verbose output from the parser",
-    };
-    pub const switches = .{
-        .stdin = 'i',
-        .width = 'w',
-        .output = 'o',
-        .inplace = 'I',
-        .verbose = 'v',
-        .timeit = 't',
-    };
-};
-
-/// Command-line options for the 'serve' command
-pub const ServeCmdOpts = struct {
-    root_file: ?[]const u8 = null,
-    root_directory: ?[]const u8 = null,
-    port: u16 = 8000,
-
-    command: ?union(enum(u8)) {
-        css: Css,
-
-        pub const descriptions = .{
-            .css = "CSS style entries",
-        };
-    },
-
-    pub const descriptions = .{
-        .root_file =
-        \\The root file of the documentation.
-        \\If no root file is given, a table of contents of all Markdown files
-        \\found in the root directory will be displayed instead.
-        ,
-        .root_directory =
-        \\The root directory of the documentation.
-        \\All paths will either be relative to this directory, or relative to the
-        \\directory of the current file.
-        ,
-        .port = "Localhost port to serve on",
-    };
-
-    pub const switches = .{
-        .root_file = 'f',
-        .root_directory = 'd',
-        .port = 'p',
-    };
-};
-
-/// Command-line options for the 'present' command
-pub const PresentCmdOpts = struct {
-    slides: ?[]const u8 = null,
-    directory: ?[]const u8 = null,
-    recurse: bool = false,
-    verbose: bool = false,
-
-    pub const descriptions = .{
-        .directory =
-        \\Directory for the slide deck (Present all .md files in the directory).
-        \\Slides will be presented in alphabetical order.
-        ,
-        .slides =
-        \\Path to a text file containing a list of slides for the presentation.
-        \\(Specify the exact files and their ordering, rather than iterating
-        \\all files in the directory in alphabetical order).
-        ,
-        .recurse = "Recursively iterate the directory to find .md files.",
-        .verbose = "Enable verbose output from the Markdown parser.",
-    };
-
-    pub const switches = .{
-        .directory = 'd',
-        .slides = 's',
-        .recurse = 'r',
-        .verbose = 'v',
-    };
-};
-
 /// Command-line arguments definition for the Flags module
 const Flags = struct {
-    pub const description = "Markdown parser supporting console and HTML rendering, and auto-formatting";
+    pub const description = "Markdown parser supporting console and HTML rendering, auto-formatting, and more.";
 
     command: union(enum(u8)) {
-        console: RenderCmdOpts,
-        range: RenderCmdOpts,
-        html: RenderCmdOpts,
-        format: RenderCmdOpts,
+        console: cli.ConsoleRenderCmdOpts,
+        range: cli.ConsoleRenderCmdOpts,
+        html: cli.HtmlRenderCmdOpts,
+        format: cli.FormatRenderCmdOpts,
 
-        serve: ServeCmdOpts,
+        serve: cli.ServeCmdOpts,
 
-        present: PresentCmdOpts,
+        present: cli.PresentCmdOpts,
 
         install_parsers: struct {
             positional: struct {
@@ -148,6 +48,11 @@ const Flags = struct {
             .console = "Render a document as console output (ANSI escaped text)",
             .html = "Render a document to HTML",
             .format = "Format the document (to stdout, or to given output file)",
+            .range =
+            \\(For debugging purposes only) Renderer used for Neovim integration.
+            \\Pretty-prints the raw document text like the formatter, and also
+            \\computes the (row, col, len) ranges to apply styles to the raw text.
+            ,
             .serve = "Serve up documents from a directory to a localhost HTTP server",
             .present = "Present a set of Markdown files as an in-terminal presentation",
             .install_parsers =
@@ -186,15 +91,20 @@ pub fn main() !void {
 
     // Process the command-line arguments
     switch (result.command) {
-        .console, .html, .format, .range => |r_opts| {
-            const method: zd.render.RenderMethod = switch (result.command) {
-                .console => .console,
-                .html => .html,
-                .format => .format,
-                .range => .range,
-                else => unreachable,
-            };
-            try handleRender(alloc, method, r_opts);
+        .console => |opts| {
+            try handleRender(alloc, .{ .console = opts });
+            std.process.exit(0);
+        },
+        .range => |opts| {
+            try handleRender(alloc, .{ .range = opts });
+            std.process.exit(0);
+        },
+        .format => |f_opts| {
+            try handleRender(alloc, .{ .format = f_opts });
+            std.process.exit(0);
+        },
+        .html => |h_opts| {
+            try handleRender(alloc, .{ .html = h_opts });
             std.process.exit(0);
         },
         .serve => |s_opts| {
@@ -240,43 +150,19 @@ pub fn main() !void {
     }
 }
 
-const ParseResult = struct { time_s: f64, parser: zd.Parser };
-
-/// Parse a Markdown file and return the time taken and the Parser object
-fn parse(alloc: std.mem.Allocator, input: []const u8, verbose: bool) !ParseResult {
-    // Parse the input text
-    const opts = zd.parser.ParserOpts{
-        .copy_input = false,
-        .verbose = verbose,
-    };
-    var parser = zd.Parser.init(alloc, opts);
-
-    var ptimer = zd.utils.Timer.start();
-    try parser.parseMarkdown(input);
-    const ptime_s = ptimer.read();
-
-    if (verbose) {
-        zd.debug.print("AST:\n", .{});
-        parser.document.print(0);
-    }
-
-    return .{ .time_s = ptime_s, .parser = parser };
-}
-
 fn handleRender(
     alloc: std.mem.Allocator,
-    method: zd.render.RenderMethod,
-    r_opts: RenderCmdOpts,
+    r_opts: cli.RenderConfig,
 ) !void {
-    var write_buf: [1024]u8 = undefined;
+    // Setup the stdin and stdout reader and writer.
+    // We may not use them, but the setup is cheap.
+    var write_buf: [256]u8 = undefined;
     var stdout_writer = std.fs.File.stdout().writer(&write_buf);
     const stdout: *std.io.Writer = &stdout_writer.interface;
 
-    var read_buf: [1024]u8 = undefined;
+    var read_buf: [256]u8 = undefined;
     var stdin_reader = std.fs.File.stdin().reader(&read_buf);
     const stdin: *std.io.Reader = &stdin_reader.interface;
-
-    const filename: ?[]const u8 = r_opts.positional.file;
 
     // Read the Markdown document to be rendered
     // This will either come from stdin, or from a file
@@ -284,15 +170,15 @@ fn handleRender(
     var md_dir: ?[]const u8 = null;
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     var realpath: ?[]const u8 = null;
-    if (r_opts.stdin) {
+    if (r_opts.stdin()) {
         // Read document from stdin
         md_text = try stdin.readAlloc(alloc, 1e9);
     } else {
-        if (filename == null) {
-            printHelpAndExit(@tagName(method), error.NoFilenameProvided);
+        if (r_opts.file() == null) {
+            printHelpAndExit(@tagName(r_opts), error.NoFilenameProvided);
         }
         // Read file into memory; Set root directory
-        realpath = try std.fs.realpath(filename.?, &path_buf);
+        realpath = try std.fs.realpath(r_opts.file().?, &path_buf);
         var md_file: File = try std.fs.openFileAbsolute(realpath.?, .{});
         defer md_file.close();
         md_text = try md_file.readToEndAlloc(alloc, 1e9);
@@ -301,36 +187,39 @@ fn handleRender(
     defer alloc.free(md_text);
 
     // Parse the document
-    var parsed = try parse(alloc, md_text, r_opts.verbose);
+    var parsed = try zd.parser.timedParse(alloc, md_text, r_opts.verbose());
     defer parsed.parser.deinit();
 
     // Get the output stream
-    var out_buf: [1024]u8 = undefined;
+    var out_buf: [256]u8 = undefined;
     var out_stream: *std.io.Writer = undefined;
     var file_writer: std.fs.File.Writer = undefined;
     var outfile: ?File = null;
     defer if (outfile) |f| f.close();
 
-    if (method == .format) {
-        if (r_opts.inplace) {
-            if (realpath == null) {
-                std.debug.print("ERROR: In-place formatting requested but no input file given\n", .{});
-                return error.InvalidArgument;
+    switch (r_opts) {
+        .format => |opts| {
+            if (opts.inplace) {
+                if (realpath == null) {
+                    std.debug.print("ERROR: In-place formatting requested but no input file given\n", .{});
+                    return error.InvalidArgument;
+                }
+                outfile = try std.fs.cwd().createFile(realpath.?, .{ .truncate = true });
+                file_writer = outfile.?.writer(&out_buf);
+                out_stream = &file_writer.interface;
+            } else {
+                out_stream = stdout;
             }
-            outfile = try std.fs.cwd().createFile(realpath.?, .{ .truncate = true });
-            file_writer = outfile.?.writer(&out_buf);
-            out_stream = &file_writer.interface;
-        } else {
-            out_stream = stdout;
-        }
-    } else {
-        if (r_opts.output) |f| {
-            outfile = try std.fs.cwd().createFile(f, .{ .truncate = true });
-            file_writer = outfile.?.writer(&out_buf);
-            out_stream = &file_writer.interface;
-        } else {
-            out_stream = stdout;
-        }
+        },
+        else => {
+            if (r_opts.output()) |f| {
+                outfile = try std.fs.cwd().createFile(f, .{ .truncate = true });
+                file_writer = outfile.?.writer(&out_buf);
+                out_stream = &file_writer.interface;
+            } else {
+                out_stream = stdout;
+            }
+        },
     }
 
     // Configure and perform the rendering
@@ -340,12 +229,12 @@ fn handleRender(
         .document = parsed.parser.document,
         .document_dir = md_dir,
         .out_stream = out_stream,
-        .width = r_opts.width,
-        .method = method,
+        .width = r_opts.width(),
+        .config = r_opts,
     });
     const rtime_s = rtimer.read();
 
-    if (r_opts.timeit) {
+    if (r_opts.timeit()) {
         cons.printColor(stdout, .Green, "  Parsed in:   {d:.3} ms\n", .{parsed.time_s * 1000});
         cons.printColor(stdout, .Green, "  Rendered in: {d:.3} ms\n", .{rtime_s * 1000});
         stdout.flush() catch {};
@@ -354,7 +243,7 @@ fn handleRender(
 
 pub fn handlePresent(
     alloc: std.mem.Allocator,
-    p_opts: PresentCmdOpts,
+    p_opts: cli.PresentCmdOpts,
 ) !void {
     const present = @import("present.zig");
     if (@import("builtin").target.os.tag == .windows) {

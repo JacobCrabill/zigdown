@@ -34,23 +34,37 @@ const google_fonts =
 pub const HtmlRenderer = struct {
     const Self = @This();
     const RenderError = Allocator.Error || Block.Error;
+
+    /// HTML rendering configuration
+    pub const Config = struct {
+        /// The CSS to include in the document
+        css: Css = .{},
+
+        /// Optional HTML to be inserted at the start of the <body> tag
+        header: []const u8 = "",
+
+        /// Optional HTML to be inserted at the end of the <body> tag
+        footer: []const u8 = "",
+
+        /// Only generate the body contents of the HTML document (useful for templating)
+        body_only: bool = false,
+    };
+
     stream: Writer,
     alloc: Allocator,
     root: ?Block = null,
+    config: Config,
     css: Css = .{},
-    /// Optional HTML to be inserted at the start of the <body> tag
-    header: []const u8 = "",
-    /// Optional HTML to be inserted at the end of the <body> tag
-    footer: []const u8 = "",
 
     /// Create a new HtmlRenderer
-    pub fn init(stream: Writer, alloc: Allocator) Self {
+    pub fn init(stream: Writer, alloc: Allocator, config: Config) Self {
         if (!wasm.is_wasm) {
             ts_queries.init(alloc);
         }
         return HtmlRenderer{
             .stream = stream,
             .alloc = alloc,
+            .config = config,
         };
     }
 
@@ -247,6 +261,13 @@ pub const HtmlRenderer = struct {
         const language = c.tag orelse "none";
         const source = c.text orelse "";
 
+        self.write("<table><tbody>\n");
+
+        // TODO: Write a table header with the name of the language
+        // if (c.tag) |lang| {
+        //     self.print("<tr><td></td><td>{s}</td>", .{lang});
+        // }
+
         // Use TreeSitter to parse the code block and apply colors
         // TODO: Escape *ALL* HTML-specific characters like '<', '>', etc.
         //       https://mateam.net/html-escape-characters/
@@ -254,7 +275,6 @@ pub const HtmlRenderer = struct {
             defer self.alloc.free(ranges);
 
             var lino: usize = 1;
-            self.write("<table><tbody>\n");
             var need_newline: bool = true;
             for (ranges) |range| {
                 if (need_newline) {
@@ -278,13 +298,11 @@ pub const HtmlRenderer = struct {
             if (need_newline) {
                 self.write("</pre></td></tr>\n");
             }
-            self.write("</tbody></table>\n");
         } else |err| {
             // TODO: Still need to implement the rest of libc for WASM
             self.print("<!-- Error using TreeSitter: {any} -->", .{err});
 
             var lino: usize = 1;
-            self.write("<table><tbody>\n");
             var lines = std.mem.tokenizeScalar(u8, source, '\n');
             while (lines.next()) |line| {
                 // Alternative: Have a CSS class for each color ( 'var(--color-x)' )
@@ -295,9 +313,10 @@ pub const HtmlRenderer = struct {
                 self.write("</span></pre></td></tr>\n");
                 lino += 1;
             }
-            self.write("</pre></td></tr></tbody></table>\n");
+            self.write("</pre></td></tr>\n");
         }
 
+        self.write("</tbody></table>\n");
         self.write("</div>\n");
     }
 
@@ -433,24 +452,28 @@ pub const HtmlRenderer = struct {
     }
 
     fn renderBegin(self: *Self) void {
-        self.write("<html><head>\n");
-        self.write(google_fonts);
-        self.write("\n  <style>\n");
-        self.renderCss();
-        self.write("  </style>\n</head>\n<body>");
-        self.write(self.header);
+        if (!self.config.body_only) {
+            self.write("<html><head>\n");
+            self.write(google_fonts);
+            self.write("\n  <style>\n");
+            self.renderCss();
+            self.write("  </style>\n</head>\n<body>");
+        }
+        self.write(self.config.header);
     }
 
     fn renderEnd(self: *Self) void {
-        self.write(self.footer);
-        self.write("</body></html>\n");
+        self.write(self.config.footer);
+        if (!self.config.body_only) {
+            self.write("</body></html>\n");
+        }
     }
 
     /// Print out all of the CSS entries from the css struct
     fn renderCss(self: *Self) void {
         inline for (@typeInfo(Css).@"struct".fields) |field| {
             self.print("/* css field: {s} */\n", .{utils.toKebab(field.name)});
-            self.print("{s}\n", .{@field(self.css, field.name)});
+            self.print("{s}\n", .{@field(self.config.css, field.name)});
         }
     }
 };

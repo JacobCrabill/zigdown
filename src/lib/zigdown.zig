@@ -9,6 +9,7 @@ pub const flags = @import("flags");
 
 // Expose public namespaces for building docs
 pub const assets = @import("assets");
+pub const cli = @import("cli.zig");
 pub const cons = @import("console.zig");
 pub const debug = @import("debug.zig");
 pub const lexer = @import("lexer.zig");

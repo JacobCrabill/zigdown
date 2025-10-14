@@ -277,7 +277,7 @@ pub fn main() !void {
     const alloc = std.heap.page_allocator;
     const args = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, args);
-    const stdout = std.io.getStdOut().writer();
+    const stdout = std.Io.getStdOut().writer();
 
     if (args.len < 2) {
         try stdout.print("Expected .png filename\n", .{});

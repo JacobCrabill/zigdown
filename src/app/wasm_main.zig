@@ -29,7 +29,7 @@ export fn renderToHtml(md_ptr: [*:0]u8) void {
 
     wasm.log("Rendering...\n", .{});
 
-    var h_renderer = zd.HtmlRenderer.init(&wasm.writer, alloc);
+    var h_renderer = zd.HtmlRenderer.init(&wasm.writer, alloc, .{ .body_only = true });
     defer h_renderer.deinit();
     h_renderer.renderBlock(parser.document) catch |err| {
         wasm.log("[render] Caught Zig error: {any}\n", .{err});

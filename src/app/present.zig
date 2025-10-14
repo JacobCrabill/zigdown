@@ -145,15 +145,14 @@ fn renderFile(alloc: Allocator, writer: *std.io.Writer, dir: []const u8, file: F
     try writer.print(cons.set_row_col, .{ 0, 0 });
 
     // Render slide
-    const opts = ConsoleRenderer.RenderOpts{
+    const opts = ConsoleRenderer.Config{
         .root_dir = dir,
         .indent = 2,
         .width = columns - 2,
-        .out_stream = writer,
         .max_image_cols = columns - 4,
         .termsize = tsize,
     };
-    var c_renderer = ConsoleRenderer.init(arena.allocator(), opts);
+    var c_renderer = ConsoleRenderer.init(writer, arena.allocator(), opts);
     defer c_renderer.deinit();
     try c_renderer.renderBlock(parser.document);
 

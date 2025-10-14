@@ -39,23 +39,26 @@ const task_list_indent = Text{ .style = .{}, .text = "      " };
 /// Keeps all the same content, but normalizes whitespace, symbols, etc.
 pub const FormatRenderer = struct {
     const Self = @This();
-    pub const RenderOpts = struct {
-        out_stream: *Writer,
+
+    pub const Config = struct {
         width: usize = 90, // Column at which to wrap all text
         indent: usize = 0, // Left indent for the entire document
     };
+
     const RenderMode = enum(u8) {
         prerender,
         scratch,
         final,
     };
+
     const StyleFlag = enum(u8) {
         bold,
         italic,
         strike,
     };
+
     stream: *Writer,
-    opts: RenderOpts = undefined,
+    opts: Config = undefined,
     column: usize = 0,
     alloc: std.mem.Allocator,
     leader_stack: ArrayList(Text),
@@ -70,10 +73,10 @@ pub const FormatRenderer = struct {
     style_stack: ArrayList(StyleFlag) = undefined,
 
     /// Create a new FormatRenderer
-    pub fn init(alloc: Allocator, opts: RenderOpts) Self {
+    pub fn init(stream: *Writer, alloc: Allocator, opts: Config) Self {
         return Self{
             .opts = opts,
-            .stream = opts.out_stream,
+            .stream = stream,
             .alloc = alloc,
             .leader_stack = ArrayList(Text).init(alloc),
             .scratch = Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
@@ -600,8 +603,7 @@ pub const FormatRenderer = struct {
         for (table.children.items) |item| {
             // Render the table cell into a new buffer
             var alloc_writer = Writer.Allocating.init(alloc);
-            const sub_opts = RenderOpts{
-                .out_stream = &alloc_writer.writer,
+            const sub_opts = Config{
                 .width = 256, // col_w,
                 .indent = 1,
             };
@@ -610,7 +612,7 @@ pub const FormatRenderer = struct {
             var root: Block = .initContainer(alloc, .Document, 0);
             try root.addChild(item);
 
-            var sub_renderer: FormatRenderer = .init(alloc, sub_opts);
+            var sub_renderer: FormatRenderer = .init(&alloc_writer.writer, alloc, sub_opts);
             try sub_renderer.renderBlock(root);
 
             const text = utils.trimTrailingWhitespace(utils.trimLeadingWhitespace(alloc_writer.writer.buffered()));
@@ -942,7 +944,7 @@ fn testRender(alloc: Allocator, input: []const u8, out_stream: *Writer, width: u
     try p.parseMarkdown(input);
     defer p.deinit();
 
-    var r = FormatRenderer.init(alloc, .{ .out_stream = out_stream, .width = width });
+    var r = FormatRenderer.init(out_stream, alloc, .{ .width = width });
     defer r.deinit();
     try r.renderBlock(p.document);
 
