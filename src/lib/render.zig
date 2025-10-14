@@ -15,6 +15,7 @@ pub const RangeRenderer = @import("render/render_range.zig").RangeRenderer;
 pub const RenderMethod = enum(u8) {
     console,
     html,
+    html_body,
     range,
     format,
 };
@@ -36,7 +37,12 @@ pub fn render(opts: RenderOptions) !void {
 
     switch (opts.method) {
         .html => {
-            var h_renderer = HtmlRenderer.init(opts.out_stream, arena.allocator());
+            var h_renderer = HtmlRenderer.init(opts.out_stream, true, arena.allocator());
+            defer h_renderer.deinit();
+            try h_renderer.renderBlock(opts.document);
+        },
+        .html_body => {
+            var h_renderer = HtmlRenderer.init(opts.out_stream, false, arena.allocator());
             defer h_renderer.deinit();
             try h_renderer.renderBlock(opts.document);
         },

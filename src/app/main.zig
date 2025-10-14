@@ -132,6 +132,7 @@ const Flags = struct {
         console: RenderCmdOpts,
         range: RenderCmdOpts,
         html: RenderCmdOpts,
+        html_body: RenderCmdOpts,
         format: RenderCmdOpts,
 
         serve: ServeCmdOpts,
@@ -147,6 +148,7 @@ const Flags = struct {
         pub const descriptions = .{
             .console = "Render a document as console output (ANSI escaped text)",
             .html = "Render a document to HTML",
+            .html_body = "Render a document to a html (Excluding header, css etc.)",
             .format = "Format the document (to stdout, or to given output file)",
             .serve = "Serve up documents from a directory to a localhost HTTP server",
             .present = "Present a set of Markdown files as an in-terminal presentation",
@@ -186,10 +188,11 @@ pub fn main() !void {
 
     // Process the command-line arguments
     switch (result.command) {
-        .console, .html, .format, .range => |r_opts| {
+        .console, .html, .html_body, .format, .range => |r_opts| {
             const method: zd.render.RenderMethod = switch (result.command) {
                 .console => .console,
                 .html => .html,
+                .html_body => .html_body,
                 .format => .format,
                 .range => .range,
                 else => unreachable,

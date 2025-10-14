@@ -36,6 +36,7 @@ pub const HtmlRenderer = struct {
     const RenderError = Allocator.Error || Block.Error;
     stream: Writer,
     alloc: Allocator,
+    renderFullPage: bool,
     root: ?Block = null,
     css: Css = .{},
     /// Optional HTML to be inserted at the start of the <body> tag
@@ -44,13 +45,14 @@ pub const HtmlRenderer = struct {
     footer: []const u8 = "",
 
     /// Create a new HtmlRenderer
-    pub fn init(stream: Writer, alloc: Allocator) Self {
+    pub fn init(stream: Writer, renderFullPage: bool, alloc: Allocator) Self {
         if (!wasm.is_wasm) {
             ts_queries.init(alloc);
         }
         return HtmlRenderer{
             .stream = stream,
             .alloc = alloc,
+            .renderFullPage = renderFullPage,
         };
     }
 
@@ -151,14 +153,14 @@ pub const HtmlRenderer = struct {
 
     /// Render a Document block (contains only other blocks)
     fn renderDocument(self: *Self, doc: Container) !void {
-        self.renderBegin();
+        if (self.renderFullPage) self.renderBegin();
         for (doc.children.items) |block| {
             try self.renderBlock(block);
             // if (!isBreak(&block)) {
             //     try self.renderBreak();
             // }
         }
-        self.renderEnd();
+        if (self.renderFullPage) self.renderEnd();
     }
 
     /// Render a Quote block
