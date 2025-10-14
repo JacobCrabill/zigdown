@@ -105,7 +105,7 @@ end
 -- Install the required version of Zig to do so
 ---@param zig_ver string Version of Zig to use, e.g. "0.12.1"
 ---@param root string Root directory of the package to build
-function M.install(zig_ver, root)
+function M.install(zig_ver)
   local raw_os = vim.loop.os_uname().sysname
   local raw_arch = jit.arch
 

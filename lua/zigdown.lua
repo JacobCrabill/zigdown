@@ -75,7 +75,7 @@ end
 
 -- Rebuild the Zigdown Lua module
 function M.install()
-  require("zigdown.build").install(zig_ver, M.root)
+  require("zigdown.build").install(zig_ver)
 end
 
 return M
