@@ -60,11 +60,12 @@ a psuedo-static web site, or present a set of files interactively as an in-termi
 ### Parser Features
 
 - [x] Headers
-- [x] Basic text formatting (**Bold**, _italic_, ~strikethrough~)_
-
-_**- [x] _Links** _ ** - [x] **Quote blocks_ ** ** _**- [x] _Unordered lists** _ ** - [x] **Ordered_
-_**lists_ ** ** **_- [x] _Code blocks, including syntax highlighting using TreeSitter
-
+- [x] Basic text formatting (**Bold**, _italic_, ~strikethrough~)
+- [x] Links
+- [x] Quote blocks
+- [x] Unordered lists
+- [x] Ordered lists
+- [x] Code blocks, including syntax highlighting using TreeSitter
 - [x] Task lists
 - [x] Tables
 - [x] Autolinks

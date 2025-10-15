@@ -1197,6 +1197,14 @@ test "FormatRenderer" {
             .input = "1",
             .output = "1\n",
         },
+        .{
+            .input = "_foo_, *bar*",
+            .output = "_foo_, _bar_\n",
+        },
+        .{
+            .input = "_foo_, **bar**",
+            .output = "_foo_, **bar**\n",
+        },
     };
 
     const alloc = std.testing.allocator;

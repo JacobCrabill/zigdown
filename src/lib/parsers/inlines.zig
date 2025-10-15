@@ -133,14 +133,17 @@ pub const InlineParser = struct {
 
         var prev_type: TokenType = .BREAK;
         var next_type: TokenType = .BREAK;
+        var next_text: []const u8 = "";
 
         var i: usize = 0;
         while (i < tokens.len) : (i += 1) {
             const tok = tokens[i];
             if (i + 1 < tokens.len) {
                 next_type = tokens[i + 1].kind;
+                next_text = tokens[i + 1].text;
             } else {
                 next_type = .BREAK;
+                next_text = "";
             }
             switch (tok.kind) {
                 .EMBOLD => {
@@ -161,7 +164,7 @@ pub const InlineParser = struct {
                 .USCORE => {
                     // If it's an underscore in the middle of a word, don't toggle style with it
                     const prev_is_ws: bool = utils.isWhitespace(prev_type);
-                    const next_is_ws: bool = utils.isWhitespace(next_type);
+                    const next_is_ws: bool = utils.isWhitespace(next_type) or std.mem.eql(u8, next_text, ",") or std.mem.eql(u8, next_text, ";");
                     if (prev_is_ws or next_is_ws) {
                         style.italic = !style.italic;
                     } else {
