@@ -227,7 +227,7 @@ pub fn initMimeMap(alloc: Allocator) !MimeMap {
     try mimes.put(".JPEG", "image/jpeg");
     try mimes.put(".png", "image/png");
     try mimes.put(".PNG", "image/png");
-    try mimes.put(".svg", "image/svg");
+    try mimes.put(".svg", "image/svg+xml");
 
     // Fonts
     try mimes.put(".ttf", "application/x-font-ttf");
