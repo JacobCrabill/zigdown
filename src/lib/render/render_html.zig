@@ -48,6 +48,8 @@ pub const HtmlRenderer = struct {
 
         /// Only generate the body contents of the HTML document (useful for templating)
         body_only: bool = false,
+
+        break_line: []const u8 = "<br>\n",
     };
 
     stream: Writer,
@@ -227,7 +229,7 @@ pub const HtmlRenderer = struct {
 
     /// Render a single line break
     fn renderBreak(self: *Self) !void {
-        self.write("<br>\n");
+        self.write(self.config.break_line);
     }
 
     /// Render an ATX Heading
