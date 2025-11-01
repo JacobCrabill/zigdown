@@ -112,6 +112,7 @@ test "test lexer" {
         \\Text _italic_ **bold** ___bold_italic___
         \\~underline~
         \\```
+        \\*Ääbc*
     ;
 
     const expected_tokens = [_]Token{
@@ -150,6 +151,10 @@ test "test lexer" {
         .{ .kind = .TILDE, .text = "~" },
         .{ .kind = .BREAK, .text = "\n" },
         .{ .kind = .DIRECTIVE, .text = "```" },
+        .{ .kind = .BREAK, .text = "\n" },
+        .{ .kind = .STAR, .text = "*" },
+        .{ .kind = .WORD, .text = "Ääbc" },
+        .{ .kind = .STAR, .text = "*" },
     };
 
     var lex = Lexer{};

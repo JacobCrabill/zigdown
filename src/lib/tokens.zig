@@ -123,15 +123,25 @@ pub fn LiteralTokenizer(comptime delim: []const u8, comptime kind: TokenType) ty
     };
 }
 
-/// Parser for a generic word
+/// Parser for a generic word.
+/// Note that we must check for unicode (non-ASCII) characters which are simply
+/// codepoints such as 'ä' and should be treated as generic characters.
 pub const WordTokenizer = struct {
     pub fn peek(text: []const u8) ?Token {
-        var end = text.len; // TODO: Should be '0'?
-        for (text, 0..) |c, i| {
-            if (!std.ascii.isAscii(c) or std.ascii.isWhitespace(c) or utils.isPunctuation(c)) {
+        var end = text.len;
+        var i: usize = 0;
+        while (i < text.len) : (i += 1) {
+            const c = text[i];
+
+            if (std.ascii.isWhitespace(c) or utils.isPunctuation(c)) {
                 end = i;
                 break;
             }
+
+            // Check for a multi-byte utf-8 codepoint. Skip ahead the appropriate number of bytes.
+            if (std.unicode.utf8ByteSequenceLength(c)) |len| {
+                i += len - 1;
+            } else |_| {}
         }
 
         if (end > 0) {
@@ -168,8 +178,23 @@ pub const DirectiveTokenizer = struct {
     }
 };
 
+/// Handles multi-byte unicode codepoints.
+///
+/// If we DO encounter a >1-byte (non-ASCII) codepoint, we will assume it is
+/// simply a character starting a Word, and handle it as such.
+pub const Utf8Tokenizer = struct {
+    pub fn peek(text: []const u8) ?Token {
+        if (std.unicode.utf8ByteSequenceLength(text[0])) |len| {
+            if (len == 1) return null;
+        } else |_| return null;
+
+        return WordTokenizer.peek(text);
+    }
+};
+
 /// Collect all available tokenizers
 pub const Tokenizers = .{
+    Utf8Tokenizer,
     LiteralTokenizer("\r\n", TokenType.BREAK),
     LiteralTokenizer("\n", TokenType.BREAK),
     LiteralTokenizer("\t", TokenType.INDENT),

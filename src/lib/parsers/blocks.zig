@@ -394,7 +394,6 @@ pub const Parser = struct {
         if (cblock.children.items.len > 0) {
             const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
             if (child.isOpen()) {
-                // if (self.handleLine(child, utils.removeIndent(line, 2))) {
                 if (self.handleLine(child, line)) {
                     return true;
                 } else {
