@@ -164,7 +164,7 @@ pub const InlineParser = struct {
                 .USCORE => {
                     // If it's an underscore in the middle of a word, don't toggle style with it
                     const prev_is_ws: bool = utils.isWhitespace(prev_type);
-                    const next_is_ws: bool = utils.isWhitespace(next_type) or std.mem.eql(u8, next_text, ",") or std.mem.eql(u8, next_text, ";");
+                    const next_is_ws: bool = utils.isWhitespace(next_type) or (std.mem.indexOfAny(u8, next_text, ",.;'\"") != null);
                     if (prev_is_ws or next_is_ws) {
                         style.italic = !style.italic;
                     } else {

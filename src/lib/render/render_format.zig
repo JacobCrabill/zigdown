@@ -1205,6 +1205,18 @@ test "FormatRenderer" {
             .input = "_foo_, **bar**",
             .output = "_foo_, **bar**\n",
         },
+        .{
+            .input =
+            \\`lorem ipsum` for _maximum speed_. For reference,
+            \\foo bar baz
+            ,
+            .output =
+            \\`lorem ipsum` for _maximum speed_. For reference,
+            \\foo bar baz
+            \\
+            ,
+            .width = 50,
+        },
     };
 
     const alloc = std.testing.allocator;
