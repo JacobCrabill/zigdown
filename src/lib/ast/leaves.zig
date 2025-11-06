@@ -15,7 +15,6 @@ const InlineType = inlines.InlineType;
 
 const Text = inlines.Text;
 const Link = inlines.Link;
-// const Image = inlines.Image;
 
 /// All types of Leaf blocks that can be contained in Container blocks
 pub const LeafType = enum(u8) {
@@ -109,7 +108,7 @@ pub const Code = struct {
 };
 
 /// Directive or Admonition box
-/// This is still TODO
+/// This is still TODO. Similar to the Alert, but using the fenced-block syntax.
 pub const Directive = struct {
     alloc: Allocator = undefined,
     // The opening tag, e.g. "```", that has to be matched to end the block

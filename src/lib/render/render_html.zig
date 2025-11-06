@@ -237,7 +237,7 @@ pub const HtmlRenderer = struct {
         const h: leaves.Heading = leaf.content.Heading;
 
         // Generate the link name for the heading
-        const id_s = try utils.headingToUri(self.alloc, h.text, false);
+        const id_s = try utils.pathToUri(self.alloc, h.text, .{ .replace_whitespace = true, .lowercase = true });
 
         if (h.level == 1) {
             self.write("<div class=\"title\">");

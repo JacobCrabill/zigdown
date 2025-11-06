@@ -256,9 +256,7 @@ pub const Parser = struct {
         // Allocate copy of the input text if requested
         // Useful if the parsed document should outlast the input text buffer
         if (self.opts.copy_input) {
-            const talloc: []u8 = try self.alloc.alloc(u8, text.len);
-            @memcpy(talloc, text);
-            self.text = talloc;
+            self.text = try self.alloc.dupe(u8, text);
         } else {
             self.text = text;
         }

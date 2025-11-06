@@ -254,19 +254,17 @@ pub fn getTerminalSize() !TermSize {
     return error.UnsupportedSystem;
 }
 
-test "Get window size" {
+test getTerminalSize {
     _ = getTerminalSize() catch return error.SkipZigTest;
 }
 
-// I don't know why this can't be run as a test...
-// 'zig test src/image.zig' works, but 'zig build test-image' just hangs
 test "Display image" {
     const alloc = std.testing.allocator;
     var stream = std.Io.Writer.Allocating.init(alloc);
     defer stream.deinit();
     debug.setStream(&stream.writer);
     debug.print("Rendering Zero the Ziguana here:\n", .{});
-    const bytes = try utils.readFile(alloc, "src/assets/img/zig-zero.png");
+    const bytes = try utils.readFile(alloc, std.fs.cwd(), "src/assets/img/zig-zero.png");
     defer alloc.free(bytes);
     try sendImagePNG(&stream.writer, alloc, bytes, 100, 60);
     debug.print("\n--------------------------------\n", .{});
@@ -294,7 +292,7 @@ pub fn main() !void {
     // The image can be shifted right by padding spaces
     // (The image is drawn from the top-left starting at the current cursor location)
     //try stdout.print("        ", .{});
-    const bytes = try utils.readFile(alloc, args[1]);
+    const bytes = try utils.readFile(alloc, std.fs.cwd(), args[1]);
     if (std.mem.endsWith(u8, args[1], ".png")) {
         try sendImagePNG(stdout, alloc, bytes, width, height);
     } else {

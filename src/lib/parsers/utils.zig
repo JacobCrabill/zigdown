@@ -362,8 +362,8 @@ pub fn isGithubAlert(line: []const Token) bool {
     return true;
 }
 
-test "Github Alert" {
-    const line: []const Token = &.{
+test isGithubAlert {
+    const is_alert: []const Token = &.{
         .{ .kind = .GT, .text = ">" },
         .{ .kind = .SPACE, .text = " " },
         .{ .kind = .LBRACK, .text = "[" },
@@ -372,18 +372,28 @@ test "Github Alert" {
         .{ .kind = .RBRACK, .text = "]" },
         .{ .kind = .BREAK, .text = "\n" },
     };
-    try std.testing.expect(isGithubAlert(line));
-}
+    try std.testing.expect(isGithubAlert(is_alert));
 
-test "Not a Github Alert" {
-    const line: []const Token = &.{
+    const not_alert1: []const Token = &.{
         .{ .kind = .GT, .text = ">" },
         .{ .kind = .SPACE, .text = " " },
         .{ .kind = .BANG, .text = "!" },
         .{ .kind = .WORD, .text = "INFO" },
         .{ .kind = .BREAK, .text = "\n" },
     };
-    try std.testing.expect(!isGithubAlert(line));
+    try std.testing.expect(!isGithubAlert(not_alert1));
+
+    // Note: `![...]` is incorrect; `[!...]` is correct
+    const not_alert2: []const Token = &.{
+        .{ .kind = .GT, .text = ">" },
+        .{ .kind = .SPACE, .text = " " },
+        .{ .kind = .BANG, .text = "!" },
+        .{ .kind = .LBRACK, .text = "[" },
+        .{ .kind = .WORD, .text = "INFO" },
+        .{ .kind = .RBRACK, .text = "]" },
+        .{ .kind = .BREAK, .text = "\n" },
+    };
+    try std.testing.expect(!isGithubAlert(not_alert2));
 }
 
 /// Concatenate a list of raw token text into a single string
@@ -556,7 +566,7 @@ pub fn validateLink(in_line: []const Token) bool {
     return true;
 }
 
-test "validateLink" {
+test validateLink {
     const TestData = struct {
         link: []const u8,
         valid: bool,

@@ -4,8 +4,16 @@ pub const InlineParser = @import("parsers/inlines.zig").InlineParser;
 
 pub const ParseResult = struct { time_s: f64, parser: Parser };
 
+pub fn parseFile(gpa: std.mem.Allocator, dir: std.fs.Dir, file: []const u8) !Parser {
+    const contents = try utils.readFile(gpa, dir, file);
+    defer gpa.free(contents);
+    var p = Parser.init(gpa, .{});
+    try p.parseMarkdown(contents);
+    return p;
+}
+
 /// Parse a Markdown file and return the time taken and the Parser object
-pub fn timedParse(alloc: @import("std").mem.Allocator, input: []const u8, verbose: bool) !ParseResult {
+pub fn timedParse(alloc: std.mem.Allocator, input: []const u8, verbose: bool) !ParseResult {
     // Parse the input text
     const opts = ParserOpts{
         .copy_input = false,
@@ -32,3 +40,6 @@ pub fn timedParse(alloc: @import("std").mem.Allocator, input: []const u8, verbos
 test "All Parser Tests" {
     @import("std").testing.refAllDecls(@This());
 }
+
+const std = @import("std");
+const utils = @import("utils.zig");

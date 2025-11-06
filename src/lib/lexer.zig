@@ -104,7 +104,7 @@ pub const Lexer = struct {
 // Tests
 //////////////////////////////////////////////////////////
 
-test "test lexer" {
+test "Tokenize" {
     const test_input =
         \\# Heading 1
         \\## Heading Two
