@@ -34,6 +34,8 @@ pub const List = struct {
     start: usize = 1,
     /// Line spacing (Number of blank lines between each item)
     spacing: u8 = 0,
+    /// State necessary for parsing ambiguous whitespace
+    _current_break_count: u8 = 0,
 };
 
 /// Single ListItem - Only needed for Task lists

@@ -1232,6 +1232,30 @@ test "FormatRenderer" {
             \\
             ,
         },
+        // Test list spacing
+        .{
+            .input =
+            \\1. one
+            \\
+            \\
+            \\1. two
+            \\1. three
+            \\
+            \\paragraph
+            ,
+            .output =
+            \\1. one
+            \\
+            \\
+            \\2. two
+            \\
+            \\
+            \\3. three
+            \\
+            \\paragraph
+            \\
+            ,
+        },
     };
 
     const alloc = std.testing.allocator;

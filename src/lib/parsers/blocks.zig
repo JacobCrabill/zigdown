@@ -455,14 +455,36 @@ pub const Parser = struct {
 
         var cblock = block.container();
 
-        if (utils.isEmptyLine(line)) {
-            // We allow spacing between each list item
-            // Keep track of how many blank lines are between each item
-            // Only the gap between the 1st and 2nd items is used to set the spacing
+        const is_break: bool = utils.isEmptyLine(line);
+        const is_list_item: bool = utils.isListItem(line);
+        if (is_break) {
+            // We allow spacing between each list item, so keep track of how many blank lines are between each item.
+            cblock.content.List._current_break_count += 1;
+
+            // NOTE: Only the gap between the 1st and 2nd items is used to set the spacing;
+            // the inter-item gaps after the 2nd item MUST be less than the gap between the 1st and 2nd items.
             if (cblock.children.items.len == 1) {
                 cblock.content.List.spacing += 1;
+                return true;
+            } else if (cblock.children.items.len > 1) {
+                const expected_spacing: u8 = cblock.content.List.spacing;
+                // We end the current list if the current line spacing between items is greater than
+                // that between the first and second list items
+                const current_spacing: u8 = cblock.content.List._current_break_count;
+                if (current_spacing > expected_spacing) {
+                    self.closeBlock(block);
+                    return false;
+                }
             }
-            return true;
+        } else if (cblock.content.List._current_break_count > 0 and !is_list_item) {
+            // If we just had a blank line in between list items, the next non-blank line
+            // must be a new list item; otherwise, end the list and parse a new block.
+            self.logger.log("Closing List block due to non-ListItem line after a blank\n", .{});
+            self.closeBlock(block);
+            return false;
+        } else {
+            // reset for the next ListItem
+            cblock.content.List._current_break_count = 0;
         }
 
         if (!(isLazyContinuationLineList(line) or utils.findStartColumn(line) > block.start_col())) {
@@ -483,7 +505,7 @@ pub const Parser = struct {
 
             // Check if the line starts a new item of the wrong type
             // In that case, we must close and return false (A new List must be started)
-            var kind: ?containers.List.Kind = undefined;
+            var kind: ?containers.List.Kind = null;
             if (utils.isTaskListItem(line)) {
                 kind = .task;
             } else if (utils.isUnorderedListItem(line)) {
@@ -494,7 +516,7 @@ pub const Parser = struct {
 
             const is_indented: bool = tline.len > 0 and tline[0].src.col > child.start_col() + 1;
             const wrong_type: bool = if (kind) |k| block.Container.content.List.kind != k else false;
-            if (wrong_type and !is_indented) {
+            if (is_break or (wrong_type and !is_indented)) {
                 self.logger.log("Mismatched list type; ending List.\n", .{});
                 self.closeBlock(child);
                 return false;
@@ -701,7 +723,8 @@ pub const Parser = struct {
         return true;
     }
 
-    pub fn handleLineBreak(_: *Self, block: *Block, line: []const Token) bool {
+    pub fn handleLineBreak(self: *Self, block: *Block, line: []const Token) bool {
+        _ = self;
         _ = block;
         _ = line;
         return false;
@@ -814,6 +837,11 @@ pub const Parser = struct {
         if (!isContinuationLineParagraph(utils.removeIndent(line, 2))) {
             self.logger.log("  Line does not continue paragraph\n", .{});
             return false;
+        }
+        if (utils.isEmptyLine(line)) {
+            self.logger.log("  Closing paragraph due to line break\n", .{});
+            self.closeBlock(block);
+            return true;
         }
         self.logger.log("  Line continues paragraph\n", .{});
 
