@@ -148,6 +148,12 @@ function M.install(zig_ver)
   }
 
   vim.notify("Building zigdown; Please wait...", vim.log.levels.WARN)
+  if utils.file_exists(M.zig_binary) then
+    -- Replace the download & extract commands with (effectively) no-ops
+    M.curl_cmd = { "echo" }
+    M.tar_cmd = { "echo" }
+  end
+
   return vim.fn.jobstart(M.curl_cmd, callbacks)
 end
 
