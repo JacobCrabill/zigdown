@@ -491,6 +491,7 @@ pub const Parser = struct {
             } else if (utils.isOrderedListItem(line)) {
                 kind = .ordered;
             }
+
             const is_indented: bool = tline.len > 0 and tline[0].src.col > child.start_col() + 1;
             const wrong_type: bool = if (kind) |k| block.Container.content.List.kind != k else false;
             if (wrong_type and !is_indented) {
@@ -851,13 +852,15 @@ pub const Parser = struct {
             },
             .MINUS => {
                 if (utils.isListItem(line)) {
-                    // Parse unorderd list block
-                    self.logger.log("Parsing list with start_col {d}\n", .{col});
+                    // Parse list block
                     b = Block.initContainer(self.alloc, .List, col);
-                    var kind: containers.List.Kind = .unordered;
-                    if (utils.isTaskListItem(line))
-                        kind = .task;
-                    b.Container.content.List = containers.List{ .kind = kind };
+                    b.Container.content.List = containers.List{ .kind = .unordered };
+                    if (utils.isTaskListItem(line)) {
+                        b.Container.content.List.kind = .task;
+                    } else if (utils.isOrderedListItem(line)) {
+                        b.Container.content.List.kind = .ordered;
+                    }
+                    self.logger.log("Parsing {s} list with start_col {d}\n", .{ @tagName(b.Container.content.List.kind), col });
                     if (!self.handleLineList(&b, line))
                         return error.ParseError;
                 } else {

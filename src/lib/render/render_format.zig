@@ -1217,6 +1217,21 @@ test "FormatRenderer" {
             ,
             .width = 50,
         },
+        .{
+            .input =
+            \\1. one
+            \\1. two
+            \\
+            \\paragraph
+            ,
+            .output =
+            \\1. one
+            \\2. two
+            \\
+            \\paragraph
+            \\
+            ,
+        },
     };
 
     const alloc = std.testing.allocator;
