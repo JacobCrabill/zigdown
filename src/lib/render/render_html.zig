@@ -446,11 +446,25 @@ pub const HtmlRenderer = struct {
     }
 
     fn renderImage(self: *Self, image: inls.Image) !void {
-        self.print("<img src=\"{s}\" class=\"image\" alt=\"", .{image.src});
-        for (image.alt.items) |text| {
-            try self.renderText(text);
+        // Check for an HTML-supported video file (mp4 or ogg) instead of an image
+        const video_template =
+            \\<video controls class="image">
+            \\  <source src="{s}" type="video/{s}">
+            \\  Your browser does not support the `<video>` tag.
+            \\</video>
+        ;
+        if (std.mem.endsWith(u8, image.src, ".mp4")) {
+            self.print(video_template, .{ image.src, "mp4" });
+        } else if (std.mem.endsWith(u8, image.src, ".ogg")) {
+            self.print(video_template, .{ image.src, "ogg" });
+        } else {
+            // Just a normal image
+            self.print("<img src=\"{s}\" class=\"image\" alt=\"", .{image.src});
+            for (image.alt.items) |text| {
+                try self.renderText(text);
+            }
+            self.write("\">");
         }
-        self.write("\">");
     }
 
     fn renderBegin(self: *Self) void {
