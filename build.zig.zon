@@ -1,7 +1,7 @@
 .{
     .name = .zigdown,
     .fingerprint = 0xec26eaf34f894e33,
-    .version = "1.0.0",
+    .version = "1.1.1",
     .minimum_zig_version = "0.15.1",
     .paths = .{
         "lua",
