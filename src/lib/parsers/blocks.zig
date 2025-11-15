@@ -645,6 +645,60 @@ pub const Parser = struct {
             if (utils.countKind(line, .PIPE) != table.ncol + 1) {
                 return false;
             }
+
+            // Parse the alignment and relative widths of each column
+            var start: ?usize = utils.indexOfTokenPos(line, 0, .PIPE);
+            var end: ?usize = utils.indexOfTokenPos(line, start.? + 1, .PIPE);
+            while (end != null) {
+                const start_idx: usize = start.?;
+                const end_idx: usize = end.?;
+
+                var alignment: containers.Table.Align = .left;
+                var dash_count: u8 = 0;
+
+                // We're looking for patterns like:
+                //     PIPE [SPACE] [WORD] [SPACE] PIPE
+                // where the WORD token contains the formatting annotations.
+                var left_marker: bool = false;
+                var right_marker: bool = false;
+                for (line[start_idx..end_idx]) |tok| {
+                    switch (tok.kind) {
+                        .COLON => {
+                            if (left_marker or dash_count > 0) {
+                                right_marker = true;
+                            } else if (dash_count == 0) {
+                                left_marker = true;
+                            }
+                        },
+                        .MINUS => {
+                            dash_count += 1;
+                        },
+                        else => {},
+                    }
+
+                    // Determine the alignment of the column.
+                    // If not specified, defaults to left.
+                    if (dash_count == 0) {
+                        alignment = .left;
+                    } else if (left_marker and right_marker) {
+                        alignment = .center;
+                    } else if (right_marker) {
+                        alignment = .right;
+                    }
+                }
+
+                table.alignment.append(table.gpa, alignment) catch return false;
+                table.relative_width.append(table.gpa, dash_count) catch return false;
+
+                // advance to the next column
+                start = end;
+                if (end_idx + 1 < line.len) {
+                    end = utils.indexOfTokenPos(line, end_idx + 1, .PIPE);
+                } else {
+                    end = null;
+                }
+            }
+
             table.row += 1;
             return true;
         }

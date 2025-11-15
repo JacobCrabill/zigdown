@@ -43,8 +43,19 @@ pub const ListItem = struct {
     checked: bool = false, // 󰄱  or 󰄵
 };
 
-/// Table
+/// Table with formatting constraints
 pub const Table = struct {
     ncol: usize = 0,
     row: usize = 0,
+    gpa: std.mem.Allocator,
+    /// Relative width (fraction of total amount) that each column should take up.
+    relative_width: std.ArrayList(u8) = .empty,
+    /// Text alignment of each column.
+    alignment: std.ArrayList(Align) = .empty,
+
+    pub const Align = enum(u8) {
+        left,
+        center,
+        right,
+    };
 };

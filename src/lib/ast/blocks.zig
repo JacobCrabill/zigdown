@@ -149,7 +149,7 @@ pub const Container = struct {
             .Quote => ContainerData{ .Quote = {} },
             .List => ContainerData{ .List = containers.List{} },
             .ListItem => ContainerData{ .ListItem = containers.ListItem{} },
-            .Table => ContainerData{ .Table = containers.Table{} },
+            .Table => ContainerData{ .Table = containers.Table{ .gpa = alloc } },
         };
 
         return block;
@@ -160,6 +160,14 @@ pub const Container = struct {
             child.deinit();
         }
         self.children.deinit();
+
+        switch (self.content) {
+            .Table => |*t| {
+                t.relative_width.deinit(t.gpa);
+                t.alignment.deinit(t.gpa);
+            },
+            else => {},
+        }
     }
 
     pub fn addChild(self: *Self, child: Block) !void {
@@ -195,6 +203,21 @@ pub const Container = struct {
             .List => |l| {
                 debug.printIndent(depth + 1);
                 debug.print("List Spacing: {d}\n", .{l.spacing});
+            },
+            .Table => |t| {
+                debug.printIndent(depth + 1);
+                debug.print("Table: Column alignment:", .{});
+                for (t.alignment.items) |a| {
+                    debug.print(" {t}", .{a});
+                }
+                debug.print("\n", .{});
+
+                debug.printIndent(depth + 1);
+                debug.print("Table: Relative column widths:", .{});
+                for (t.relative_width.items) |w| {
+                    debug.print(" {d}", .{w});
+                }
+                debug.print("\n", .{});
             },
             else => {},
         }
@@ -283,8 +306,8 @@ pub const Leaf = struct {
             // Print each token with its line and column numbers
             for (self.raw_contents.items) |token| {
                 debug.printIndent(depth + 1);
-                debug.print("Token: {s}, text: \"{s}\", line: {d}, col: {d}\n", .{
-                    toks.typeStr(token.kind),
+                debug.print("Token: {t}, text: \"{s}\", line: {d}, col: {d}\n", .{
+                    token.kind,
                     token.text,
                     token.src.row,
                     token.src.col,
@@ -454,6 +477,8 @@ test "Print basic AST" {
         \\│ │ │ │ │ │ Link:
         \\│ │ │ │ │ │ │ Text: 'Google' [line: 0, col: 0]
         \\│ │ Container: open: true, type: Table with 2 children
+        \\│ │ │ Table: Column alignment:
+        \\│ │ │ Table: Relative column widths:
         \\│ │ │ Leaf: open: true, type: Paragraph
         \\│ │ │ │ Inline content:
         \\│ │ │ │ │ Text: 'Hello, ' [line: 0, col: 0]

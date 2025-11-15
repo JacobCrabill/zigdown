@@ -45,6 +45,7 @@ pub const TokenType = enum {
     PIPE,
     BOLD,
     EMBOLD,
+    COLON,
     UNKNOWN,
 };
 
@@ -236,6 +237,7 @@ pub const Tokenizers = .{
     SingularTokenizer('/', TokenType.SLASH),
     SingularTokenizer('\\', TokenType.BSLASH),
     SingularTokenizer('|', TokenType.PIPE),
+    SingularTokenizer(':', TokenType.COLON),
     AnyOfTokenizer("0123456789", TokenType.DIGIT),
     WordTokenizer,
 };
@@ -244,52 +246,9 @@ pub const Tokenizers = .{
 // Utility Functions
 ///////////////////////////////////////////////////////////////////////////////
 
-pub fn typeStr(kind: TokenType) []const u8 {
-    return switch (kind) {
-        .EOF => "EOF",
-        .WORD => "WORD",
-        .DIGIT => "DIGIT",
-        .INDENT => "INDENT",
-        .SPACE => "SPACE",
-        .BREAK => "BREAK",
-        .HASH => "HASH",
-        .DIRECTIVE => "DIRECTIVE",
-        .CODE_INLINE => "CODE_INLINE",
-        .PLUS => "PLUS",
-        .MINUS => "MINUS",
-        .STAR => "STAR",
-        .USCORE => "USCORE",
-        .TILDE => "TILDE",
-        .PERIOD => "PERIOD",
-        .COMMA => "COMMA",
-        .EQUAL => "EQUAL",
-        .BANG => "BANG",
-        .QUERY => "QUERY",
-        .AT => "AT",
-        .DOLLAR => "DOLLAR",
-        .PERCENT => "PERCENT",
-        .CARET => "CARET",
-        .AND => "AND",
-        .LT => "LT",
-        .GT => "GT",
-        .LPAREN => "LPAREN",
-        .RPAREN => "RPAREN",
-        .LBRACK => "LBRACK",
-        .RBRACK => "RBRACK",
-        .LCURLY => "LCURLY",
-        .RCURLY => "RCURLY",
-        .SLASH => "SLASH",
-        .BSLASH => "BSLASH",
-        .PIPE => "PIPE",
-        .BOLD => "BOLD",
-        .EMBOLD => "EMBOLD",
-        .UNKNOWN => "UNKNOWN",
-    };
-}
-
 pub fn printTypes(tokens: []const Token) void {
     for (tokens) |tok| {
-        debug.print("{s}, ", .{typeStr(tok.kind)});
+        debug.print("{t}, ", .{tok.kind});
     }
     debug.print("\n", .{});
 }

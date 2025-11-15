@@ -606,3 +606,13 @@ pub fn countKind(line: []const Token, kind: TokenType) usize {
     }
     return count;
 }
+
+/// Find the index of the first occurance of a 'kind' Token beginning from 'start_index' (inclusive).
+///
+/// The index is relative to the start of the 'line' slice.
+pub fn indexOfTokenPos(line: []const Token, start_index: usize, kind: TokenType) ?usize {
+    for (line[start_index..], start_index..) |tok, i| {
+        if (tok.kind == kind) return i;
+    }
+    return null;
+}
