@@ -160,10 +160,6 @@ fn handleRender(
     var stdout_writer = std.fs.File.stdout().writer(&write_buf);
     const stdout: *std.io.Writer = &stdout_writer.interface;
 
-    var read_buf: [256]u8 = undefined;
-    var stdin_reader = std.fs.File.stdin().reader(&read_buf);
-    const stdin: *std.io.Reader = &stdin_reader.interface;
-
     // Read the Markdown document to be rendered
     // This will either come from stdin, or from a file
     var md_text: []const u8 = undefined;
@@ -171,8 +167,7 @@ fn handleRender(
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     var realpath: ?[]const u8 = null;
     if (r_opts.stdin()) {
-        // Read document from stdin
-        md_text = try stdin.readAlloc(alloc, 1e9);
+        md_text = try std.fs.File.stdin().readToEndAlloc(alloc, 1e9);
     } else {
         if (r_opts.file() == null) {
             printHelpAndExit(@tagName(r_opts), error.NoFilenameProvided);
