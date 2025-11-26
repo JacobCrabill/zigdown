@@ -129,6 +129,15 @@ pub fn build(b: *std.Build) !void {
         });
         if (ziglua_opt == null) return; // This will then go and fetch the dependency
 
+        // TODO: Zig's build system appears to have a bug where it refuses to fetch needed
+        // lazy dependencies of lazy dependencies.
+        // To fix the ziglua build, we must directly reference and use its luajit lazy dependency
+        // so that ziglua will actually build luajit.
+        _ = b.lazyDependency("luajit", .{
+            .optimize = optimize,
+            .target = target,
+        }) orelse return;
+
         const ziglua = ziglua_opt.?;
         const ziglua_dep = Dependency{ .name = "luajit", .module = ziglua.module("zlua") };
 
