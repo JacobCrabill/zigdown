@@ -133,8 +133,10 @@ fn serveRequest(request: *std.http.Server.Request, context: *const Context) !voi
     const path = request.head.target;
 
     if (std.mem.endsWith(u8, path, ".md")) {
-        md.renderMarkdown(request);
-        // try serveDocsFile(request, context, path, "text/html");
+        const path_dupe: []u8 = try context.alloc.dupe(u8, path);
+        defer context.alloc.free(path_dupe);
+        const path_decoded = std.Uri.percentDecodeInPlace(path_dupe);
+        md.renderMarkdown(request, path_decoded);
     } else if (std.mem.indexOf(u8, path, "favicon")) |_| {
         try request.respond(html.favicon, .{
             .extra_headers = &.{

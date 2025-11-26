@@ -35,9 +35,7 @@ fn sendErrorPage(r: *std.http.Server.Request, status: std.http.Status) void {
 }
 
 /// Render a Markdown file to HTML and send it back as an HTTP response
-pub fn renderMarkdown(r: *std.http.Server.Request) void {
-    const path = r.head.target;
-
+pub fn renderMarkdown(r: *std.http.Server.Request, path: []const u8) void {
     if (!std.mem.endsWith(u8, path, ".md")) {
         return;
     }
