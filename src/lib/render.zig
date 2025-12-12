@@ -2,6 +2,8 @@ const std = @import("std");
 const blocks = @import("ast/blocks.zig");
 const gfx = @import("image.zig");
 const cli = @import("cli.zig");
+const cons = @import("console.zig");
+const RawTTY = @import("RawTTY.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -57,8 +59,13 @@ pub fn render(opts: RenderOptions) !void {
                 columns = @min(tsize.cols, columns);
             }
 
+            var render_buf: std.io.Writer.Allocating = .init(opts.alloc);
+            defer render_buf.deinit();
+
+            const render_writer: *std.io.Writer = if (cfg.pager) &render_buf.writer else opts.out_stream;
+
             var c_renderer = ConsoleRenderer.init(
-                opts.out_stream,
+                render_writer,
                 arena.allocator(),
                 .{
                     .root_dir = opts.document_dir,
@@ -71,6 +78,17 @@ pub fn render(opts: RenderOptions) !void {
             );
             defer c_renderer.deinit();
             try c_renderer.renderBlock(opts.document);
+
+            if (cfg.pager) {
+                if (@import("builtin").os.tag == .windows) {
+                    std.debug.print("ERROR: Output paging is not supported on Windows", .{});
+                    return error.UnsupportedOS;
+                }
+
+                // If we're paging the output, the render above was to a temporary buffer.
+                // Take that output and page it to the console
+                try pageOutput(opts.alloc, opts.out_stream, render_buf.written());
+            }
         },
         .range => {
             // Get the terminal size; limit our width to that
@@ -110,6 +128,84 @@ pub fn render(opts: RenderOptions) !void {
     }
 
     opts.out_stream.flush() catch @panic("Can't flush output stream");
+}
+
+/// Page the output to the terminal given by 'writer'.
+///
+/// alloc:  The allocator to use for all file reading, parsing, and rendering.
+/// writer: The writer for the tty to page the output to.
+/// output: The rendered output to page.
+pub fn pageOutput(alloc: Allocator, writer: *std.io.Writer, output: []const u8) !void {
+    const raw_tty = try RawTTY.init(writer);
+    defer raw_tty.deinit();
+
+    var lines: std.ArrayList([]const u8) = try splitLines(alloc, output);
+    defer lines.deinit(alloc);
+
+    const n_rows = lines.items.len;
+    const tsize = gfx.getTerminalSize() catch gfx.TermSize{};
+
+    // Begin the presentation, using stdin to go forward/backward
+    var quit: bool = false;
+    var row: usize = 0;
+    while (!quit) {
+        _ = try writer.write(cons.clear_screen);
+        try raw_tty.moveCursor(0, 0);
+        for (lines.items[row..@min(row + tsize.rows - 1, n_rows)]) |line| {
+            try writer.writeAll(line);
+            try writer.writeAll("\n");
+        }
+        // TODO: Consider putting in lower-right corner like slide # in present mode
+        // try writer.print("[row {d} / {d}]\n", .{ row, n_rows });
+        try writer.flush();
+
+        switch (raw_tty.read()) {
+            'n', 'j', 'l' => { // Next Slide
+                if (row < n_rows)
+                    row += 1;
+            },
+            'p', 'h', 'k' => { // Previous Slide
+                if (row > 0) {
+                    row -= 1;
+                }
+            },
+            'q' => { // Quit
+                quit = true;
+            },
+            27 => { // Escape (0x1b)
+                if (raw_tty.read() == 91) { // 0x5b (??)
+                    switch (raw_tty.read()) {
+                        66, 67 => { // Down, Right -- Next Slide
+                            if (row < n_rows) {
+                                row += 1;
+                            }
+                        },
+                        65, 68 => { // Up, Left -- Previous Slide
+                            if (row > 0) {
+                                row -= 1;
+                            }
+                        },
+                        else => {},
+                    }
+                }
+            },
+            else => {},
+        }
+    }
+}
+
+/// Split a document into individual lines.
+///
+/// The lines of text are not duplicated; they point within the given text slice.
+fn splitLines(alloc: Allocator, text: []const u8) !std.ArrayList([]const u8) {
+    var lines: std.ArrayList([]const u8) = .empty;
+
+    var line_iter = std.mem.splitScalar(u8, text, '\n');
+    while (line_iter.next()) |line| {
+        try lines.append(alloc, line);
+    }
+
+    return lines;
 }
 
 //////////////////////////////////////////////////////////

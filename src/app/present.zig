@@ -1,6 +1,6 @@
 const std = @import("std");
 const zd = @import("zigdown");
-const RawTTY = @import("RawTTY.zig");
+const RawTTY = zd.RawTTY;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.array_list.Managed;

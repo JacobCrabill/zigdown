@@ -74,6 +74,7 @@ pub fn read(self: Self) u8 {
     }
 }
 
-fn moveCursor(self: Self, row: usize, col: usize) !void {
+/// Move the cursor to the given (zero-indexed) row and column
+pub fn moveCursor(self: Self, row: usize, col: usize) !void {
     _ = try self.writer.print("\x1B[{};{}H", .{ row + 1, col + 1 });
 }

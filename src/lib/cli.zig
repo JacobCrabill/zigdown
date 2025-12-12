@@ -98,6 +98,7 @@ pub const ConsoleRenderCmdOpts = struct {
     verbose: bool = false,
     timeit: bool = false,
     nofetch: bool = false,
+    pager: bool = false,
     positional: struct {
         file: ?[]const u8,
         pub const descriptions = .{
@@ -111,6 +112,7 @@ pub const ConsoleRenderCmdOpts = struct {
         .timeit = "Time the parsing & rendering and display the results",
         .verbose = "Enable verbose output from the parser",
         .nofetch = "Don't fetch images from the internet (just display the image link)",
+        .pager = "Page the output in the terminal (e.g. like 'less')",
     };
     pub const switches = .{
         .stdin = 'i',
@@ -119,6 +121,7 @@ pub const ConsoleRenderCmdOpts = struct {
         .verbose = 'v',
         .timeit = 't',
         .nofetch = 'n',
+        .pager = 'p',
     };
 };
 

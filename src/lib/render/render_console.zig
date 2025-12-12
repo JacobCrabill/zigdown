@@ -627,6 +627,10 @@ pub const ConsoleRenderer = struct {
         const ncol = table.content.Table.ncol;
         const col_w = @divFloor(self.opts.width - (2 * self.opts.indent) - (ncol + 1), ncol);
 
+        // The total width of all text to be rendered (removing inter-column spacing)
+        const render_width = self.opts.width - (2 * self.opts.indent) - (ncol + 1);
+        const render_width_f: f32 = @floatFromInt(render_width);
+
         // Create a new renderer to render into a buffer for each cell
         // Use an arena to simplify memory management here
         var arena = std.heap.ArenaAllocator.init(self.alloc);
@@ -639,11 +643,33 @@ pub const ConsoleRenderer = struct {
         };
         var cells = ArrayList(Cell).init(alloc);
 
-        for (table.children.items) |item| {
+        const relative_widths = table.content.Table.relative_width.items;
+        const total_width: usize = blk: {
+            var sum: usize = 0;
+            for (relative_widths) |w| {
+                sum += w;
+            }
+            break :blk sum;
+        };
+        const total_width_f: f32 = @floatFromInt(total_width);
+
+        // Compute & store the (integer) width of each column
+        var col_widths = try ArrayList(u32).initCapacity(alloc, ncol);
+        for (relative_widths) |w| {
+            const rel_width: f32 = @floatFromInt(w);
+            const width_frac: f32 = rel_width / total_width_f;
+            col_widths.appendAssumeCapacity(@intFromFloat(@round(width_frac * render_width_f)));
+        }
+
+        for (table.children.items, 0..) |item, i| {
+            // Compute the width of this cell based on which column it is in
+            const col_idx: usize = @mod(i, ncol);
+            const width: usize = col_widths.items[col_idx];
+
             // Render the table cell into a new buffer
             var alloc_writer = std.Io.Writer.Allocating.init(alloc);
             const sub_opts = Config{
-                .width = col_w - 1,
+                .width = width - 1, // col_w - 1,
                 .indent = 1,
                 .max_image_rows = self.opts.max_image_rows,
                 .max_image_cols = col_w - 2 * self.opts.indent,
@@ -664,7 +690,7 @@ pub const ConsoleRenderer = struct {
         const nrow: usize = @divFloor(cells.items.len, ncol);
         std.debug.assert(cells.items.len == ncol * nrow);
 
-        self.writeTableBorderTop(ncol, col_w);
+        self.writeTableBorderTop(ncol, col_widths.items);
 
         for (0..nrow) |i| {
             // Get the max number of rows of text for any cell in the table row
@@ -683,14 +709,20 @@ pub const ConsoleRenderer = struct {
             // Loop over the # of rows of text in this single row of the table
             for (0..max_rows) |_| {
                 self.writeLeaders();
+                var left_col_idx: usize = self.opts.indent + 2;
                 for (0..ncol) |j| {
                     const cell_idx: usize = i * ncol + j;
                     const cell: *Cell = &cells.items[cell_idx];
+
+                    const rel_width: f32 = @floatFromInt(relative_widths[j]);
+                    const width_f: f32 = (rel_width / total_width_f) * render_width_f;
+                    const width: usize = @intFromFloat(@round(width_f));
 
                     // For each cell in the row...
                     self.write(self.opts.box_style.vb);
                     self.write(" ");
 
+                    // --- TODO --- left/center/right alignment should be handled here
                     if (cell.idx < cell.text.len) {
                         // Write the next line of text from that cell,
                         // then increment the write head index of that cell.
@@ -706,11 +738,14 @@ pub const ConsoleRenderer = struct {
                         cell.idx += text.len + 1;
 
                         // Move the cursor to the start of the next cell
-                        const new_col: usize = self.opts.indent + (j + 2) + (j + 1) * col_w;
+                        // const new_col: usize = self.opts.indent + (j + 2) + (j + 1) * col_w;
+                        left_col_idx += width + 1;
+                        const new_col = left_col_idx;
                         self.printno(cons.set_col, .{new_col});
                         self.column = new_col;
                     } else {
-                        self.writeNTimes(" ", col_w - 1);
+                        // self.writeNTimes(" ", col_w - 1);
+                        self.writeNTimes(" ", width - 1);
                     }
                 }
                 self.write(self.opts.box_style.vb);
@@ -721,16 +756,17 @@ pub const ConsoleRenderer = struct {
             self.writeLeaders();
 
             if (i == nrow - 1) {
-                self.writeTableBorderBottom(ncol, col_w);
+                self.writeTableBorderBottom(ncol, col_widths.items);
             } else {
-                self.writeTableBorderMiddle(ncol, col_w);
+                self.writeTableBorderMiddle(ncol, col_widths.items);
             }
         }
     }
 
-    fn writeTableBorderTop(self: *Self, ncol: usize, col_w: usize) void {
+    fn writeTableBorderTop(self: *Self, ncol: usize, col_widths: []const u32) void {
         self.write(self.opts.box_style.tl);
         for (0..ncol) |i| {
+            const col_w: usize = col_widths[i];
             for (0..col_w) |_| {
                 self.write(self.opts.box_style.hb);
             }
@@ -744,9 +780,10 @@ pub const ConsoleRenderer = struct {
         self.writeLeaders();
     }
 
-    fn writeTableBorderMiddle(self: *Self, ncol: usize, col_w: usize) void {
+    fn writeTableBorderMiddle(self: *Self, ncol: usize, col_widths: []const u32) void {
         self.write(self.opts.box_style.lj);
         for (0..ncol) |i| {
+            const col_w: usize = col_widths[i];
             for (0..col_w) |_| {
                 self.write(self.opts.box_style.hb);
             }
@@ -760,9 +797,10 @@ pub const ConsoleRenderer = struct {
         self.writeLeaders();
     }
 
-    fn writeTableBorderBottom(self: *Self, ncol: usize, col_w: usize) void {
+    fn writeTableBorderBottom(self: *Self, ncol: usize, col_widths: []const u32) void {
         self.write(self.opts.box_style.bl);
         for (0..ncol) |i| {
+            const col_w: usize = col_widths[i];
             for (0..col_w) |_| {
                 self.write(self.opts.box_style.hb);
             }
