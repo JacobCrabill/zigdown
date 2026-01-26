@@ -98,7 +98,7 @@ pub const ConsoleRenderer = struct {
             .alloc = alloc,
             .leader_stack = ArrayList(Text).init(alloc),
             .opts = opts,
-            .prerender = std.Io.Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
+            // .prerender = std.Io.Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
         };
     }
 
@@ -654,12 +654,21 @@ pub const ConsoleRenderer = struct {
         const total_width_f: f32 = @floatFromInt(total_width);
 
         // Compute & store the (integer) width of each column
+        // Calculate all columns except the last, then assign remaining width to last column
+        // to ensure total width equals render_width exactly (avoiding rounding errors)
         var col_widths = try ArrayList(u32).initCapacity(alloc, ncol);
-        for (relative_widths) |w| {
+        var total_assigned: u32 = 0;
+        for (relative_widths[0 .. ncol - 1]) |w| {
             const rel_width: f32 = @floatFromInt(w);
             const width_frac: f32 = rel_width / total_width_f;
-            col_widths.appendAssumeCapacity(@intFromFloat(@round(width_frac * render_width_f)));
+            const width: u32 = @intFromFloat(@round(width_frac * render_width_f));
+            col_widths.appendAssumeCapacity(width);
+            total_assigned += width;
         }
+        // Last column gets the remaining width to ensure exact total
+        const render_width_u32: u32 = @intFromFloat(render_width_f);
+        const last_width: u32 = render_width_u32 - total_assigned;
+        col_widths.appendAssumeCapacity(last_width);
 
         for (table.children.items, 0..) |item, i| {
             // Compute the width of this cell based on which column it is in
@@ -709,14 +718,13 @@ pub const ConsoleRenderer = struct {
             // Loop over the # of rows of text in this single row of the table
             for (0..max_rows) |_| {
                 self.writeLeaders();
-                var left_col_idx: usize = self.opts.indent + 2;
+                var left_col_idx: usize = self.opts.indent + 1;
                 for (0..ncol) |j| {
                     const cell_idx: usize = i * ncol + j;
                     const cell: *Cell = &cells.items[cell_idx];
 
-                    const rel_width: f32 = @floatFromInt(relative_widths[j]);
-                    const width_f: f32 = (rel_width / total_width_f) * render_width_f;
-                    const width: usize = @intFromFloat(@round(width_f));
+                    // Use the precomputed column width to avoid rounding errors
+                    const width: usize = col_widths.items[j];
 
                     // For each cell in the row...
                     self.write(self.opts.box_style.vb);
@@ -738,14 +746,15 @@ pub const ConsoleRenderer = struct {
                         cell.idx += text.len + 1;
 
                         // Move the cursor to the start of the next cell
-                        // const new_col: usize = self.opts.indent + (j + 2) + (j + 1) * col_w;
                         left_col_idx += width + 1;
                         const new_col = left_col_idx;
                         self.printno(cons.set_col, .{new_col});
                         self.column = new_col;
                     } else {
-                        // self.writeNTimes(" ", col_w - 1);
+                        // Write padding spaces for empty cell
                         self.writeNTimes(" ", width - 1);
+                        // Update left_col_idx even for empty cells
+                        left_col_idx += width + 1;
                     }
                 }
                 self.write(self.opts.box_style.vb);
@@ -1388,3 +1397,71 @@ pub const ConsoleRenderer = struct {
         }
     }
 };
+
+//////////////////////////////////////////////////////////
+// Tests
+//////////////////////////////////////////////////////////
+
+fn testRender(alloc: Allocator, input: []const u8, out_stream: Writer, width: usize) !void {
+    var p = @import("../parser.zig").Parser.init(alloc, .{});
+    try p.parseMarkdown(input);
+    defer p.deinit();
+
+    var r = ConsoleRenderer.init(out_stream, alloc, .{
+        .width = width,
+        .indent = 2,
+        .rendering_to_buffer = true,
+    });
+    defer r.deinit();
+    try r.renderBlock(p.document);
+
+    try out_stream.*.flush();
+}
+
+test "ConsoleRenderer" {
+    const TestData = struct {
+        input: []const u8,
+        expected: []const u8,
+        width: usize = 90,
+    };
+
+    const test_data: []const TestData = &.{
+        .{
+            .input =
+            \\| Foo | Bar | Baz   |
+            \\| --- | --- | ----- |
+            \\| one | two | three |
+            ,
+            .expected = @embedFile("test_assets/table_basic.txt"),
+        },
+        .{
+            .input =
+            \\| First row                                                          | 2nd cell                 | 3rd cell |
+            \\| :----------------------------------------------------------------- | :----------------------- | -------- |
+            \\| `The` **2nd row** (_header row_) sets the alignment of each column | same number of columns   | foo      |
+            \\| An `other` row                                                     | `same` number of columns | bar      |
+            ,
+            .expected = @embedFile("test_assets/table_multiline.txt"),
+        },
+        .{
+            .input =
+            \\| A   | B | C |
+            \\| --- | - | - |
+            \\| foo |   | x |
+            \\|     | y |   |
+            ,
+            .expected = @embedFile("test_assets/table_empty_cells.txt"),
+        },
+    };
+
+    const alloc = std.testing.allocator;
+
+    for (test_data) |data| {
+        var writer = std.Io.Writer.Allocating.init(alloc);
+        defer writer.deinit();
+
+        try testRender(alloc, data.input, &writer.writer, data.width);
+
+        try std.testing.expectEqualStrings(data.expected, writer.writer.buffered());
+    }
+}
