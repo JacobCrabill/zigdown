@@ -52,7 +52,8 @@ export fn render_markdown(lua: ?*LuaState) callconv(.c) c_int {
     // Number of columns to render (output width).
     // We handle the case of the user not providing the argument by defaulting to 100.
     const no_arg: bool = (c.lua_isnone(lua, 2) or c.lua_isnil(lua, 2));
-    const columns: usize = if (no_arg) 100 else @intCast(c.lua_tointeger(lua, 2));
+    const raw_cols: i64 = if (no_arg) 100 else @intCast(std.math.clamp(c.lua_tointeger(lua, 2), 10, 120));
+    const columns: usize = if (raw_cols <= 0) 100 else @intCast(std.math.clamp(c.lua_tointeger(lua, 2), 10, 120));
 
     // Parse the input text
     const opts = zd.parser.ParserOpts{ .copy_input = false, .verbose = false };
@@ -75,8 +76,8 @@ export fn render_markdown(lua: ?*LuaState) callconv(.c) c_int {
     const render_opts = zd.render.RangeRenderer.Config{
         .root_dir = null, // TODO opts.document_dir,
         .indent = 2,
-        .width = columns,
-        .max_image_cols = if (columns > 4) columns - 4 else columns,
+        .width = @intCast(columns),
+        .max_image_cols = if (columns > 4) @intCast(columns - 4) else @intCast(columns),
         .termsize = tsize,
     };
     var r_renderer = zd.render.RangeRenderer.init(&alloc_writer.writer, alloc, render_opts);
