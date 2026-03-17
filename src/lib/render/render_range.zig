@@ -763,7 +763,7 @@ pub const RangeRenderer = struct {
                         cell.idx += text.len + 1;
 
                         // Advance to the start of the next cell using actual column widths
-                        var new_col: usize = self.opts.indent + 2; // Start after indent and first "┃ "
+                        var new_col: usize = self.opts.indent + 1; // Start after indent and opening "┃"
                         for (0..j + 1) |k| {
                             new_col += col_widths.items[k] + 1; // width + separator
                         }
