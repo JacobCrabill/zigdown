@@ -415,6 +415,7 @@ fn getDependencies(b: *std.Build, target: Target, optimize: OptimizeMode, ts_lan
             .{ .name = "cmake", .scanner = "src/scanner.c" },
             .{ .name = "cpp", .scanner = "src/scanner.c" },
             .{ .name = "json" },
+            .{ .name = "lua", .scanner = "src/scanner.c" },
             .{ .name = "make" },
             .{ .name = "python", .scanner = "src/scanner.c" },
             .{ .name = "rust", .scanner = "src/scanner.c" },

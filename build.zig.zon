@@ -66,6 +66,10 @@
             .url = "https://github.com/tree-sitter/tree-sitter-json/archive/4d770d31f732d50d3ec373865822fbe659e47c75.tar.gz",
             .hash = "N-V-__8AACVXAgCEl--zqcqoXlvXpEMk5BTS748bsLVslERc",
         },
+        .tree_sitter_lua = .{
+            .url = "https://github.com/tree-sitter-grammars/tree-sitter-lua/archive/7040a79f95b0bf7517a9809a8d0ecd41197027ac.tar.gz",
+            .hash = "N-V-__8AAExZCQBbT7NCZKdW4KxnVtSRvSVqTtJt0FEqfSa9",
+        },
         .tree_sitter_make = .{
             .url = "https://github.com/tree-sitter-grammars/tree-sitter-make/archive/5e9e8f8ff3387b0edcaa90f46ddf3629f4cfeb1d.tar.gz",
             .hash = "N-V-__8AAD6dEwA9hwePYcn8FdDAJEeYqCBBlYI2Oey6O5g2",
