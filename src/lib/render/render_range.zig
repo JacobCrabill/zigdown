@@ -686,6 +686,13 @@ pub const RangeRenderer = struct {
             try sub_renderer.renderBlock(item);
             sub_renderer.renderEnd();
 
+            // Shift the style ranges over by the amount of indent
+            // to map from sub-renderer to parent renderer
+            for (sub_renderer.style_ranges.items) |*range| {
+                range.start += (cell_col_idx + 1) * self.opts.indent;
+                range.end += (cell_col_idx + 1) * self.opts.indent;
+            }
+
             try cells.append(.{
                 .text = alloc_writer.writer.buffered(),
                 .style_ranges = sub_renderer.style_ranges,
