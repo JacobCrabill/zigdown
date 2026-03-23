@@ -732,10 +732,16 @@ pub const RangeRenderer = struct {
                     col_offset += col_widths.items[k] + 1; // width + separator
                 }
                 for (cell.style_ranges.items) |range| {
+                    // The sub-renderer starts line 0 at col_byte=0 (no indent),
+                    // but wrapped lines (line > 0) start at col_byte=sub_indent
+                    // because renderBreak writes the sub-renderer's indent.
+                    // We must subtract that indent on wrapped lines so that
+                    // the col_offset mapping is consistent across all lines.
+                    const sub_indent_adjust: usize = if (range.line > 0) 1 else 0;
                     const new_range: StyleRange = .{
                         .line = current_line + range.line,
-                        .start = col_offset + range.start,
-                        .end = col_offset + range.end,
+                        .start = col_offset + range.start - sub_indent_adjust,
+                        .end = col_offset + range.end - sub_indent_adjust,
                         .style = range.style,
                     };
                     self.style_ranges.append(new_range) catch @panic("OOM");
