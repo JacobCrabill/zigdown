@@ -644,6 +644,7 @@ pub const ConsoleRenderer = struct {
         var cells = ArrayList(Cell).init(alloc);
 
         const relative_widths = table.content.Table.relative_width.items;
+        const use_relative_widths = relative_widths.len == ncol;
         const total_width: usize = blk: {
             var sum: usize = 0;
             for (relative_widths) |w| {
@@ -658,12 +659,19 @@ pub const ConsoleRenderer = struct {
         // to ensure total width equals render_width exactly (avoiding rounding errors)
         var col_widths = try ArrayList(u32).initCapacity(alloc, ncol);
         var total_assigned: u32 = 0;
-        for (relative_widths[0 .. ncol - 1]) |w| {
-            const rel_width: f32 = @floatFromInt(w);
-            const width_frac: f32 = rel_width / total_width_f;
-            const width: u32 = @intFromFloat(@round(width_frac * render_width_f));
-            col_widths.appendAssumeCapacity(width);
-            total_assigned += width;
+        if (use_relative_widths and total_width > 0) {
+            for (relative_widths[0 .. ncol - 1]) |w| {
+                const rel_width: f32 = @floatFromInt(w);
+                const width_frac: f32 = rel_width / total_width_f;
+                const width: u32 = @intFromFloat(@round(width_frac * render_width_f));
+                col_widths.appendAssumeCapacity(width);
+                total_assigned += width;
+            }
+        } else {
+            for (0..ncol - 1) |_| {
+                col_widths.appendAssumeCapacity(@intCast(col_w));
+                total_assigned += @intCast(col_w);
+            }
         }
         // Last column gets the remaining width to ensure exact total
         const render_width_u32: u32 = @intFromFloat(render_width_f);
@@ -1451,6 +1459,24 @@ test "ConsoleRenderer" {
             \\|     | y |   |
             ,
             .expected = @embedFile("test_assets/table_empty_cells.txt"),
+        },
+        .{
+            .input =
+            \\| End-State Packages |
+            ,
+            .expected = @embedFile("test_assets/table_single_row.txt"),
+            .width = 40,
+        },
+        .{
+            .input =
+            \\1. Intro
+            \\
+            \\   | Name | Value |
+            \\   | --- | --- |
+            \\   | foo | bar |
+            ,
+            .expected = @embedFile("test_assets/table_nested_list_item.txt"),
+            .width = 60,
         },
     };
 

@@ -44,6 +44,8 @@ pub fn init(writer: *std.io.Writer) !Self {
     try writer.writeAll("\x1B[s"); // Save cursor position
     try writer.writeAll("\x1B[?47h"); // Save screen
     try writer.writeAll("\x1B[?1049h"); // Enable alternative buffer
+    try writer.writeAll("\x1B[2J"); // Clear the screen
+    try writer.writeAll("\x1B[1;1H"); // Move cursor to top-left (1,1 in 1-indexed)
     try writer.flush();
 
     return Self{

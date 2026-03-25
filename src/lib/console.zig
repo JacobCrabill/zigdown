@@ -7,7 +7,7 @@ const Color = theme.Color;
 const Style = theme.Style;
 const TextStyle = theme.TextStyle;
 
-// ANSI terminal escape character
+/// ANSI terminal escape character
 pub const ansi = [1]u8{0x1b};
 
 // ANSI Reset command (clear formatting)
@@ -27,15 +27,18 @@ pub const set_row_col = ansi ++ "[{d};{d}H"; // Row, Column
 pub const save_position = ansi ++ "[s";
 pub const restore_position = ansi ++ "[u";
 
-// ANSI Clear Screen Command
+// ANSI Clear Screen Commands
 pub const clear_screen_end = ansi ++ "[0J"; // Clear from cursor to end of screen
 pub const clear_screen_beg = ansi ++ "[1J"; // Clear from cursor to beginning of screen
 pub const clear_screen = ansi ++ "[2J"; // Clear entire screen
 
-// ANSI Clear Line Command
+// ANSI Clear Line Commands
 pub const clear_line_end = ansi ++ "[0K"; // Clear from cursor to end of line
 pub const clear_line_beg = ansi ++ "[1K"; // Clear from cursor to beginning of line
 pub const clear_line = ansi ++ "[2K"; // Clear entire line
+
+/// Kitty Graphics Protocol - Clear all images
+pub const clear_graphics = ansi ++ "_Ga=d" ++ ansi ++ "\\"; // Delete all graphics
 
 // ====================================================
 // ANSI display codes (colors, styles, etc.)

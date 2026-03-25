@@ -149,6 +149,7 @@ pub fn pageOutput(alloc: Allocator, writer: *std.io.Writer, output: []const u8) 
     var quit: bool = false;
     var row: usize = 0;
     while (!quit) {
+        _ = try writer.write(cons.clear_graphics); // Clear all graphics/images
         _ = try writer.write(cons.clear_screen);
         try raw_tty.moveCursor(0, 0);
         for (lines.items[row..@min(row + tsize.rows - 1, n_rows)]) |line| {

@@ -478,10 +478,26 @@ pub const Parser = struct {
             }
         } else if (cblock.content.List._current_break_count > 0 and !is_list_item) {
             // If we just had a blank line in between list items, the next non-blank line
-            // must be a new list item; otherwise, end the list and parse a new block.
-            self.logger.log("Closing List block due to non-ListItem line after a blank\n", .{});
-            self.closeBlock(block);
-            return false;
+            // may still belong to the current list item if it is indented as child content.
+            const start_col = utils.findStartColumn(line);
+            const is_indented_child = start_col > block.start_col();
+            if (!is_indented_child) {
+                self.logger.log("Closing List block due to non-ListItem line after a blank\n", .{});
+                self.closeBlock(block);
+                return false;
+            }
+
+            // A blank line between blocks in the same list item ends the previous child block.
+            if (cblock.children.items.len > 0) {
+                const list_item = &cblock.children.items[cblock.children.items.len - 1];
+                if (list_item.lastChild()) |child| {
+                    if (child.isOpen()) {
+                        self.closeBlock(child);
+                    }
+                }
+            }
+
+            cblock.content.List._current_break_count = 0;
         } else {
             // reset for the next ListItem
             cblock.content.List._current_break_count = 0;
@@ -604,13 +620,15 @@ pub const Parser = struct {
             }
         }
 
+        const content_line = if (open_child_is_code) utils.removeIndent(line, block.start_col()) else utils.removeIndent(trimmed_line, block.start_col());
+
         // Check for an open child
         if (cblock.children.items.len > 0) {
             const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
-            if (self.handleLine(child, utils.removeIndent(line, block.start_col()))) {
+            if (child.isOpen() and self.handleLine(child, content_line)) {
                 self.logger.log("ListItem's child handled line\n", .{});
                 return true;
-            } else {
+            } else if (child.isOpen()) {
                 self.logger.log("ListItem's child did *not* handle line\n", .{});
                 self.closeBlock(child);
             }
@@ -618,7 +636,7 @@ pub const Parser = struct {
 
         // Child did not accept this line (or no children yet)
         // Determine which kind of Block this line should be
-        const child = self.parseNewBlock(utils.removeIndent(trimmed_line, block.start_col())) catch unreachable;
+        const child = self.parseNewBlock(content_line) catch unreachable;
         cblock.children.append(child) catch unreachable;
 
         return true;
@@ -628,13 +646,14 @@ pub const Parser = struct {
         assert(block.isOpen());
         assert(block.isContainer());
 
-        if (line[0].kind != .PIPE) return false;
+        const trimmed_line = utils.trimLeadingWhitespace(line);
+        if (trimmed_line.len == 0 or trimmed_line[0].kind != .PIPE) return false;
 
         self.logger.log("TABLE\n", .{});
-        self.logger.printText(line, false);
+        self.logger.printText(trimmed_line, false);
 
         // A table row must contain *at least* '||'
-        if (utils.countKind(line, .PIPE) < 2)
+        if (utils.countKind(trimmed_line, .PIPE) < 2)
             return false;
 
         var cblock = block.container();
@@ -642,13 +661,13 @@ pub const Parser = struct {
 
         // Check the 2nd row - this should be the "header" / formatting row
         if (table.row == 1) {
-            if (utils.countKind(line, .PIPE) != table.ncol + 1) {
+            if (utils.countKind(trimmed_line, .PIPE) != table.ncol + 1) {
                 return false;
             }
 
             // Parse the alignment and relative widths of each column
-            var start: ?usize = utils.indexOfTokenPos(line, 0, .PIPE);
-            var end: ?usize = utils.indexOfTokenPos(line, start.? + 1, .PIPE);
+            var start: ?usize = utils.indexOfTokenPos(trimmed_line, 0, .PIPE);
+            var end: ?usize = utils.indexOfTokenPos(trimmed_line, start.? + 1, .PIPE);
             while (end != null) {
                 const start_idx: usize = start.?;
                 const end_idx: usize = end.?;
@@ -661,7 +680,7 @@ pub const Parser = struct {
                 // where the WORD token contains the formatting annotations.
                 var left_marker: bool = false;
                 var right_marker: bool = false;
-                for (line[start_idx..end_idx]) |tok| {
+                for (trimmed_line[start_idx..end_idx]) |tok| {
                     switch (tok.kind) {
                         .COLON => {
                             if (left_marker or dash_count > 0) {
@@ -692,8 +711,8 @@ pub const Parser = struct {
 
                 // advance to the next column
                 start = end;
-                if (end_idx + 1 < line.len) {
-                    end = utils.indexOfTokenPos(line, end_idx + 1, .PIPE);
+                if (end_idx + 1 < trimmed_line.len) {
+                    end = utils.indexOfTokenPos(trimmed_line, end_idx + 1, .PIPE);
                 } else {
                     end = null;
                 }
@@ -705,17 +724,17 @@ pub const Parser = struct {
 
         var column_count: usize = 0;
         var i: usize = 1;
-        while (i < line.len) {
-            const tok = line[i];
+        while (i < trimmed_line.len) {
+            const tok = trimmed_line[i];
             if (tok.kind == .PIPE) {
                 // End of this cell
                 column_count += 1;
                 self.logger.log("Incrementing table column_count\n", .{});
             } else if (tok.kind == .BREAK) {
                 // End of line
-            } else if (i < line.len) {
-                if (utils.findFirstOf(line, i, &.{.PIPE})) |idx| {
-                    const child = self.parseNewBlock(line[i..idx]) catch unreachable;
+            } else if (i < trimmed_line.len) {
+                if (utils.findFirstOf(trimmed_line, i, &.{.PIPE})) |idx| {
+                    const child = self.parseNewBlock(trimmed_line[i..idx]) catch unreachable;
                     cblock.children.append(child) catch unreachable;
                     i = idx - 1;
                 }
@@ -1088,3 +1107,65 @@ pub const Parser = struct {
         self.parseInlines(&leaf.inlines, tokens) catch unreachable;
     }
 };
+
+test "Parser supports table nested in ordered list item" {
+    const alloc = std.testing.allocator;
+    const input =
+        \\1. Intro
+        \\
+        \\   | Extension Point | Algorithm Library | Mixin Role | Block Discovery |
+        \\   | --- | --- | --- | --- |
+        \\   | **SAEM Tasks** | `cognition-task-extensions` | Inherits task class | `forEachMixin<TaskModifier>()` |
+    ;
+
+    var p = Parser.init(alloc, .{});
+    defer p.deinit();
+    try p.parseMarkdown(input);
+
+    const root = p.document.container();
+    try std.testing.expectEqual(@as(usize, 1), root.children.items.len);
+
+    const list = &root.children.items[0];
+    try std.testing.expect(list.isContainer());
+    try std.testing.expect(list.container().content == .List);
+    try std.testing.expectEqual(@as(usize, 1), list.container().children.items.len);
+
+    const list_item = &list.container().children.items[0];
+    try std.testing.expect(list_item.isContainer());
+    try std.testing.expect(list_item.container().content == .ListItem);
+    try std.testing.expectEqual(@as(usize, 2), list_item.container().children.items.len);
+
+    const table = &list_item.container().children.items[1];
+    try std.testing.expect(table.isContainer());
+    try std.testing.expect(table.container().content == .Table);
+    try std.testing.expectEqual(@as(usize, 4), table.container().content.Table.ncol);
+    try std.testing.expectEqual(@as(usize, 3), table.container().content.Table.row);
+    try std.testing.expectEqual(@as(usize, 4), table.container().content.Table.relative_width.items.len);
+    try std.testing.expectEqual(@as(usize, 4), table.container().content.Table.alignment.items.len);
+    try std.testing.expectEqual(@as(usize, 8), table.container().children.items.len);
+}
+
+test "Parser supports table nested in task list item" {
+    const alloc = std.testing.allocator;
+    const input =
+        \\- [ ] Intro
+        \\
+        \\  | Name | Value |
+        \\  | --- | --- |
+        \\  | foo | bar |
+    ;
+
+    var p = Parser.init(alloc, .{});
+    defer p.deinit();
+    try p.parseMarkdown(input);
+
+    const root = p.document.container();
+    const list = &root.children.items[0];
+    const list_item = &list.container().children.items[0];
+    const table = &list_item.container().children.items[1];
+
+    try std.testing.expect(list.container().content == .List);
+    try std.testing.expectEqual(@as(usize, 2), table.container().content.Table.ncol);
+    try std.testing.expectEqual(@as(usize, 2), table.container().content.Table.relative_width.items.len);
+    try std.testing.expectEqual(@as(usize, 4), table.container().children.items.len);
+}

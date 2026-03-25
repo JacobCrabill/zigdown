@@ -1422,7 +1422,7 @@ test "RangeRenderer" {
             \\  high-order, GPU-enabled CFD solver. Uses the Direct Flux Reconstruction (DFR) method on both CPUs
             \\  and GPUs (using CUDA), and can run on arbitrary 3D unstructured grids.
             ,
-            // TODO: Fix trailing whitespace
+            // TODO: Fix trailing whitespace - can't use multiline string here!
             .output = "\n  ‣ ZEFR: The Aerospace Computing Lab (ACL)'s collaborative high-order, GPU-enabled CFD \n    solver. Uses the Direct Flux Reconstruction (DFR) method on both CPUs and GPUs (\n    using CUDA), and can run on arbitrary 3D unstructured grids.\n  \n  ",
         },
     };
