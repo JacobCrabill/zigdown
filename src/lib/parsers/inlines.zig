@@ -172,7 +172,16 @@ pub const InlineParser = struct {
                     }
                 },
                 .TILDE => {
-                    style.strike = !style.strike;
+                    if (style.strike) {
+                        // Already inside a strikethrough span — close it unconditionally.
+                        style.strike = false;
+                    } else if (utils.findFirstOf(tokens, i + 1, &.{.TILDE}) != null) {
+                        // Only open a span when a matching closing ~ exists later in the same block.
+                        style.strike = true;
+                    } else {
+                        // No closing ~ in scope — treat as a literal character.
+                        try utils.appendSingleToken(self.alloc, &inlines, tok, style);
+                    }
                 },
                 .BANG, .LBRACK => {
                     const bang: bool = tok.kind == .BANG;
@@ -362,7 +371,20 @@ pub const InlineParser = struct {
                     }
                 },
                 .TILDE => {
-                    style.strike = !style.strike;
+                    if (style.strike) {
+                        style.strike = false;
+                    } else if (utils.findFirstOf(alt_text, i + 1, &.{.TILDE}) != null) {
+                        style.strike = true;
+                    } else {
+                        const text = inls.Text{
+                            .alloc = self.alloc,
+                            .style = style,
+                            .text = try self.alloc.dupe(u8, tok.text),
+                            .line = tok.src.row,
+                            .col = tok.src.col,
+                        };
+                        try link_text_block.append(text);
+                    }
                 },
                 .BREAK => {
                     // Treat line breaks as spaces; Don't clear the style
