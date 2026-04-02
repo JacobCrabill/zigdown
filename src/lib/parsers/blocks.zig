@@ -1169,3 +1169,43 @@ test "Parser supports table nested in task list item" {
     try std.testing.expectEqual(@as(usize, 2), table.container().content.Table.relative_width.items.len);
     try std.testing.expectEqual(@as(usize, 4), table.container().children.items.len);
 }
+
+test "paragraph with lone tilde has no strikethrough inlines" {
+    const alloc = std.testing.allocator;
+
+    var p = Parser.init(alloc, .{});
+    defer p.deinit();
+    try p.parseMarkdown("Temperature is ~20 degrees C");
+
+    const root = p.document.container();
+    try std.testing.expectEqual(@as(usize, 1), root.children.items.len);
+
+    const para = root.children.items[0].leaf();
+    for (para.inlines.items) |inl| {
+        if (inl.content == .text) {
+            try std.testing.expect(!inl.content.text.style.strike);
+        }
+    }
+}
+
+test "paragraph with matched tildes has strikethrough inlines" {
+    const alloc = std.testing.allocator;
+
+    var p = Parser.init(alloc, .{});
+    defer p.deinit();
+    try p.parseMarkdown("This is ~struck~ text");
+
+    const root = p.document.container();
+    const para = root.children.items[0].leaf();
+
+    var found_struck: bool = false;
+    var found_plain: bool = false;
+    for (para.inlines.items) |inl| {
+        if (inl.content != .text) continue;
+        const t = inl.content.text;
+        if (t.style.strike) found_struck = true;
+        if (!t.style.strike and t.text.len > 0) found_plain = true;
+    }
+    try std.testing.expect(found_struck);
+    try std.testing.expect(found_plain);
+}

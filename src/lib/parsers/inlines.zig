@@ -459,3 +459,96 @@ pub const InlineParser = struct {
         return start + rp_idx + 1;
     }
 };
+
+//////////////////////////////////////////////////////////
+// Tests
+//////////////////////////////////////////////////////////
+
+const Lexer = @import("../lexer.zig").Lexer;
+
+/// Parse 'input' through the lexer and inline parser, returning the resulting inlines.
+/// The caller owns the returned ArrayList and must deinit it (including each element).
+fn parseInlinesFromStr(alloc: std.mem.Allocator, input: []const u8) !ArrayList(Inline) {
+    var lex = Lexer{};
+    var tokens = try lex.tokenize(alloc, input);
+    defer tokens.deinit();
+    // Strip the trailing EOF token before passing to the inline parser
+    const tok_slice = if (tokens.items.len > 0 and tokens.items[tokens.items.len - 1].kind == .EOF)
+        tokens.items[0 .. tokens.items.len - 1]
+    else
+        tokens.items;
+    var parser = InlineParser.init(alloc, .{});
+    return parser.parseInlines(tok_slice);
+}
+
+test "lone tilde parses as literal text, not strikethrough" {
+    const alloc = std.testing.allocator;
+    var inlines = try parseInlinesFromStr(alloc, "~foo");
+    defer {
+        for (inlines.items) |*inl| inl.deinit();
+        inlines.deinit();
+    }
+
+    // No inline should carry the strikethrough style
+    for (inlines.items) |inl| {
+        if (inl.content == .text) {
+            try std.testing.expect(!inl.content.text.style.strike);
+        }
+    }
+    // The '~' character must appear as literal text
+    var found_tilde: bool = false;
+    for (inlines.items) |inl| {
+        if (inl.content == .text and std.mem.eql(u8, inl.content.text.text, "~"))
+            found_tilde = true;
+    }
+    try std.testing.expect(found_tilde);
+}
+
+test "matched tildes produce strikethrough text" {
+    const alloc = std.testing.allocator;
+    var inlines = try parseInlinesFromStr(alloc, "~foo~");
+    defer {
+        for (inlines.items) |*inl| inl.deinit();
+        inlines.deinit();
+    }
+
+    // The word "foo" must be struck
+    var foo_is_struck: bool = false;
+    for (inlines.items) |inl| {
+        if (inl.content == .text and std.mem.eql(u8, inl.content.text.text, "foo"))
+            foo_is_struck = inl.content.text.style.strike;
+    }
+    try std.testing.expect(foo_is_struck);
+
+    // Neither tilde should appear as literal text — both were consumed as markers
+    for (inlines.items) |inl| {
+        if (inl.content == .text)
+            try std.testing.expect(!std.mem.eql(u8, inl.content.text.text, "~"));
+    }
+}
+
+test "first tilde pair is strikethrough, trailing lone tilde is literal" {
+    const alloc = std.testing.allocator;
+    // "~foo~" → struck; " ~bar" → plain with literal '~'
+    var inlines = try parseInlinesFromStr(alloc, "~foo~ ~bar");
+    defer {
+        for (inlines.items) |*inl| inl.deinit();
+        inlines.deinit();
+    }
+
+    var foo_struck: bool = false;
+    var bar_plain: bool = false;
+    var literal_tilde: bool = false;
+
+    for (inlines.items) |inl| {
+        if (inl.content != .text) continue;
+        const t = inl.content.text;
+        if (std.mem.eql(u8, t.text, "foo")) foo_struck = t.style.strike;
+        if (std.mem.eql(u8, t.text, "bar")) bar_plain = !t.style.strike;
+        if (std.mem.eql(u8, t.text, "~")) literal_tilde = !t.style.strike;
+    }
+
+    try std.testing.expect(foo_struck);
+    try std.testing.expect(bar_plain);
+    try std.testing.expect(literal_tilde);
+}

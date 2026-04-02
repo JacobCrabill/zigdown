@@ -1491,3 +1491,32 @@ test "ConsoleRenderer" {
         try std.testing.expectEqualStrings(data.expected, writer.writer.buffered());
     }
 }
+
+test "ConsoleRenderer strikethrough ANSI codes" {
+    // cons.text_strike == "\x1b[9m"  (SGR 9 — strikethrough on)
+    // cons.end_strike  == "\x1b[29m" (SGR 29 — strikethrough off)
+    const strike_on = cons.text_strike;
+    const strike_off = cons.end_strike;
+
+    const alloc = std.testing.allocator;
+
+    // Matched tildes must produce the strikethrough ANSI sequence.
+    {
+        var writer = std.Io.Writer.Allocating.init(alloc);
+        defer writer.deinit();
+        try testRender(alloc, "~foo~", &writer.writer, 90);
+        const out = writer.writer.buffered();
+        try std.testing.expect(std.mem.indexOf(u8, out, strike_on) != null);
+        try std.testing.expect(std.mem.indexOf(u8, out, strike_off) != null);
+    }
+
+    // A lone tilde (no matching closer) must NOT produce any strikethrough ANSI sequence.
+    {
+        var writer = std.Io.Writer.Allocating.init(alloc);
+        defer writer.deinit();
+        try testRender(alloc, "~3 items", &writer.writer, 90);
+        const out = writer.writer.buffered();
+        try std.testing.expect(std.mem.indexOf(u8, out, strike_on) == null);
+        try std.testing.expect(std.mem.indexOf(u8, out, strike_off) == null);
+    }
+}

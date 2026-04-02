@@ -1205,6 +1205,26 @@ test "FormatRenderer" {
             .input = "_foo_, **bar**",
             .output = "_foo_, **bar**\n",
         },
+        // Strikethrough: matched tildes round-trip as ~word~
+        .{
+            .input = "~foo~",
+            .output = "~foo~\n",
+        },
+        // Lone tilde (no closer) is a literal character — no markup applied
+        .{
+            .input = "~3 items",
+            .output = "~3 items\n",
+        },
+        // Two pairs of matched tildes both round-trip correctly
+        .{
+            .input = "~foo~ and ~bar~",
+            .output = "~foo~ and ~bar~\n",
+        },
+        // First pair is strikethrough; lone trailing tilde is a literal character
+        .{
+            .input = "~foo~ and ~bar",
+            .output = "~foo~ and ~bar\n",
+        },
         .{
             .input =
             \\`lorem ipsum` for _maximum speed_. For reference,
