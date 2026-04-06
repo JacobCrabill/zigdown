@@ -61,6 +61,7 @@ const TreezError = error{
 pub const RangeRenderer = struct {
     const Self = @This();
     const RenderError = Renderer.RenderError || TreezError;
+    const no_line_map: usize = std.math.maxInt(usize);
 
     /// Range rendering configuration
     pub const Config = struct {
@@ -98,6 +99,10 @@ pub const RangeRenderer = struct {
     /// List of all styles to be applied to the text
     cur_range: ?StyleRange = null,
     style_ranges: ArrayList(StyleRange) = undefined,
+    /// Source-line (index) to first rendered-line mapping.
+    /// Unmapped lines contain `no_line_map`.
+    source_line_map: ArrayList(usize) = undefined,
+    active_src_line: ?usize = null,
 
     /// Create a new RangeRenderer
     pub fn init(stream: Writer, alloc: Allocator, opts: Config) Self {
@@ -110,6 +115,7 @@ pub const RangeRenderer = struct {
             .opts = opts,
             .prerender = std.Io.Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
             .style_ranges = ArrayList(StyleRange).initCapacity(alloc, 1024) catch @panic("OOM"),
+            .source_line_map = ArrayList(usize).initCapacity(alloc, 1024) catch @panic("OOM"),
         };
     }
 
@@ -130,6 +136,30 @@ pub const RangeRenderer = struct {
         ts_queries.deinit();
         self.prerender.deinit();
         self.style_ranges.deinit();
+        self.source_line_map.deinit();
+    }
+
+    fn ensureSourceLineCapacity(self: *Self, min_len: usize) void {
+        if (self.source_line_map.items.len >= min_len) return;
+        const cur_len = self.source_line_map.items.len;
+        self.source_line_map.resize(min_len) catch @panic("OOM");
+        for (self.source_line_map.items[cur_len..]) |*line| {
+            line.* = no_line_map;
+        }
+    }
+
+    fn mapSourceLineToRendered(self: *Self, src_line: usize, dst_line: usize) void {
+        self.ensureSourceLineCapacity(src_line + 1);
+        const mapped = self.source_line_map.items[src_line];
+        if (mapped == no_line_map or dst_line < mapped) {
+            self.source_line_map.items[src_line] = dst_line;
+        }
+    }
+
+    fn markCurrentLineForActiveSource(self: *Self) void {
+        if (self.active_src_line) |src_line| {
+            self.mapSourceLineToRendered(src_line, self.line);
+        }
     }
 
     pub fn typeErasedDeinit(ctx: *anyopaque) void {
@@ -210,6 +240,8 @@ pub const RangeRenderer = struct {
 
     /// Write an array of bytes to the underlying writer, and update the current column
     fn write(self: *Self, bytes: []const u8) void {
+        if (bytes.len == 0) return;
+        self.markCurrentLineForActiveSource();
         self.prerender.writer.writeAll(bytes) catch |err| {
             errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
         };
@@ -1043,6 +1075,10 @@ pub const RangeRenderer = struct {
         // leading space when writing into the alert box.
         const content_start_line = self.line;
         const col_offset: usize = self.opts.indent + 4;
+        for (sub_renderer.source_line_map.items, 0..) |dst_line, src_line| {
+            if (dst_line == no_line_map) continue;
+            self.mapSourceLineToRendered(src_line, content_start_line + dst_line);
+        }
         for (ranges.items) |range| {
             const sub_indent_adjust: usize = if (range.line > 0) 1 else 0;
             const new_range: StyleRange = .{
@@ -1149,6 +1185,10 @@ pub const RangeRenderer = struct {
         // leading space when writing into the directive box.
         const content_start_line = self.line;
         const col_offset: usize = self.opts.indent + 4;
+        for (sub_renderer.source_line_map.items, 0..) |dst_line, src_line| {
+            if (dst_line == no_line_map) continue;
+            self.mapSourceLineToRendered(src_line, content_start_line + dst_line);
+        }
         for (ranges.items) |range| {
             const sub_indent_adjust: usize = if (range.line > 0) 1 else 0;
             const new_range: StyleRange = .{
@@ -1225,6 +1265,9 @@ pub const RangeRenderer = struct {
     }
 
     fn renderText(self: *Self, text: Text) !void {
+        const prev_src_line = self.active_src_line;
+        self.active_src_line = text.line;
+        defer self.active_src_line = prev_src_line;
         self.startStyle(text.style);
         self.wrapText(text.text);
     }
@@ -1440,4 +1483,89 @@ test "RangeRenderer" {
         try testRender(arena.allocator(), data.input, &alloc_writer.writer, data.width);
         try std.testing.expectEqualSlices(u8, data.output, alloc_writer.writer.buffered());
     }
+}
+
+fn lineSliceAt(text: []const u8, target_line: usize) ?[]const u8 {
+    var line: usize = 0;
+    var start: usize = 0;
+    var i: usize = 0;
+    while (i < text.len) : (i += 1) {
+        if (text[i] == '\n') {
+            if (line == target_line) {
+                return text[start..i];
+            }
+            line += 1;
+            start = i + 1;
+        }
+    }
+    if (line == target_line) {
+        return text[start..];
+    }
+    return null;
+}
+
+test "RangeRenderer directive wrapped styles map once and align" {
+    const input =
+        "```{warning}\n" ++
+        "This sentence intentionally pads the line so that **BOLDTOKEN** wraps and `CODETOKEN` wraps too.\n" ++
+        "```\n";
+
+    const alloc = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(alloc);
+    defer arena.deinit();
+
+    var parser = @import("../parser.zig").Parser.init(arena.allocator(), .{});
+    try parser.parseMarkdown(input);
+
+    var alloc_writer = std.Io.Writer.Allocating.init(arena.allocator());
+    var renderer = RangeRenderer.init(&alloc_writer.writer, arena.allocator(), .{ .width = 48 });
+    try renderer.renderBlock(parser.document);
+
+    const output = alloc_writer.writer.buffered();
+    const ranges = renderer.style_ranges.items;
+
+    var bold_hits: usize = 0;
+    var code_hits: usize = 0;
+    for (ranges) |range| {
+        const line = lineSliceAt(output, range.line) orelse continue;
+        try std.testing.expect(range.end <= line.len);
+        const seg = line[range.start..range.end];
+
+        if (range.style.bold and std.mem.eql(u8, seg, "BOLDTOKEN")) {
+            bold_hits += 1;
+        }
+
+        if (range.style.bg_color == .DarkGrey and
+            range.style.fg_color == .PurpleGrey and
+            std.mem.eql(u8, seg, "CODETOKEN"))
+        {
+            code_hits += 1;
+        }
+    }
+
+    try std.testing.expectEqual(@as(usize, 1), bold_hits);
+    try std.testing.expectEqual(@as(usize, 1), code_hits);
+}
+
+test "RangeRenderer exposes source line map" {
+    const input =
+        "first line\n" ++
+        "second line\n";
+
+    const alloc = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(alloc);
+    defer arena.deinit();
+
+    var parser = @import("../parser.zig").Parser.init(arena.allocator(), .{});
+    try parser.parseMarkdown(input);
+
+    var alloc_writer = std.Io.Writer.Allocating.init(arena.allocator());
+    var renderer = RangeRenderer.init(&alloc_writer.writer, arena.allocator(), .{ .width = 80 });
+    try renderer.renderBlock(parser.document);
+
+    const no_map = std.math.maxInt(usize);
+    try std.testing.expect(renderer.source_line_map.items.len >= 2);
+    try std.testing.expect(renderer.source_line_map.items[0] != no_map);
+    try std.testing.expect(renderer.source_line_map.items[1] != no_map);
+    try std.testing.expect(renderer.source_line_map.items[1] >= renderer.source_line_map.items[0]);
 }

@@ -47,14 +47,25 @@ function M.render_current_buffer()
   -- Create an autocmd group to automatically re-render the buffer upon save
   -- (Effectively a live preview pane)
   vim.api.nvim_create_augroup("ZigdownGrp", { clear = true })
+  local render = require("zigdown.render")
   vim.api.nvim_create_autocmd("BufWritePost", {
-    pattern = "*.md",
-    command = ":Zigdown",
+    buffer = 0,
+    callback = function()
+      render.render_buffer_lua(0)
+    end,
+    group = "ZigdownGrp",
+  })
+  vim.api.nvim_create_autocmd({"CursorMoved", "CursorMovedI"}, {
+    buffer = 0,
+    callback = function()
+      render.sync_preview_to_cursor(0)
+    end,
     group = "ZigdownGrp",
   })
 
   -- Render the Markdown in-process using the Lua module and nvim APIs.
-  require("zigdown.render").render_buffer_lua(0)
+  render.render_buffer_lua(0)
+  render.sync_preview_to_cursor(0)
 end
 
 function M.format_current_buffer()

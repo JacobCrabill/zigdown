@@ -13,7 +13,37 @@ local config = {
   src_buf = nil,
   dest_buf = nil,
   win_width = nil,
+  line_map = nil,
 }
+
+local function resolve_render_line(src_line0)
+  if config.line_map == nil then
+    return nil
+  end
+
+  local idx = src_line0 + 1
+  local mapped = config.line_map[idx]
+  if mapped ~= nil and mapped >= 0 then
+    return mapped
+  end
+
+  for i = idx, 1, -1 do
+    local v = config.line_map[i]
+    if v ~= nil and v >= 0 then
+      return v
+    end
+  end
+
+  local n = #config.line_map
+  for i = idx + 1, n do
+    local v = config.line_map[i]
+    if v ~= nil and v >= 0 then
+      return v
+    end
+  end
+
+  return nil
+end
 
 -- Get the contents of the given buffer as a single string with unix line endings
 local function buffer_to_string(bufnr)
@@ -89,7 +119,8 @@ function M.render_buffer_lua(bufnr)
   -- Get the raw Markdown text and render it to raw output with highlight metadata
   local content = buffer_to_string(0)
   local cols = vim.api.nvim_win_get_width(config.dest_win) - 2
-  local output, ranges = zigdown.render_markdown(content, cols)
+  local output, ranges, line_map = zigdown.render_markdown(content, cols)
+  config.line_map = line_map
 
   -- Remove all trailing empty lines, except for one
   local lines = vim.split(output, "\n")
@@ -100,6 +131,39 @@ function M.render_buffer_lua(bufnr)
 
   -- Render the document by applying the highlight ranges to the raw output
   M.output_to_buffer(lines, ranges)
+end
+
+function M.sync_preview_to_cursor(bufnr)
+  local src_buf = bufnr == 0 and vim.api.nvim_get_current_buf() or bufnr
+  if config.src_buf == nil or config.dest_win == nil then
+    return
+  end
+  if src_buf ~= config.src_buf then
+    return
+  end
+  if not vim.api.nvim_win_is_valid(config.dest_win) then
+    return
+  end
+  if config.dest_buf == nil or not vim.api.nvim_buf_is_loaded(config.dest_buf) then
+    return
+  end
+  if not vim.api.nvim_win_is_valid(config.src_win) then
+    return
+  end
+  if vim.api.nvim_get_current_win() ~= config.src_win then
+    return
+  end
+
+  local cursor = vim.api.nvim_win_get_cursor(config.src_win)
+  local src_line0 = cursor[1] - 1
+  local dst_line0 = resolve_render_line(src_line0)
+  if dst_line0 == nil then
+    return
+  end
+
+  local last = vim.api.nvim_buf_line_count(config.dest_buf)
+  local row1 = math.min(dst_line0 + 1, math.max(last, 1))
+  vim.api.nvim_win_set_cursor(config.dest_win, {row1, 0})
 end
 
 function M.format_buffer(bufnr, width)

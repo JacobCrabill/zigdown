@@ -39,9 +39,10 @@ export fn luaopen_zigdown_lua(lua: ?*LuaState) callconv(.c) c_int {
 /// - Markdown text to be rendered.
 /// - [optional] Render width (columns).
 ///
-/// Returns two Lua values:
+/// Returns three Lua values:
 /// - The raw text.
 /// - A table containing a list of style ranges to be applied to the text.
+/// - A source-line to rendered-line mapping table.
 export fn render_markdown(lua: ?*LuaState) callconv(.c) c_int {
     // Markdown text to render
     var len: usize = 0;
@@ -98,7 +99,9 @@ export fn render_markdown(lua: ?*LuaState) callconv(.c) c_int {
         c.lua_rawseti(lua, -2, @intCast(i));
     }
 
-    return 2;
+    convertSourceLineMapToTable(lua, r_renderer.source_line_map.items);
+
+    return 3;
 }
 
 /// Format the given Markdown text.
@@ -202,4 +205,19 @@ fn convertStyleToTable(lua: ?*LuaState, style: zd.theme.TextStyle) void {
 
     c.lua_pushinteger(lua, if (style.strike) 1 else 0);
     c.lua_setfield(lua, -2, "strikethrough");
+}
+
+/// Create a Lua table mapping source line index -> rendered line index.
+/// Unmapped entries use `-1`.
+fn convertSourceLineMapToTable(lua: ?*LuaState, line_map: []const usize) void {
+    const narr: c_int = @intCast(line_map.len);
+    const nfield: c_int = 0;
+    c.lua_createtable(lua, narr, nfield);
+
+    const no_map = std.math.maxInt(usize);
+    for (line_map, 1..) |dst_line, i| {
+        const out: i64 = if (dst_line == no_map) -1 else @intCast(dst_line);
+        c.lua_pushinteger(lua, out);
+        c.lua_rawseti(lua, -2, @intCast(i));
+    }
 }
