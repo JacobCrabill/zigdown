@@ -1038,6 +1038,22 @@ pub const RangeRenderer = struct {
 
         try self.leader_stack.append(leader);
 
+        // Map all styles from the sub-renderer once.
+        // Wrapped sub-lines are indented by 1 column, but we trim that
+        // leading space when writing into the alert box.
+        const content_start_line = self.line;
+        const col_offset: usize = self.opts.indent + 4;
+        for (ranges.items) |range| {
+            const sub_indent_adjust: usize = if (range.line > 0) 1 else 0;
+            const new_range: StyleRange = .{
+                .line = content_start_line + range.line,
+                .start = col_offset + range.start - sub_indent_adjust,
+                .end = col_offset + range.end - sub_indent_adjust,
+                .style = range.style,
+            };
+            self.style_ranges.append(new_range) catch @panic("OOM");
+        }
+
         // Write the Alert box contents, line by line
         var iter = std.mem.tokenizeScalar(u8, source, '\n');
         while (iter.next()) |line| {
@@ -1054,20 +1070,6 @@ pub const RangeRenderer = struct {
             self.startStyle(trailer.style);
             self.write(trailer.text);
             self.resetStyle();
-
-            // Append all styles from this line to our ranges
-            // NOTE: The index here looks off-by-one, but I *think* it's
-            // due to the vertical bar character being 2 bytes
-            const col_offset: usize = self.opts.indent + 4;
-            for (ranges.items) |range| {
-                const new_range: StyleRange = .{
-                    .line = self.line + range.line,
-                    .start = col_offset + range.start,
-                    .end = col_offset + range.end,
-                    .style = range.style,
-                };
-                self.style_ranges.append(new_range) catch @panic("OOM");
-            }
 
             self.renderBreak();
         }
@@ -1142,7 +1144,23 @@ pub const RangeRenderer = struct {
 
         try self.leader_stack.append(leader);
 
-        // Write the Alert box contents, line by line
+        // Map all styles from the sub-renderer once.
+        // Wrapped sub-lines are indented by 1 column, but we trim that
+        // leading space when writing into the directive box.
+        const content_start_line = self.line;
+        const col_offset: usize = self.opts.indent + 4;
+        for (ranges.items) |range| {
+            const sub_indent_adjust: usize = if (range.line > 0) 1 else 0;
+            const new_range: StyleRange = .{
+                .line = content_start_line + range.line,
+                .start = col_offset + range.start - sub_indent_adjust,
+                .end = col_offset + range.end - sub_indent_adjust,
+                .style = range.style,
+            };
+            self.style_ranges.append(new_range) catch @panic("OOM");
+        }
+
+        // Write the Directive box contents, line by line
         var iter = std.mem.tokenizeScalar(u8, source, '\n');
         while (iter.next()) |line| {
             // Write leader
@@ -1158,20 +1176,6 @@ pub const RangeRenderer = struct {
             self.startStyle(trailer.style);
             self.write(trailer.text);
             self.resetStyle();
-
-            // Append all styles from this line to our ranges
-            // NOTE: The index here looks off-by-one, but I *think* it's
-            // due to the vertical bar character being 2 bytes
-            const col_offset: usize = self.opts.indent + 4;
-            for (ranges.items) |range| {
-                const new_range: StyleRange = .{
-                    .line = self.line + range.line,
-                    .start = col_offset + range.start,
-                    .end = col_offset + range.end,
-                    .style = range.style,
-                };
-                self.style_ranges.append(new_range) catch @panic("OOM");
-            }
 
             self.renderBreak();
         }
