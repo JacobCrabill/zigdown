@@ -687,7 +687,12 @@ pub fn splitFrontmatter(alloc: Allocator, input: []const u8) !SplitResult {
     const split = findFrontmatterEnd(input, yaml_start) orelse return splitFallback(alloc, input);
 
     const yaml_input = trimDocumentEndings(input[yaml_start..split.yaml_end]);
-    var document = parseFrontmatterDocument(alloc, yaml_input) catch return splitFallback(alloc, input);
+    var document = parseFrontmatterDocument(alloc, yaml_input) catch |err| {
+        if (isFrontmatterParseError(err)) {
+            return splitFallback(alloc, input);
+        }
+        return err;
+    };
     errdefer document.deinit(alloc);
 
     return .{
@@ -1294,6 +1299,18 @@ fn splitFallback(alloc: Allocator, input: []const u8) !SplitResult {
     };
 }
 
+fn isFrontmatterParseError(err: anyerror) bool {
+    return switch (err) {
+        ParseError.EmptyDocument,
+        ParseError.ExpectedArrayItem,
+        ParseError.ExpectedIndentedBlock,
+        ParseError.ExpectedMapField,
+        ParseError.InvalidYaml,
+        => true,
+        else => false,
+    };
+}
+
 fn parseFrontmatterDocument(alloc: Allocator, input: []const u8) !YamlDocument {
     return parseYamlDocument(alloc, input) catch |err| switch (err) {
         ParseError.EmptyDocument => parseEmptyYamlDocument(alloc, input),
@@ -1705,4 +1722,9 @@ test "frontmatter splitter keeps comment-only enclosed frontmatter" {
     try std.testing.expectEqualStrings("note", split.frontmatter.?.document.leading_comments[0].text);
     try std.testing.expectEqual(@as(usize, 0), split.frontmatter.?.document.trailing_comments.len);
     try std.testing.expectEqual(@as(usize, 0), split.frontmatter.?.document.root.map.fields.len);
+}
+
+test "frontmatter fallback classification excludes out of memory" {
+    try std.testing.expect(isFrontmatterParseError(ParseError.InvalidYaml));
+    try std.testing.expect(!isFrontmatterParseError(error.OutOfMemory));
 }
