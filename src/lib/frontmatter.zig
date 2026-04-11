@@ -796,7 +796,7 @@ fn emitArrayItem(state: *EmitState, indent: usize, item: *const ArrayItem) EmitE
         else => {},
     }
 
-    if (isScalarNode(&item.value) and nodeLeadingComments(&item.value).len == 0) {
+    if (canInlineScalarArrayItemValue(item)) {
         try state.beginLine(indent);
         try state.writer.writeAll("- ");
         try emitScalarValue(state.writer, &item.value);
@@ -817,6 +817,12 @@ fn canInlineArrayMapItem(item: *const ArrayItem, map: Map) bool {
 
 fn canInlineScalarFieldValue(node: *const Node) bool {
     return isScalarNode(node) and nodeLeadingComments(node).len == 0 and nodeTrailingComment(node) == null;
+}
+
+fn canInlineScalarArrayItemValue(item: *const ArrayItem) bool {
+    return isScalarNode(&item.value) and
+        nodeLeadingComments(&item.value).len == 0 and
+        !(item.trailing_comment != null and nodeTrailingComment(&item.value) != null);
 }
 
 fn isScalarNode(node: *const Node) bool {
@@ -1886,6 +1892,25 @@ test "emitYamlDocumentAlloc keeps floats parse stable" {
     defer alloc.free(text);
 
     try std.testing.expectEqualStrings("ratio: 0.0\nnegative: -2.0", text);
+}
+
+test "emitYamlDocumentAlloc preserves item and scalar trailing comments on scalar array items" {
+    const alloc = std.testing.allocator;
+
+    var doc = try parseYamlDocument(alloc,
+        \\items:
+        \\  - # item note
+        \\    true # scalar note
+    );
+    defer doc.deinit(alloc);
+
+    const text = try emitYamlDocumentAlloc(alloc, &doc);
+    defer alloc.free(text);
+
+    try std.testing.expectEqualStrings(
+        "items:\n  - # item note\n    true # scalar note",
+        text,
+    );
 }
 
 test "parseYamlDocument keeps root plain scalars with colons as scalars" {

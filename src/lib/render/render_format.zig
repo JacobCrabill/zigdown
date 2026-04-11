@@ -1300,6 +1300,23 @@ test "FormatRenderer" {
         .{
             .input =
             \\---
+            \\items:
+            \\  - # item note
+            \\    true # scalar note
+            \\---
+            ,
+            .output =
+            \\---
+            \\items:
+            \\  - # item note
+            \\    true # scalar note
+            \\---
+            \\
+            ,
+        },
+        .{
+            .input =
+            \\---
             \\nothing: null
             \\published: false
             \\count: 42
