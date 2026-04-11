@@ -296,6 +296,14 @@ pub fn isListItem(line: []const Token) bool {
     return isUnorderedListItem(line) or isOrderedListItem(line);
 }
 
+/// Check if the line starts a table row (begins with '|' and has at least '||')
+pub fn isTableRow(line: []const Token) bool {
+    const trimmed = trimLeadingWhitespace(line);
+    if (trimmed.len == 0) return false;
+    if (trimmed[0].kind != .PIPE) return false;
+    return countKind(trimmed, .PIPE) >= 2;
+}
+
 /// Check for the pattern "[ ]*[>][ ]+"
 pub fn isQuote(line: []const Token) bool {
     var have_caret: bool = false;

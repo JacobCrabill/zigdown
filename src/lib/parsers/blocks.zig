@@ -76,7 +76,7 @@ fn isContinuationLineList(line: []const Token) bool {
 /// Check if the given line is a continuation line for a paragraph
 fn isContinuationLineParagraph(line: []const Token) bool {
     if (line.len == 0) return true; // TODO: check
-    if (utils.isEmptyLine(line) or utils.isListItem(line) or utils.isQuote(line) or utils.isHeading(line) or utils.isCodeBlock(line))
+    if (utils.isEmptyLine(line) or utils.isListItem(line) or utils.isQuote(line) or utils.isHeading(line) or utils.isCodeBlock(line) or utils.isTableRow(line))
         return false;
     return true;
 }
@@ -1054,8 +1054,12 @@ pub const Parser = struct {
 
                 switch (c.content) {
                     .List => {
-                        // Spacing only counts if there are >1 ListItems
-                        if (c.children.items.len == 1)
+                        // Spacing only counts if there are >1 ListItems,
+                        // OR if a single item has multiple block children (loose single-item list)
+                        const has_multi_item_children: bool = for (c.children.items) |*child| {
+                            if (child.container().children.items.len > 1) break true;
+                        } else false;
+                        if (c.children.items.len == 1 and !has_multi_item_children)
                             c.content.List.spacing = 0;
                     },
                     else => {},
@@ -1168,6 +1172,98 @@ test "Parser supports table nested in task list item" {
     try std.testing.expectEqual(@as(usize, 2), table.container().content.Table.ncol);
     try std.testing.expectEqual(@as(usize, 2), table.container().content.Table.relative_width.items.len);
     try std.testing.expectEqual(@as(usize, 4), table.container().children.items.len);
+}
+
+test "Parser: unordered list item with table, no blank line" {
+    const alloc = std.testing.allocator;
+    const input =
+        \\- Intro
+        \\| h1 | h2 |
+        \\| -- | -- |
+        \\| A  | B  |
+    ;
+
+    var p = Parser.init(alloc, .{});
+    defer p.deinit();
+    try p.parseMarkdown(input);
+
+    const root = p.document.container();
+    try std.testing.expectEqual(@as(usize, 1), root.children.items.len);
+
+    const list = &root.children.items[0];
+    try std.testing.expect(list.container().content == .List);
+    try std.testing.expectEqual(@as(usize, 1), list.container().children.items.len);
+
+    const list_item = &list.container().children.items[0];
+    try std.testing.expect(list_item.container().content == .ListItem);
+    // Should have 2 children: Paragraph("Intro") + Table
+    try std.testing.expectEqual(@as(usize, 2), list_item.container().children.items.len);
+
+    const table = &list_item.container().children.items[1];
+    try std.testing.expect(table.isContainer());
+    try std.testing.expect(table.container().content == .Table);
+    try std.testing.expectEqual(@as(usize, 2), table.container().content.Table.ncol);
+    try std.testing.expectEqual(@as(usize, 3), table.container().content.Table.row);
+    try std.testing.expectEqual(@as(usize, 4), table.container().children.items.len);
+}
+
+test "Parser: unordered list item with table, with blank line, spacing preserved" {
+    const alloc = std.testing.allocator;
+    const input =
+        \\- Intro
+        \\
+        \\  | h1 | h2 |
+        \\  | -- | -- |
+        \\  | A  | B  |
+    ;
+
+    var p = Parser.init(alloc, .{});
+    defer p.deinit();
+    try p.parseMarkdown(input);
+
+    const root = p.document.container();
+    const list = &root.children.items[0];
+    try std.testing.expect(list.container().content == .List);
+
+    // Spacing should be preserved (blank line between paragraph and table)
+    try std.testing.expectEqual(@as(u8, 1), list.container().content.List.spacing);
+
+    const list_item = &list.container().children.items[0];
+    try std.testing.expectEqual(@as(usize, 2), list_item.container().children.items.len);
+
+    const table = &list_item.container().children.items[1];
+    try std.testing.expect(table.container().content == .Table);
+    try std.testing.expectEqual(@as(usize, 2), table.container().content.Table.ncol);
+    try std.testing.expectEqual(@as(usize, 3), table.container().content.Table.row);
+}
+
+test "Parser: table row interrupts open paragraph" {
+    const alloc = std.testing.allocator;
+    // A table row starting with | should close an open paragraph and start a Table,
+    // rather than being absorbed into the paragraph text.
+    const input =
+        \\Some text
+        \\| h1 | h2 |
+        \\| -- | -- |
+        \\| A  | B  |
+    ;
+
+    var p = Parser.init(alloc, .{});
+    defer p.deinit();
+    try p.parseMarkdown(input);
+
+    const root = p.document.container();
+    // Should have 2 children: Paragraph("Some text") + Table
+    try std.testing.expectEqual(@as(usize, 2), root.children.items.len);
+
+    const paragraph = &root.children.items[0];
+    try std.testing.expect(paragraph.isLeaf());
+    try std.testing.expect(paragraph.leaf().content == .Paragraph);
+
+    const table = &root.children.items[1];
+    try std.testing.expect(table.isContainer());
+    try std.testing.expect(table.container().content == .Table);
+    try std.testing.expectEqual(@as(usize, 2), table.container().content.Table.ncol);
 }
 
 test "paragraph with lone tilde has no strikethrough inlines" {

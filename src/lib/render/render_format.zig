@@ -406,7 +406,7 @@ pub const FormatRenderer = struct {
             .Document => try self.renderDocument(block),
             .Quote => try self.renderQuote(block),
             .List => try self.renderList(block),
-            .ListItem => try self.renderListItem(block),
+            .ListItem => try self.renderListItem(block, 0),
             .Table => try self.renderTable(block),
         }
     }
@@ -496,7 +496,7 @@ pub const FormatRenderer = struct {
             self.needs_leaders = false;
             try self.leader_stack.append(list_indent);
             defer _ = self.leader_stack.pop();
-            try self.renderListItem(item.Container);
+            try self.renderListItem(item.Container, list.content.List.spacing);
         }
     }
 
@@ -536,7 +536,7 @@ pub const FormatRenderer = struct {
             }
             defer _ = self.leader_stack.pop();
 
-            try self.renderListItem(item.Container);
+            try self.renderListItem(item.Container, list.content.List.spacing);
         }
     }
 
@@ -567,15 +567,16 @@ pub const FormatRenderer = struct {
             self.needs_leaders = false;
             try self.leader_stack.append(task_list_indent);
             defer _ = self.leader_stack.pop();
-            try self.renderListItem(item.Container);
+            try self.renderListItem(item.Container, list.content.List.spacing);
         }
     }
 
     /// Render a single ListItem
-    fn renderListItem(self: *Self, list: Container) !void {
+    fn renderListItem(self: *Self, list: Container, spacing: usize) !void {
         for (list.children.items, 0..) |item, i| {
             if (i > 0) {
                 self.renderBreak();
+                for (0..spacing) |_| self.renderBreak();
                 self.needs_leaders = true;
             }
             try self.renderBlock(item);
@@ -658,11 +659,9 @@ pub const FormatRenderer = struct {
             self.write("|");
             self.renderBreak();
 
-            // End the current row
-            self.writeLeaders();
-
             if (i == 0) {
                 // TODO: left/center/right alignment
+                self.writeLeaders();
                 self.writeTableBorderMiddle(ncol, max_cols.items);
             }
         }
@@ -681,7 +680,6 @@ pub const FormatRenderer = struct {
             }
         }
         self.renderBreak();
-        self.writeLeaders();
     }
 
     // Leaf Rendering Functions -------------------------------------------
@@ -1273,6 +1271,75 @@ test "FormatRenderer" {
             \\3. three
             \\
             \\paragraph
+            \\
+            ,
+        },
+        .{
+            // Loose list item: blank line between paragraph and table is preserved
+            .input =
+            \\- ListItem with nested table
+            \\
+            \\  | h1 | h2 | h3 | h4 |
+            \\  | -- |---|----| ----- |
+            \\  | A | B | C | D |
+            ,
+            .output =
+            \\- ListItem with nested table
+            \\
+            \\  | h1 | h2 | h3 | h4 |
+            \\  | -- | -- | -- | -- |
+            \\  | A  | B  | C  | D  |
+            \\
+            ,
+        },
+        .{
+            // Loose list: idempotent (second format pass produces same output)
+            .input =
+            \\- ListItem with nested table
+            \\
+            \\  | h1 | h2 | h3 | h4 |
+            \\  | -- | -- | -- | -- |
+            \\  | A  | B  | C  | D  |
+            \\
+            ,
+            .output =
+            \\- ListItem with nested table
+            \\
+            \\  | h1 | h2 | h3 | h4 |
+            \\  | -- | -- | -- | -- |
+            \\  | A  | B  | C  | D  |
+            \\
+            ,
+        },
+        .{
+            // Tight list item: no blank line between paragraph and table
+            .input =
+            \\- ListItem with nested table
+            \\| h1 | h2 | h3 | h4 |
+            \\| -- |---|----| ----- |
+            \\| A | B | C | D |
+            ,
+            .output =
+            \\- ListItem with nested table
+            \\  | h1 | h2 | h3 | h4 |
+            \\  | -- | -- | -- | -- |
+            \\  | A  | B  | C  | D  |
+            \\
+            ,
+        },
+        .{
+            // Tight list: idempotent (second format pass produces same output)
+            .input =
+            \\- ListItem with nested table
+            \\  | h1 | h2 | h3 | h4 |
+            \\  | -- | -- | -- | -- |
+            \\  | A  | B  | C  | D  |
+            ,
+            .output =
+            \\- ListItem with nested table
+            \\  | h1 | h2 | h3 | h4 |
+            \\  | -- | -- | -- | -- |
+            \\  | A  | B  | C  | D  |
             \\
             ,
         },
