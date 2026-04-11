@@ -1,6 +1,8 @@
 const std = @import("std");
 
 const Allocator = std.mem.Allocator;
+const Writer = std.io.Writer;
+const EmitError = Allocator.Error || Writer.Error;
 
 pub const Comment = struct {
     text: []const u8,
@@ -680,6 +682,210 @@ pub fn parseYamlDocument(alloc: Allocator, input: []const u8) !YamlDocument {
 
     var parser = Parser{ .alloc = alloc, .lines = lines.items };
     return parser.parseDocument(raw);
+}
+
+pub fn emitYamlDocumentAlloc(alloc: Allocator, document: *const YamlDocument) EmitError![]u8 {
+    var buffer = std.Io.Writer.Allocating.init(alloc);
+    defer buffer.deinit();
+
+    var state = EmitState{ .writer = &buffer.writer };
+    try emitComments(&state, 0, document.leading_comments);
+    try emitNode(&state, 0, &document.root);
+    try emitComments(&state, 0, document.trailing_comments);
+
+    try buffer.writer.flush();
+    return try alloc.dupe(u8, buffer.writer.buffered());
+}
+
+const EmitState = struct {
+    writer: *Writer,
+    wrote_line: bool = false,
+
+    fn beginLine(self: *EmitState, indent: usize) EmitError!void {
+        if (self.wrote_line) try self.writer.writeByte('\n');
+        self.wrote_line = true;
+
+        for (0..indent) |_| {
+            try self.writer.writeByte(' ');
+        }
+    }
+
+    fn writeTrailingComment(self: *EmitState, comment: ?Comment) EmitError!void {
+        if (comment) |value| {
+            try self.writer.writeAll(" #");
+            if (value.text.len > 0) {
+                try self.writer.writeByte(' ');
+                try self.writer.writeAll(value.text);
+            }
+        }
+    }
+};
+
+fn emitComments(state: *EmitState, indent: usize, comments: []const Comment) EmitError!void {
+    for (comments) |comment| {
+        try state.beginLine(indent);
+        try state.writer.writeByte('#');
+        if (comment.text.len > 0) {
+            try state.writer.writeByte(' ');
+            try state.writer.writeAll(comment.text);
+        }
+    }
+}
+
+fn emitNode(state: *EmitState, indent: usize, node: *const Node) EmitError!void {
+    switch (node.*) {
+        .null, .bool, .int, .float, .string => try emitScalarNode(state, indent, node),
+        .array => |array| {
+            try emitComments(state, indent, array.leading_comments);
+            for (array.items) |item| {
+                try emitArrayItem(state, indent, &item);
+            }
+        },
+        .map => |map| {
+            try emitComments(state, indent, map.leading_comments);
+            for (map.fields) |field| {
+                try emitField(state, indent, &field);
+            }
+        },
+    }
+}
+
+fn emitScalarNode(state: *EmitState, indent: usize, node: *const Node) EmitError!void {
+    try emitComments(state, indent, nodeLeadingComments(node));
+    try state.beginLine(indent);
+    try emitScalarValue(state.writer, node);
+    try state.writeTrailingComment(nodeTrailingComment(node));
+}
+
+fn emitField(state: *EmitState, indent: usize, field: *const Field) EmitError!void {
+    try emitComments(state, indent, field.leading_comments);
+    try state.beginLine(indent);
+    try emitScalarText(state.writer, field.key_style, field.key);
+    try emitFieldValue(state, indent, field);
+}
+
+fn emitFieldValue(state: *EmitState, indent: usize, field: *const Field) EmitError!void {
+    if (isScalarNode(&field.value)) {
+        try state.writer.writeAll(": ");
+        try emitScalarValue(state.writer, &field.value);
+        try state.writeTrailingComment(field.trailing_comment);
+        return;
+    }
+
+    try state.writer.writeByte(':');
+    try state.writeTrailingComment(field.trailing_comment);
+    try emitNode(state, indent + 2, &field.value);
+}
+
+fn emitArrayItem(state: *EmitState, indent: usize, item: *const ArrayItem) EmitError!void {
+    try emitComments(state, indent, item.leading_comments);
+
+    switch (item.value) {
+        .map => |map| {
+            if (canInlineArrayMapItem(item, map)) {
+                try state.beginLine(indent);
+                try state.writer.writeAll("- ");
+                try emitScalarText(state.writer, map.fields[0].key_style, map.fields[0].key);
+                try emitFieldValue(state, indent + 2, &map.fields[0]);
+                for (map.fields[1..]) |field| {
+                    try emitField(state, indent + 2, &field);
+                }
+                return;
+            }
+        },
+        else => {},
+    }
+
+    if (isScalarNode(&item.value) and nodeLeadingComments(&item.value).len == 0) {
+        try state.beginLine(indent);
+        try state.writer.writeAll("- ");
+        try emitScalarValue(state.writer, &item.value);
+        try state.writeTrailingComment(item.trailing_comment orelse nodeTrailingComment(&item.value));
+        return;
+    }
+
+    try state.beginLine(indent);
+    try state.writer.writeByte('-');
+    try state.writeTrailingComment(item.trailing_comment);
+    try emitNode(state, indent + 2, &item.value);
+}
+
+fn canInlineArrayMapItem(item: *const ArrayItem, map: Map) bool {
+    if (item.trailing_comment != null or map.leading_comments.len != 0 or map.fields.len == 0) return false;
+    return map.fields[0].leading_comments.len == 0;
+}
+
+fn isScalarNode(node: *const Node) bool {
+    return switch (node.*) {
+        .null, .bool, .int, .float, .string => true,
+        .array, .map => false,
+    };
+}
+
+fn nodeLeadingComments(node: *const Node) []const Comment {
+    return switch (node.*) {
+        .null => |value| value.leading_comments,
+        .bool => |value| value.leading_comments,
+        .int => |value| value.leading_comments,
+        .float => |value| value.leading_comments,
+        .string => |value| value.leading_comments,
+        .array => |value| value.leading_comments,
+        .map => |value| value.leading_comments,
+    };
+}
+
+fn nodeTrailingComment(node: *const Node) ?Comment {
+    return switch (node.*) {
+        .null => |value| value.trailing_comment,
+        .bool => |value| value.trailing_comment,
+        .int => |value| value.trailing_comment,
+        .float => |value| value.trailing_comment,
+        .string => |value| value.trailing_comment,
+        .array => |value| value.trailing_comment,
+        .map => |value| value.trailing_comment,
+    };
+}
+
+fn emitScalarValue(writer: *Writer, node: *const Node) EmitError!void {
+    switch (node.*) {
+        .null => try writer.writeAll("null"),
+        .bool => |value| try writer.writeAll(if (value.value) "true" else "false"),
+        .int => |value| try writer.print("{d}", .{value.value}),
+        .float => |value| try writer.print("{d}", .{value.value}),
+        .string => |value| try emitScalarText(writer, value.style, value.value),
+        .array, .map => unreachable,
+    }
+}
+
+fn emitScalarText(writer: *Writer, style: ScalarStyle, text: []const u8) EmitError!void {
+    switch (style) {
+        .plain => try writer.writeAll(text),
+        .single_quoted => {
+            try writer.writeByte('\'');
+            for (text) |char| {
+                if (char == '\'') {
+                    try writer.writeAll("''");
+                } else {
+                    try writer.writeByte(char);
+                }
+            }
+            try writer.writeByte('\'');
+        },
+        .double_quoted => {
+            try writer.writeByte('"');
+            for (text) |char| {
+                switch (char) {
+                    '\n' => try writer.writeAll("\\n"),
+                    '\r' => try writer.writeAll("\\r"),
+                    '\t' => try writer.writeAll("\\t"),
+                    '\\' => try writer.writeAll("\\\\"),
+                    '"' => try writer.writeAll("\\\""),
+                    else => try writer.writeByte(char),
+                }
+            }
+            try writer.writeByte('"');
+        },
+    }
 }
 
 pub fn splitFrontmatter(alloc: Allocator, input: []const u8) !SplitResult {

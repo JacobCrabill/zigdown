@@ -2,6 +2,7 @@ const std = @import("std");
 
 const blocks = @import("../ast/blocks.zig");
 const containers = @import("../ast/containers.zig");
+const frontmatter = @import("../frontmatter.zig");
 const leaves = @import("../ast/leaves.zig");
 const inls = @import("../ast/inlines.zig");
 const utils = @import("../utils.zig");
@@ -431,6 +432,25 @@ pub const FormatRenderer = struct {
     /// Render a Document block (contains only other blocks)
     fn renderDocument(self: *Self, doc: Container) !void {
         self.renderBegin();
+
+        if (doc.content.Document.frontmatter) |matter| {
+            const text = try frontmatter.emitYamlDocumentAlloc(self.alloc, &matter.document);
+            defer self.alloc.free(text);
+
+            self.write("---");
+            if (text.len > 0) {
+                self.renderBreak();
+                self.write(text);
+            }
+            self.renderBreak();
+            self.write("---");
+
+            if (doc.children.items.len > 0) {
+                self.renderBreak();
+                self.renderBreak();
+            }
+        }
+
         for (doc.children.items, 0..) |block, i| {
             try self.renderBlock(block);
 
@@ -1204,6 +1224,121 @@ test "FormatRenderer" {
         .{
             .input = "_foo_, **bar**",
             .output = "_foo_, **bar**\n",
+        },
+        .{
+            .input =
+            \\---
+            \\title: Example
+            \\published: true
+            \\---
+            \\# Heading
+            \\Body text
+            ,
+            .output =
+            \\---
+            \\title: Example
+            \\published: true
+            \\---
+            \\
+            \\# Heading
+            \\
+            \\Body text
+            \\
+            ,
+        },
+        .{
+            .input =
+            \\---
+            \\title: Example
+            \\tags:
+            \\  - zig
+            \\---
+            ,
+            .output =
+            \\---
+            \\title: Example
+            \\tags:
+            \\  - zig
+            \\---
+            \\
+            ,
+        },
+        .{
+            .input =
+            \\---
+            \\nothing: null
+            \\published: false
+            \\count: 42
+            \\score: 3.5
+            \\title: "Hello"
+            \\meta:
+            \\  tags:
+            \\    - zig
+            \\    - yaml
+            \\  empty: null
+            \\---
+            \\Body
+            ,
+            .output =
+            \\---
+            \\nothing: null
+            \\published: false
+            \\count: 42
+            \\score: 3.5
+            \\title: "Hello"
+            \\meta:
+            \\  tags:
+            \\    - zig
+            \\    - yaml
+            \\  empty: null
+            \\---
+            \\
+            \\Body
+            \\
+            ,
+        },
+        .{
+            .input =
+            \\---
+            \\# top note
+            \\title: Example # title inline
+            \\authors:
+            \\  # first lead
+            \\  - name: Alice # first inline
+            \\    roles:
+            \\      - writer # writer inline
+            \\# bottom note
+            \\---
+            \\Body
+            ,
+            .output =
+            \\---
+            \\# top note
+            \\title: Example # title inline
+            \\authors:
+            \\  # first lead
+            \\  - name: Alice # first inline
+            \\    roles:
+            \\      - writer # writer inline
+            \\# bottom note
+            \\---
+            \\
+            \\Body
+            \\
+            ,
+        },
+        .{
+            .input =
+            \\---
+            \\# note
+            \\---
+            ,
+            .output =
+            \\---
+            \\# note
+            \\---
+            \\
+            ,
         },
         // Strikethrough: matched tildes round-trip as ~word~
         .{
