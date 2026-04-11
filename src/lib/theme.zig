@@ -102,7 +102,7 @@ pub fn colorToCss(color: Color) []const u8 {
         .Magenta => "var(--pink)",
         .Coral => "var(--orange)",
         .Orange => "var(--orange)",
-        .DarkYellow => "var(--darkyello)",
+        .DarkYellow => "var(--darkyellow)",
         .PurpleGrey => "var(--purple)",
         .MediumGrey => "var(--mediumgrey)",
         .DarkGrey => "var(--darkgrey)",
