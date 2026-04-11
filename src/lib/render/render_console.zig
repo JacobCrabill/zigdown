@@ -445,7 +445,7 @@ pub const ConsoleRenderer = struct {
             .Document => try self.renderDocument(block),
             .Quote => try self.renderQuote(block),
             .List => try self.renderList(block),
-            .ListItem => try self.renderListItem(block),
+            .ListItem => try self.renderListItem(block, 0),
             .Table => try self.renderTable(block),
         }
     }
@@ -530,7 +530,7 @@ pub const ConsoleRenderer = struct {
             self.needs_leaders = false;
             try self.leader_stack.append(list_indent);
             defer _ = self.leader_stack.pop();
-            try self.renderListItem(item.Container);
+            try self.renderListItem(item.Container, list.content.List.spacing);
         }
     }
 
@@ -572,7 +572,7 @@ pub const ConsoleRenderer = struct {
             }
             defer _ = self.leader_stack.pop();
 
-            try self.renderListItem(item.Container);
+            try self.renderListItem(item.Container, list.content.List.spacing);
         }
     }
 
@@ -605,15 +605,17 @@ pub const ConsoleRenderer = struct {
             self.needs_leaders = false;
             try self.leader_stack.append(task_list_indent);
             defer _ = self.leader_stack.pop();
-            try self.renderListItem(item.Container);
+            try self.renderListItem(item.Container, list.content.List.spacing);
         }
     }
 
     /// Render a single ListItem
-    fn renderListItem(self: *Self, list: blocks.Container) !void {
+    fn renderListItem(self: *Self, list: blocks.Container, spacing: usize) !void {
         for (list.children.items, 0..) |item, i| {
             if (i > 0) {
                 self.renderBreak();
+                for (0..spacing) |_| self.renderBreak();
+                self.needs_leaders = true;
             }
             try self.renderBlock(item);
         }
@@ -707,6 +709,7 @@ pub const ConsoleRenderer = struct {
         const nrow: usize = @divFloor(cells.items.len, ncol);
         std.debug.assert(cells.items.len == ncol * nrow);
 
+        if (self.leader_stack.items.len > 0) self.writeLeaders();
         self.writeTableBorderTop(ncol, col_widths.items);
 
         for (0..nrow) |i| {
@@ -726,7 +729,7 @@ pub const ConsoleRenderer = struct {
             // Loop over the # of rows of text in this single row of the table
             for (0..max_rows) |_| {
                 self.writeLeaders();
-                var left_col_idx: usize = self.opts.indent + 1;
+                var left_col_idx: usize = self.opts.indent + self.getLeadersWidth() + 1;
                 for (0..ncol) |j| {
                     const cell_idx: usize = i * ncol + j;
                     const cell: *Cell = &cells.items[cell_idx];
@@ -794,7 +797,6 @@ pub const ConsoleRenderer = struct {
             }
         }
         self.renderBreak();
-        self.writeLeaders();
     }
 
     fn writeTableBorderMiddle(self: *Self, ncol: usize, col_widths: []const u32) void {
@@ -811,7 +813,6 @@ pub const ConsoleRenderer = struct {
             }
         }
         self.renderBreak();
-        self.writeLeaders();
     }
 
     fn writeTableBorderBottom(self: *Self, ncol: usize, col_widths: []const u32) void {
