@@ -931,13 +931,17 @@ fn decodeDoubleQuotedString(alloc: Allocator, text: []const u8) ![]u8 {
         }
 
         index += 1;
-        const escaped = switch (text[index]) {
+        const escaped: u8 = switch (text[index]) {
             'n' => '\n',
             'r' => '\r',
             't' => '\t',
             '\\' => '\\',
             '"' => '"',
-            else => text[index],
+            else => {
+                try out.append(alloc, '\\');
+                try out.append(alloc, text[index]);
+                continue;
+            },
         };
         try out.append(alloc, escaped);
     }
@@ -1190,6 +1194,13 @@ test "parseScalarValue decodes quoted strings" {
         var value = try parseScalarValue(alloc, "\"line\\nindent\\tquote\\\"slash\\\\\"");
         defer value.deinit(alloc);
         try std.testing.expectEqualStrings("line\nindent\tquote\"slash\\", value.string.value);
+        try std.testing.expectEqual(ScalarStyle.double_quoted, value.string.style);
+    }
+
+    {
+        var value = try parseScalarValue(alloc, "\"keep\\qboth\"");
+        defer value.deinit(alloc);
+        try std.testing.expectEqualStrings("keep\\qboth", value.string.value);
         try std.testing.expectEqual(ScalarStyle.double_quoted, value.string.style);
     }
 }
