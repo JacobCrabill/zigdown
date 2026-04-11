@@ -117,6 +117,20 @@ pub const Node = union(enum) {
     }
 };
 
+pub const YamlDocument = struct {
+    leading_comments: []Comment,
+    root: Node,
+    trailing_comments: []Comment,
+    raw: []const u8,
+
+    pub fn deinit(self: *YamlDocument, alloc: Allocator) void {
+        freeComments(alloc, self.leading_comments);
+        self.root.deinit(alloc);
+        freeComments(alloc, self.trailing_comments);
+        alloc.free(self.raw);
+    }
+};
+
 pub const LineKind = enum {
     blank,
     comment_only,
@@ -148,6 +162,415 @@ pub const CommentSplit = struct {
         }
     }
 };
+
+const ParseError = error{
+    EmptyDocument,
+    ExpectedArrayItem,
+    ExpectedIndentedBlock,
+    ExpectedMapField,
+    InvalidYaml,
+};
+
+const FieldParts = struct {
+    key: []const u8,
+    value: []const u8,
+    has_value: bool,
+};
+
+const KeyText = struct {
+    value: []const u8,
+    style: ScalarStyle,
+};
+
+const Parser = struct {
+    alloc: Allocator,
+    lines: []LineParts,
+    index: usize = 0,
+
+    fn parseDocument(self: *Parser, raw: []const u8) anyerror!YamlDocument {
+        const leading_comments = try self.collectDocumentLeadingComments();
+        errdefer freeComments(self.alloc, leading_comments);
+
+        if (self.peekNextContentIndent(self.index) == null) {
+            return ParseError.EmptyDocument;
+        }
+
+        var root = try self.parseNodeAtNextContent(try self.alloc.alloc(Comment, 0), null);
+        errdefer root.deinit(self.alloc);
+
+        const trailing_comments = try self.collectDocumentTrailingComments();
+        errdefer freeComments(self.alloc, trailing_comments);
+
+        if (self.peekNextContentIndent(self.index) != null) {
+            return ParseError.InvalidYaml;
+        }
+
+        return .{
+            .leading_comments = leading_comments,
+            .root = root,
+            .trailing_comments = trailing_comments,
+            .raw = raw,
+        };
+    }
+
+    fn parseNodeAtNextContent(self: *Parser, leading_comments: []Comment, min_indent: ?usize) anyerror!Node {
+        const indent = self.peekNextContentIndent(self.index) orelse return ParseError.EmptyDocument;
+        if (min_indent) |expected| {
+            if (indent < expected) return ParseError.ExpectedIndentedBlock;
+        }
+        return self.parseNode(indent, leading_comments);
+    }
+
+    fn parseNode(self: *Parser, indent: usize, leading_comments: []Comment) anyerror!Node {
+        while (self.index < self.lines.len and self.lines[self.index].kind == .blank) {
+            self.index += 1;
+        }
+
+        const content_index = self.peekNextContentIndex(self.index) orelse return ParseError.EmptyDocument;
+        const line = &self.lines[content_index];
+        if (line.indent != indent) return ParseError.InvalidYaml;
+
+        if (content_index != self.index) {
+            if (isArrayItemLine(line.content)) {
+                return self.parseArray(indent, leading_comments);
+            }
+
+            if (splitFieldParts(line.content) != null) {
+                return self.parseMap(indent, leading_comments, null, null);
+            }
+
+            return ParseError.InvalidYaml;
+        }
+
+        if (isArrayItemLine(line.content)) {
+            return self.parseArray(indent, leading_comments);
+        }
+
+        if (splitFieldParts(line.content) != null) {
+            return self.parseMap(indent, leading_comments, null, null);
+        }
+
+        self.index += 1;
+        var node = try parseScalarValue(self.alloc, line.content);
+        attachLeadingComments(&node, self.alloc, leading_comments);
+        if (line.comment) |comment| {
+            line.comment = null;
+            attachTrailingComment(&node, self.alloc, comment);
+        }
+        return node;
+    }
+
+    fn parseMap(self: *Parser, indent: usize, leading_comments: []Comment, initial_field: ?Field, parent_indent: ?usize) anyerror!Node {
+        var fields = std.ArrayList(Field).empty;
+        errdefer {
+            for (fields.items) |field| field.deinit(self.alloc);
+            fields.deinit(self.alloc);
+        }
+
+        if (initial_field) |field| {
+            try fields.append(self.alloc, field);
+        }
+
+        while (true) {
+            const field_leading = try self.collectCommentsBeforeSibling(indent, parent_indent);
+
+            const next_indent = self.peekNextContentIndent(self.index) orelse break;
+            if (next_indent < indent) {
+                freeComments(self.alloc, field_leading);
+                break;
+            }
+            if (next_indent != indent) {
+                freeComments(self.alloc, field_leading);
+                return ParseError.ExpectedMapField;
+            }
+
+            const line = &self.lines[self.index];
+            const parts = splitFieldParts(line.content) orelse {
+                freeComments(self.alloc, field_leading);
+                return ParseError.ExpectedMapField;
+            };
+
+            const field = blk: {
+                const key = try parseKeyText(self.alloc, parts.key);
+
+                self.index += 1;
+                var field = Field{
+                    .key = key.value,
+                    .key_style = key.style,
+                    .value = undefined,
+                    .leading_comments = field_leading,
+                    .trailing_comment = line.comment,
+                };
+                line.comment = null;
+                errdefer field.deinit(self.alloc);
+
+                if (parts.has_value) {
+                    field.value = try parseScalarValue(self.alloc, parts.value);
+                } else {
+                    const nested_comments = try self.collectCommentsBeforeChild(indent);
+                    field.value = try self.parseNodeAtNextContent(nested_comments, indent + 1);
+                }
+
+                break :blk field;
+            };
+            try fields.append(self.alloc, field);
+        }
+
+        return .{ .map = .{
+            .fields = try fields.toOwnedSlice(self.alloc),
+            .leading_comments = leading_comments,
+            .trailing_comment = null,
+        } };
+    }
+
+    fn parseArray(self: *Parser, indent: usize, leading_comments: []Comment) anyerror!Node {
+        var items = std.ArrayList(ArrayItem).empty;
+        errdefer {
+            for (items.items) |item| item.deinit(self.alloc);
+            items.deinit(self.alloc);
+        }
+
+        while (true) {
+            const item_leading = try self.collectCommentsBeforeSibling(indent, null);
+
+            const next_indent = self.peekNextContentIndent(self.index) orelse break;
+            if (next_indent < indent) {
+                freeComments(self.alloc, item_leading);
+                break;
+            }
+            if (next_indent != indent) {
+                freeComments(self.alloc, item_leading);
+                return ParseError.ExpectedArrayItem;
+            }
+
+            const line = &self.lines[self.index];
+            const remainder = arrayItemRemainder(line.content) orelse {
+                freeComments(self.alloc, item_leading);
+                return ParseError.ExpectedArrayItem;
+            };
+
+            const item = blk: {
+                self.index += 1;
+                var item = ArrayItem{
+                    .value = undefined,
+                    .leading_comments = item_leading,
+                    .trailing_comment = null,
+                };
+                errdefer item.deinit(self.alloc);
+
+                if (remainder.len == 0) {
+                    const nested_comments = try self.collectCommentsBeforeChild(indent);
+                    item.value = try self.parseNodeAtNextContent(nested_comments, indent + 1);
+                    item.trailing_comment = line.comment;
+                    line.comment = null;
+                } else if (splitFieldParts(remainder)) |parts| {
+                    item.value = try self.parseInlineItemMap(indent, parts, line.comment);
+                    line.comment = null;
+                } else {
+                    item.value = try parseScalarValue(self.alloc, remainder);
+                    item.trailing_comment = line.comment;
+                    line.comment = null;
+                }
+
+                break :blk item;
+            };
+            try items.append(self.alloc, item);
+        }
+
+        return .{ .array = .{
+            .items = try items.toOwnedSlice(self.alloc),
+            .leading_comments = leading_comments,
+            .trailing_comment = null,
+        } };
+    }
+
+    fn parseInlineItemMap(self: *Parser, item_indent: usize, parts: FieldParts, trailing_comment: ?Comment) anyerror!Node {
+        const first_field = blk: {
+            const key = try parseKeyText(self.alloc, parts.key);
+
+            var first_field = Field{
+                .key = key.value,
+                .key_style = key.style,
+                .value = undefined,
+                .leading_comments = try self.alloc.alloc(Comment, 0),
+                .trailing_comment = trailing_comment,
+            };
+            errdefer first_field.deinit(self.alloc);
+
+            if (parts.has_value) {
+                first_field.value = try parseScalarValue(self.alloc, parts.value);
+            } else {
+                const nested_comments = try self.collectCommentsBeforeChild(item_indent);
+                first_field.value = try self.parseNodeAtNextContent(nested_comments, item_indent + 1);
+            }
+
+            break :blk first_field;
+        };
+
+        const continuation_indent = self.peekNextContentIndent(self.index);
+        if (continuation_indent == null or continuation_indent.? <= item_indent) {
+            return .{ .map = .{
+                .fields = try self.alloc.dupe(Field, &[_]Field{first_field}),
+                .leading_comments = try self.alloc.alloc(Comment, 0),
+                .trailing_comment = null,
+            } };
+        }
+
+        return self.parseMap(continuation_indent.?, try self.alloc.alloc(Comment, 0), first_field, item_indent);
+    }
+
+    fn collectDocumentLeadingComments(self: *Parser) anyerror![]Comment {
+        var comments = std.ArrayList(Comment).empty;
+        errdefer {
+            for (comments.items) |comment| comment.deinit(self.alloc);
+            comments.deinit(self.alloc);
+        }
+
+        while (self.index < self.lines.len) {
+            const line = &self.lines[self.index];
+            switch (line.kind) {
+                .blank => self.index += 1,
+                .comment_only => {
+                    try comments.append(self.alloc, line.comment.?);
+                    line.comment = null;
+                    self.index += 1;
+                },
+                .content => break,
+            }
+        }
+
+        return comments.toOwnedSlice(self.alloc);
+    }
+
+    fn collectDocumentTrailingComments(self: *Parser) anyerror![]Comment {
+        var saved_index = self.index;
+        while (saved_index < self.lines.len and self.lines[saved_index].kind == .blank) {
+            saved_index += 1;
+        }
+
+        var comments = std.ArrayList(Comment).empty;
+        errdefer {
+            for (comments.items) |comment| comment.deinit(self.alloc);
+            comments.deinit(self.alloc);
+        }
+
+        while (saved_index < self.lines.len) {
+            const line = &self.lines[saved_index];
+            switch (line.kind) {
+                .blank => saved_index += 1,
+                .comment_only => {
+                    try comments.append(self.alloc, line.comment.?);
+                    line.comment = null;
+                    saved_index += 1;
+                },
+                .content => return comments.toOwnedSlice(self.alloc),
+            }
+        }
+
+        self.index = saved_index;
+        return comments.toOwnedSlice(self.alloc);
+    }
+
+    fn collectCommentsBeforeSibling(self: *Parser, indent: usize, parent_indent: ?usize) anyerror![]Comment {
+        var saved_index = self.index;
+        while (saved_index < self.lines.len and self.lines[saved_index].kind == .blank) {
+            saved_index += 1;
+        }
+
+        var comment_count: usize = 0;
+        while (saved_index + comment_count < self.lines.len and self.lines[saved_index + comment_count].kind == .comment_only) {
+            comment_count += 1;
+            while (saved_index + comment_count < self.lines.len and self.lines[saved_index + comment_count].kind == .blank) {
+                comment_count += 1;
+            }
+        }
+
+        const next_indent = self.peekNextContentIndent(saved_index);
+        if (next_indent) |value| {
+            if (value < indent or (parent_indent != null and value <= parent_indent.?)) {
+                return self.alloc.alloc(Comment, 0);
+            }
+        } else if (comment_count == 0) {
+            return self.alloc.alloc(Comment, 0);
+        } else {
+            return self.alloc.alloc(Comment, 0);
+        }
+
+        var comments = std.ArrayList(Comment).empty;
+        errdefer {
+            for (comments.items) |comment| comment.deinit(self.alloc);
+            comments.deinit(self.alloc);
+        }
+
+        while (self.index < self.lines.len) {
+            const line = &self.lines[self.index];
+            switch (line.kind) {
+                .blank => self.index += 1,
+                .comment_only => {
+                    try comments.append(self.alloc, line.comment.?);
+                    line.comment = null;
+                    self.index += 1;
+                },
+                .content => break,
+            }
+        }
+
+        return comments.toOwnedSlice(self.alloc);
+    }
+
+    fn collectCommentsBeforeChild(self: *Parser, parent_indent: usize) anyerror![]Comment {
+        var saved_index = self.index;
+        while (saved_index < self.lines.len and self.lines[saved_index].kind == .blank) {
+            saved_index += 1;
+        }
+
+        const next_indent = self.peekNextContentIndent(saved_index) orelse return ParseError.ExpectedIndentedBlock;
+        if (next_indent <= parent_indent) return ParseError.ExpectedIndentedBlock;
+        return self.alloc.alloc(Comment, 0);
+    }
+
+    fn peekNextContentIndent(self: *Parser, start: usize) ?usize {
+        var cursor = start;
+        while (cursor < self.lines.len) : (cursor += 1) {
+            switch (self.lines[cursor].kind) {
+                .blank, .comment_only => continue,
+                .content => return self.lines[cursor].indent,
+            }
+        }
+        return null;
+    }
+
+    fn peekNextContentIndex(self: *Parser, start: usize) ?usize {
+        var cursor = start;
+        while (cursor < self.lines.len) : (cursor += 1) {
+            if (self.lines[cursor].kind == .content) return cursor;
+        }
+        return null;
+    }
+};
+
+pub fn parseYamlDocument(alloc: Allocator, input: []const u8) !YamlDocument {
+    var lines = std.ArrayList(LineParts).empty;
+    defer {
+        for (lines.items) |line| {
+            var owned = line;
+            owned.deinit(alloc);
+        }
+        lines.deinit(alloc);
+    }
+
+    var iterator = std.mem.splitScalar(u8, input, '\n');
+    while (iterator.next()) |segment| {
+        const raw_line = trimLineRight(segment);
+        try lines.append(alloc, try scanLine(alloc, raw_line));
+    }
+
+    const raw = try alloc.dupe(u8, input);
+    errdefer alloc.free(raw);
+
+    var parser = Parser{ .alloc = alloc, .lines = lines.items };
+    return parser.parseDocument(raw);
+}
 
 pub fn splitTrailingComment(alloc: Allocator, line: []const u8) !CommentSplit {
     const hash_index = findTrailingCommentStart(line);
@@ -244,6 +667,94 @@ fn countIndent(line: []const u8) usize {
     var indent: usize = 0;
     while (indent < line.len and line[indent] == ' ') : (indent += 1) {}
     return indent;
+}
+
+fn attachLeadingComments(node: *Node, alloc: Allocator, comments: []Comment) void {
+    switch (node.*) {
+        .string => |*string| string.leading_comments = comments,
+        .array => |*array| array.leading_comments = comments,
+        .map => |*map| map.leading_comments = comments,
+        else => freeComments(alloc, comments),
+    }
+}
+
+fn attachTrailingComment(node: *Node, alloc: Allocator, comment: Comment) void {
+    switch (node.*) {
+        .string => |*string| string.trailing_comment = comment,
+        .array => |*array| array.trailing_comment = comment,
+        .map => |*map| map.trailing_comment = comment,
+        else => comment.deinit(alloc),
+    }
+}
+
+fn isArrayItemLine(content: []const u8) bool {
+    return content.len == 1 and content[0] == '-' or std.mem.startsWith(u8, content, "- ");
+}
+
+fn arrayItemRemainder(content: []const u8) ?[]const u8 {
+    if (content.len == 1 and content[0] == '-') return "";
+    if (std.mem.startsWith(u8, content, "- ")) return trimLine(content[2..]);
+    return null;
+}
+
+fn splitFieldParts(content: []const u8) ?FieldParts {
+    var quote: ?u8 = null;
+    var escaped = false;
+
+    for (content, 0..) |char, index| {
+        if (quote) |active_quote| {
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+
+            if (active_quote == '"' and char == '\\') {
+                escaped = true;
+                continue;
+            }
+
+            if (char == active_quote) quote = null;
+            continue;
+        }
+
+        if (char == '\'' or char == '"') {
+            quote = char;
+            continue;
+        }
+
+        if (char == ':') {
+            const key = trimLineRight(content[0..index]);
+            const value = trimLine(content[index + 1 ..]);
+            return .{
+                .key = key,
+                .value = value,
+                .has_value = value.len != 0,
+            };
+        }
+    }
+
+    return null;
+}
+
+fn parseKeyText(alloc: Allocator, text: []const u8) !KeyText {
+    if (text.len >= 2 and text[0] == '\'' and text[text.len - 1] == '\'') {
+        return .{
+            .value = try decodeSingleQuotedString(alloc, text[1 .. text.len - 1]),
+            .style = .single_quoted,
+        };
+    }
+
+    if (text.len >= 2 and text[0] == '"' and text[text.len - 1] == '"') {
+        return .{
+            .value = try decodeDoubleQuotedString(alloc, text[1 .. text.len - 1]),
+            .style = .double_quoted,
+        };
+    }
+
+    return .{
+        .value = try alloc.dupe(u8, text),
+        .style = .plain,
+    };
 }
 
 fn initScalar(alloc: Allocator, text: []const u8, style: ScalarStyle) !Scalar {
@@ -607,4 +1118,139 @@ fn splitTrailingCommentAllocationTest(alloc: Allocator, line: []const u8) !void 
 fn scanLineAllocationTest(alloc: Allocator, line: []const u8) !void {
     var parts = try scanLine(alloc, line);
     defer parts.deinit(alloc);
+}
+
+test "parseYamlDocument builds nested map and array tree" {
+    const alloc = std.testing.allocator;
+
+    var doc = try parseYamlDocument(alloc,
+        \\title: example
+        \\flags:
+        \\  published: true
+        \\  score: 3.5
+        \\authors:
+        \\  - name: Alice
+        \\    roles:
+        \\      - writer
+        \\      - editor
+        \\  - name: Bob
+        \\    roles:
+        \\      - reviewer
+        \\metadata:
+        \\  tags:
+        \\    - zig
+        \\    - yaml
+        \\  empty: null
+    );
+    defer doc.deinit(alloc);
+
+    try std.testing.expectEqual(@as(usize, 0), doc.leading_comments.len);
+    try std.testing.expectEqualStrings(
+        "title: example\nflags:\n  published: true\n  score: 3.5\nauthors:\n  - name: Alice\n    roles:\n      - writer\n      - editor\n  - name: Bob\n    roles:\n      - reviewer\nmetadata:\n  tags:\n    - zig\n    - yaml\n  empty: null",
+        doc.raw,
+    );
+    try std.testing.expectEqual(@as(usize, 0), doc.trailing_comments.len);
+
+    const root = doc.root.map;
+    try std.testing.expectEqual(@as(usize, 4), root.fields.len);
+
+    try std.testing.expectEqualStrings("title", root.fields[0].key);
+    try std.testing.expectEqualStrings("example", root.fields[0].value.string.value);
+
+    try std.testing.expectEqualStrings("flags", root.fields[1].key);
+    const flags = root.fields[1].value.map;
+    try std.testing.expectEqual(@as(usize, 2), flags.fields.len);
+    try std.testing.expectEqual(@as(bool, true), flags.fields[0].value.bool);
+    try std.testing.expectEqual(@as(f64, 3.5), flags.fields[1].value.float);
+
+    try std.testing.expectEqualStrings("authors", root.fields[2].key);
+    const authors = root.fields[2].value.array;
+    try std.testing.expectEqual(@as(usize, 2), authors.items.len);
+    const first_author = authors.items[0].value.map;
+    try std.testing.expectEqual(@as(usize, 2), first_author.fields.len);
+    try std.testing.expectEqualStrings("Alice", first_author.fields[0].value.string.value);
+    const first_roles = first_author.fields[1].value.array;
+    try std.testing.expectEqual(@as(usize, 2), first_roles.items.len);
+    try std.testing.expectEqualStrings("writer", first_roles.items[0].value.string.value);
+    try std.testing.expectEqualStrings("editor", first_roles.items[1].value.string.value);
+
+    const second_author = authors.items[1].value.map;
+    const second_roles = second_author.fields[1].value.array;
+    try std.testing.expectEqual(@as(usize, 1), second_roles.items.len);
+    try std.testing.expectEqualStrings("reviewer", second_roles.items[0].value.string.value);
+
+    try std.testing.expectEqualStrings("metadata", root.fields[3].key);
+    const metadata = root.fields[3].value.map;
+    const tags = metadata.fields[0].value.array;
+    try std.testing.expectEqual(@as(usize, 2), tags.items.len);
+    try std.testing.expectEqualStrings("zig", tags.items[0].value.string.value);
+    try std.testing.expectEqualStrings("yaml", tags.items[1].value.string.value);
+    try std.testing.expectEqual(Node.null, metadata.fields[1].value);
+}
+
+test "parseYamlDocument attaches comments to document, fields, and items" {
+    const alloc = std.testing.allocator;
+
+    var doc = try parseYamlDocument(alloc,
+        \\# top 1
+        \\# top 2
+        \\title: example # title inline
+        \\# authors lead
+        \\authors:
+        \\  # first author lead
+        \\  - name: Alice # first author inline
+        \\    # roles lead
+        \\    roles:
+        \\      # writer lead
+        \\      - writer # writer inline
+        \\  # second author lead
+        \\  - name: Bob
+        \\# tags lead
+        \\tags:
+        \\  # zig lead
+        \\  - zig # zig inline
+        \\# bottom 1
+        \\# bottom 2
+    );
+    defer doc.deinit(alloc);
+
+    try std.testing.expectEqual(@as(usize, 2), doc.leading_comments.len);
+    try std.testing.expectEqualStrings("top 1", doc.leading_comments[0].text);
+    try std.testing.expectEqualStrings("top 2", doc.leading_comments[1].text);
+    try std.testing.expectEqual(@as(usize, 2), doc.trailing_comments.len);
+    try std.testing.expectEqualStrings("bottom 1", doc.trailing_comments[0].text);
+    try std.testing.expectEqualStrings("bottom 2", doc.trailing_comments[1].text);
+
+    const root = doc.root.map;
+    try std.testing.expect(root.fields[0].trailing_comment != null);
+    try std.testing.expectEqualStrings("title inline", root.fields[0].trailing_comment.?.text);
+
+    try std.testing.expectEqual(@as(usize, 1), root.fields[1].leading_comments.len);
+    try std.testing.expectEqualStrings("authors lead", root.fields[1].leading_comments[0].text);
+
+    const authors = root.fields[1].value.array;
+    try std.testing.expectEqual(@as(usize, 1), authors.items[0].leading_comments.len);
+    try std.testing.expectEqualStrings("first author lead", authors.items[0].leading_comments[0].text);
+    try std.testing.expect(authors.items[0].trailing_comment == null);
+    const first_author = authors.items[0].value.map;
+    try std.testing.expect(first_author.fields[0].trailing_comment != null);
+    try std.testing.expectEqualStrings("first author inline", first_author.fields[0].trailing_comment.?.text);
+    try std.testing.expectEqual(@as(usize, 1), first_author.fields[1].leading_comments.len);
+    try std.testing.expectEqualStrings("roles lead", first_author.fields[1].leading_comments[0].text);
+    const roles = first_author.fields[1].value.array;
+    try std.testing.expectEqual(@as(usize, 1), roles.items[0].leading_comments.len);
+    try std.testing.expectEqualStrings("writer lead", roles.items[0].leading_comments[0].text);
+    try std.testing.expect(roles.items[0].trailing_comment != null);
+    try std.testing.expectEqualStrings("writer inline", roles.items[0].trailing_comment.?.text);
+
+    try std.testing.expectEqual(@as(usize, 1), authors.items[1].leading_comments.len);
+    try std.testing.expectEqualStrings("second author lead", authors.items[1].leading_comments[0].text);
+
+    try std.testing.expectEqual(@as(usize, 1), root.fields[2].leading_comments.len);
+    try std.testing.expectEqualStrings("tags lead", root.fields[2].leading_comments[0].text);
+    const tags = root.fields[2].value.array;
+    try std.testing.expectEqual(@as(usize, 1), tags.items[0].leading_comments.len);
+    try std.testing.expectEqualStrings("zig lead", tags.items[0].leading_comments[0].text);
+    try std.testing.expect(tags.items[0].trailing_comment != null);
+    try std.testing.expectEqualStrings("zig inline", tags.items[0].trailing_comment.?.text);
 }
