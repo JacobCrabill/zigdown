@@ -23,6 +23,7 @@ const FnReg = c.luaL_Reg;
 const lib_fn_reg = [_]FnReg{
     .{ .name = "render_markdown", .func = render_markdown },
     .{ .name = "format_markdown", .func = format_markdown },
+    .{ .name = "parse_markdown", .func = parse_markdown },
     FnReg{},
 };
 
@@ -152,6 +153,36 @@ export fn format_markdown(lua: ?*LuaState) callconv(.c) c_int {
     return 1;
 }
 
+/// Parse Markdown text and expose frontmatter to Lua.
+///
+/// Lua arguments:
+/// - Markdown text to parse.
+///
+/// Returns one Lua value:
+/// - A table with a `frontmatter` field containing parsed metadata or `nil`.
+export fn parse_markdown(lua: ?*LuaState) callconv(.c) c_int {
+    var len: usize = 0;
+    const input_a: [*c]const u8 = c.lua_tolstring(lua, 1, &len);
+    const input: []const u8 = input_a[0..len];
+    const alloc = std.heap.page_allocator;
+
+    const opts = zd.parser.ParserOpts{ .copy_input = false, .verbose = false };
+    var parser = zd.Parser.init(alloc, opts);
+    defer parser.deinit();
+
+    parser.parseMarkdown(input) catch @panic("Parse error!");
+
+    c.lua_createtable(lua, 0, 1);
+    if (parser.document.container().content.Document.frontmatter) |matter| {
+        pushFrontmatterNode(lua, &matter.document.root);
+    } else {
+        c.lua_pushnil(lua);
+    }
+    c.lua_setfield(lua, -2, "frontmatter");
+
+    return 1;
+}
+
 /// Create a Lua table representation of a StyleRange.
 /// After this function, the table will reside on the top of the Lua stack.
 fn convertStyleRangeToTable(lua: ?*LuaState, range: zd.RangeRenderer.StyleRange) void {
@@ -220,4 +251,114 @@ fn convertSourceLineMapToTable(lua: ?*LuaState, line_map: []const usize) void {
         c.lua_pushinteger(lua, out);
         c.lua_rawseti(lua, -2, @intCast(i));
     }
+}
+
+fn pushFrontmatterNode(lua: ?*LuaState, node: *const zd.frontmatter.Node) void {
+    switch (node.*) {
+        .null => pushLuaString(lua, "null"),
+        .bool => |value| c.lua_pushboolean(lua, if (value.value) 1 else 0),
+        .int => |value| c.lua_pushinteger(lua, @intCast(value.value)),
+        .float => |value| c.lua_pushnumber(lua, value.value),
+        .string => |value| pushLuaString(lua, value.value),
+        .array => |value| {
+            c.lua_createtable(lua, @intCast(value.items.len), 0);
+            for (value.items, 1..) |item, index| {
+                pushFrontmatterNode(lua, &item.value);
+                c.lua_rawseti(lua, -2, @intCast(index));
+            }
+        },
+        .map => |value| {
+            c.lua_createtable(lua, 0, @intCast(value.fields.len));
+            for (value.fields) |field| {
+                pushLuaString(lua, field.key);
+                pushFrontmatterNode(lua, &field.value);
+                c.lua_settable(lua, -3);
+            }
+        },
+    }
+}
+
+fn pushLuaString(lua: ?*LuaState, value: []const u8) void {
+    if (value.len == 0) {
+        c.lua_pushliteral(lua, "");
+        return;
+    }
+    c.lua_pushlstring(lua, @ptrCast(value.ptr), value.len);
+}
+
+test "parse_markdown exposes null frontmatter values as lua string null" {
+    const lua = c.luaL_newstate() orelse return error.OutOfMemory;
+    defer c.lua_close(lua);
+
+    _ = luaopen_zigdown_lua(lua);
+    c.lua_settop(lua, 0);
+
+    try expectLuaChunkSuccess(lua,
+        \\local parsed = zigdown_lua.parse_markdown([[---
+        \\empty: null
+        \\---
+        \\body
+        \\]])
+        \\return parsed.frontmatter.empty
+    );
+    defer c.lua_settop(lua, 0);
+
+    try std.testing.expectEqual(c.LUA_TSTRING, c.lua_type(lua, -1));
+    var len: usize = 0;
+    const value = c.lua_tolstring(lua, -1, &len);
+    try std.testing.expectEqualStrings("null", value[0..len]);
+}
+
+test "parse_markdown keeps nested frontmatter maps and arrays representable in lua" {
+    const lua = c.luaL_newstate() orelse return error.OutOfMemory;
+    defer c.lua_close(lua);
+
+    _ = luaopen_zigdown_lua(lua);
+    c.lua_settop(lua, 0);
+
+    try expectLuaChunkSuccess(lua,
+        \\local parsed = zigdown_lua.parse_markdown([[---
+        \\metadata:
+        \\  tags:
+        \\    - zig
+        \\    - lua
+        \\  owner:
+        \\    active: true
+        \\authors:
+        \\  - name: Alice
+        \\    roles:
+        \\      - writer
+        \\      - editor
+        \\  - name: Bob
+        \\    roles:
+        \\      - reviewer
+        \\---
+        \\body
+        \\]])
+        \\return parsed.frontmatter.metadata.tags[1], parsed.frontmatter.metadata.tags[2], parsed.frontmatter.metadata.owner.active, parsed.frontmatter.authors[2].roles[1]
+    );
+    defer c.lua_settop(lua, 0);
+
+    try std.testing.expectEqual(c.LUA_TSTRING, c.lua_type(lua, 1));
+    try std.testing.expectEqualStrings("zig", luaStringAt(lua, 1));
+    try std.testing.expectEqual(c.LUA_TSTRING, c.lua_type(lua, 2));
+    try std.testing.expectEqualStrings("lua", luaStringAt(lua, 2));
+    try std.testing.expectEqual(c.LUA_TBOOLEAN, c.lua_type(lua, 3));
+    try std.testing.expectEqual(@as(c_int, 1), c.lua_toboolean(lua, 3));
+    try std.testing.expectEqual(c.LUA_TSTRING, c.lua_type(lua, 4));
+    try std.testing.expectEqualStrings("reviewer", luaStringAt(lua, 4));
+}
+
+fn expectLuaChunkSuccess(lua: *LuaState, chunk: [:0]const u8) !void {
+    try std.testing.expectEqual(@as(c_int, 0), c.luaL_loadstring(lua, chunk.ptr));
+    const status = c.lua_pcall(lua, 0, c.LUA_MULTRET, 0);
+    if (status != 0) {
+        return error.LuaChunkFailed;
+    }
+}
+
+fn luaStringAt(lua: *LuaState, index: c_int) []const u8 {
+    var len: usize = 0;
+    const value = c.lua_tolstring(lua, index, &len);
+    return value[0..len];
 }
