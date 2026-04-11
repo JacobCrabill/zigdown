@@ -158,19 +158,18 @@ export fn format_markdown(lua: ?*LuaState) callconv(.c) c_int {
 /// Lua arguments:
 /// - Markdown text to parse.
 ///
-/// Returns one Lua value:
-/// - A table with a `frontmatter` field containing parsed metadata or `nil`.
+/// Returns either:
+/// - One Lua value: a table with a `frontmatter` field containing parsed metadata or `nil`.
+/// - Two Lua values on failure: `nil`, then an error message string.
 export fn parse_markdown(lua: ?*LuaState) callconv(.c) c_int {
     const state = lua.?;
     const input = getLuaStringArg(state, 1) orelse {
-        pushLuaString(state, "parse_markdown expects a markdown string");
-        return c.lua_error(state);
+        return pushLuaFailure(state, "parse_markdown expects a markdown string");
     };
     const alloc = std.heap.page_allocator;
 
     var parser = initMarkdownParser(alloc, input) catch {
-        pushLuaString(state, "parse_markdown failed to parse markdown");
-        return c.lua_error(state);
+        return pushLuaFailure(state, "parse_markdown failed to parse markdown");
     };
     defer parser.deinit();
 
@@ -288,6 +287,12 @@ fn pushLuaString(lua: ?*LuaState, value: []const u8) void {
     c.lua_pushlstring(lua, @ptrCast(value.ptr), value.len);
 }
 
+fn pushLuaFailure(lua: *LuaState, message: []const u8) c_int {
+    c.lua_pushnil(lua);
+    pushLuaString(lua, message);
+    return 2;
+}
+
 fn getLuaStringArg(lua: *LuaState, index: c_int) ?[]const u8 {
     if (c.lua_isstring(lua, index) == 0) return null;
 
@@ -373,6 +378,24 @@ test "getLuaStringArg returns null for missing markdown argument" {
     defer c.lua_close(lua);
 
     try std.testing.expect(getLuaStringArg(lua, 1) == null);
+}
+
+test "parse_markdown returns nil and error string for missing markdown argument" {
+    const lua = c.luaL_newstate() orelse return error.OutOfMemory;
+    defer c.lua_close(lua);
+
+    _ = luaopen_zigdown_lua(lua);
+    c.lua_settop(lua, 0);
+
+    try expectLuaChunkSuccess(lua,
+        \\local parsed, err = zigdown_lua.parse_markdown()
+        \\return parsed, err
+    );
+    defer c.lua_settop(lua, 0);
+
+    try std.testing.expectEqual(c.LUA_TNIL, c.lua_type(lua, 1));
+    try std.testing.expectEqual(c.LUA_TSTRING, c.lua_type(lua, 2));
+    try std.testing.expectEqualStrings("parse_markdown expects a markdown string", luaStringAt(lua, 2));
 }
 
 fn expectLuaChunkSuccess(lua: *LuaState, chunk: [:0]const u8) !void {
