@@ -765,7 +765,7 @@ fn emitField(state: *EmitState, indent: usize, field: *const Field) EmitError!vo
 }
 
 fn emitFieldValue(state: *EmitState, indent: usize, field: *const Field) EmitError!void {
-    if (isScalarNode(&field.value)) {
+    if (isScalarNode(&field.value) and nodeLeadingComments(&field.value).len == 0) {
         try state.writer.writeAll(": ");
         try emitScalarValue(state.writer, &field.value);
         try state.writeTrailingComment(field.trailing_comment);
@@ -1814,6 +1814,29 @@ test "parseYamlDocument attaches comments to nested scalar child values" {
         },
         else => return error.TestUnexpectedResult,
     }
+}
+
+test "emitYamlDocumentAlloc preserves comments on nested scalar child values" {
+    const alloc = std.testing.allocator;
+
+    var doc = try parseYamlDocument(alloc,
+        \\flag:
+        \\  # lead
+        \\  true # inline
+        \\authors:
+        \\  - name:
+        \\      # nested lead
+        \\      Alice # nested inline
+    );
+    defer doc.deinit(alloc);
+
+    const text = try emitYamlDocumentAlloc(alloc, &doc);
+    defer alloc.free(text);
+
+    try std.testing.expectEqualStrings(
+        "flag:\n  # lead\n  true # inline\nauthors:\n  - name:\n      # nested lead\n      Alice # nested inline",
+        text,
+    );
 }
 
 test "parseYamlDocument keeps root plain scalars with colons as scalars" {
