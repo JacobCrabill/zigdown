@@ -31,6 +31,57 @@ pub const Scalar = struct {
     }
 };
 
+pub const NullValue = struct {
+    leading_comments: []Comment,
+    trailing_comment: ?Comment = null,
+
+    pub fn deinit(self: NullValue, alloc: Allocator) void {
+        freeComments(alloc, self.leading_comments);
+        if (self.trailing_comment) |comment| {
+            comment.deinit(alloc);
+        }
+    }
+};
+
+pub const BoolValue = struct {
+    value: bool,
+    leading_comments: []Comment,
+    trailing_comment: ?Comment = null,
+
+    pub fn deinit(self: BoolValue, alloc: Allocator) void {
+        freeComments(alloc, self.leading_comments);
+        if (self.trailing_comment) |comment| {
+            comment.deinit(alloc);
+        }
+    }
+};
+
+pub const IntValue = struct {
+    value: i64,
+    leading_comments: []Comment,
+    trailing_comment: ?Comment = null,
+
+    pub fn deinit(self: IntValue, alloc: Allocator) void {
+        freeComments(alloc, self.leading_comments);
+        if (self.trailing_comment) |comment| {
+            comment.deinit(alloc);
+        }
+    }
+};
+
+pub const FloatValue = struct {
+    value: f64,
+    leading_comments: []Comment,
+    trailing_comment: ?Comment = null,
+
+    pub fn deinit(self: FloatValue, alloc: Allocator) void {
+        freeComments(alloc, self.leading_comments);
+        if (self.trailing_comment) |comment| {
+            comment.deinit(alloc);
+        }
+    }
+};
+
 pub const ArrayItem = struct {
     value: Node,
     leading_comments: []Comment,
@@ -99,17 +150,20 @@ pub const Map = struct {
 };
 
 pub const Node = union(enum) {
-    null,
-    bool: bool,
-    int: i64,
-    float: f64,
+    null: NullValue,
+    bool: BoolValue,
+    int: IntValue,
+    float: FloatValue,
     string: Scalar,
     array: Array,
     map: Map,
 
     pub fn deinit(self: *Node, alloc: Allocator) void {
         switch (self.*) {
-            .null, .bool, .int, .float => {},
+            .null => |null_value| null_value.deinit(alloc),
+            .bool => |bool_value| bool_value.deinit(alloc),
+            .int => |int_value| int_value.deinit(alloc),
+            .float => |float_value| float_value.deinit(alloc),
             .string => |string| string.deinit(alloc),
             .array => |array| array.deinit(alloc),
             .map => |map| map.deinit(alloc),
@@ -232,22 +286,28 @@ const Parser = struct {
 
         if (content_index != self.index) {
             if (isArrayItemLine(line.content)) {
-                return self.parseArray(indent, leading_comments);
+                return self.parseArray(indent, try self.alloc.alloc(Comment, 0), leading_comments);
             }
 
             if (splitFieldParts(line.content) != null) {
-                return self.parseMap(indent, leading_comments, null, null);
+                return self.parseMap(indent, try self.alloc.alloc(Comment, 0), null, null, leading_comments);
             }
 
-            return ParseError.InvalidYaml;
+            self.index = content_index;
         }
 
         if (isArrayItemLine(line.content)) {
-            return self.parseArray(indent, leading_comments);
+            if (leading_comments.len != 0) {
+                return self.parseArray(indent, try self.alloc.alloc(Comment, 0), leading_comments);
+            }
+            return self.parseArray(indent, leading_comments, null);
         }
 
         if (splitFieldParts(line.content) != null) {
-            return self.parseMap(indent, leading_comments, null, null);
+            if (leading_comments.len != 0) {
+                return self.parseMap(indent, try self.alloc.alloc(Comment, 0), null, null, leading_comments);
+            }
+            return self.parseMap(indent, leading_comments, null, null, null);
         }
 
         self.index += 1;
@@ -260,19 +320,24 @@ const Parser = struct {
         return node;
     }
 
-    fn parseMap(self: *Parser, indent: usize, leading_comments: []Comment, initial_field: ?Field, parent_indent: ?usize) anyerror!Node {
+    fn parseMap(self: *Parser, indent: usize, leading_comments: []Comment, initial_field: ?Field, parent_indent: ?usize, initial_field_comments: ?[]Comment) anyerror!Node {
         var fields = std.ArrayList(Field).empty;
         errdefer {
             for (fields.items) |field| field.deinit(self.alloc);
             fields.deinit(self.alloc);
         }
 
+        var pending_initial_field_comments = initial_field_comments;
+
         if (initial_field) |field| {
             try fields.append(self.alloc, field);
         }
 
         while (true) {
-            const field_leading = try self.collectCommentsBeforeSibling(indent, parent_indent);
+            const field_leading = if (pending_initial_field_comments) |comments| blk: {
+                pending_initial_field_comments = null;
+                break :blk comments;
+            } else try self.collectCommentsBeforeSibling(indent, parent_indent);
 
             const next_indent = self.peekNextContentIndent(self.index) orelse break;
             if (next_indent < indent) {
@@ -323,15 +388,20 @@ const Parser = struct {
         } };
     }
 
-    fn parseArray(self: *Parser, indent: usize, leading_comments: []Comment) anyerror!Node {
+    fn parseArray(self: *Parser, indent: usize, leading_comments: []Comment, initial_item_comments: ?[]Comment) anyerror!Node {
         var items = std.ArrayList(ArrayItem).empty;
         errdefer {
             for (items.items) |item| item.deinit(self.alloc);
             items.deinit(self.alloc);
         }
 
+        var pending_initial_item_comments = initial_item_comments;
+
         while (true) {
-            const item_leading = try self.collectCommentsBeforeSibling(indent, null);
+            const item_leading = if (pending_initial_item_comments) |comments| blk: {
+                pending_initial_item_comments = null;
+                break :blk comments;
+            } else try self.collectCommentsBeforeSibling(indent, null);
 
             const next_indent = self.peekNextContentIndent(self.index) orelse break;
             if (next_indent < indent) {
@@ -416,7 +486,7 @@ const Parser = struct {
             } };
         }
 
-        return self.parseMap(continuation_indent.?, try self.alloc.alloc(Comment, 0), first_field, item_indent);
+        return self.parseMap(continuation_indent.?, try self.alloc.alloc(Comment, 0), first_field, item_indent, null);
     }
 
     fn collectDocumentLeadingComments(self: *Parser) anyerror![]Comment {
@@ -526,7 +596,27 @@ const Parser = struct {
 
         const next_indent = self.peekNextContentIndent(saved_index) orelse return ParseError.ExpectedIndentedBlock;
         if (next_indent <= parent_indent) return ParseError.ExpectedIndentedBlock;
-        return self.alloc.alloc(Comment, 0);
+
+        var comments = std.ArrayList(Comment).empty;
+        errdefer {
+            for (comments.items) |comment| comment.deinit(self.alloc);
+            comments.deinit(self.alloc);
+        }
+
+        while (self.index < self.lines.len) {
+            const line = &self.lines[self.index];
+            switch (line.kind) {
+                .blank => self.index += 1,
+                .comment_only => {
+                    try comments.append(self.alloc, line.comment.?);
+                    line.comment = null;
+                    self.index += 1;
+                },
+                .content => break,
+            }
+        }
+
+        return comments.toOwnedSlice(self.alloc);
     }
 
     fn peekNextContentIndent(self: *Parser, start: usize) ?usize {
@@ -631,15 +721,26 @@ pub fn scanLine(alloc: Allocator, raw_line: []const u8) !LineParts {
 
 pub fn parseScalarValue(alloc: Allocator, text: []const u8) !Node {
     if (std.mem.eql(u8, text, "null")) {
-        return .null;
+        return .{ .null = .{
+            .leading_comments = try alloc.alloc(Comment, 0),
+            .trailing_comment = null,
+        } };
     }
 
     if (std.mem.eql(u8, text, "true")) {
-        return .{ .bool = true };
+        return .{ .bool = .{
+            .value = true,
+            .leading_comments = try alloc.alloc(Comment, 0),
+            .trailing_comment = null,
+        } };
     }
 
     if (std.mem.eql(u8, text, "false")) {
-        return .{ .bool = false };
+        return .{ .bool = .{
+            .value = false,
+            .leading_comments = try alloc.alloc(Comment, 0),
+            .trailing_comment = null,
+        } };
     }
 
     if (text.len >= 2 and text[0] == '\'' and text[text.len - 1] == '\'') {
@@ -652,12 +753,20 @@ pub fn parseScalarValue(alloc: Allocator, text: []const u8) !Node {
 
     if (isFloatText(text)) {
         if (std.fmt.parseFloat(f64, text)) |value| {
-            return .{ .float = value };
+            return .{ .float = .{
+                .value = value,
+                .leading_comments = try alloc.alloc(Comment, 0),
+                .trailing_comment = null,
+            } };
         } else |_| {}
     }
 
     if (std.fmt.parseInt(i64, text, 10)) |value| {
-        return .{ .int = value };
+        return .{ .int = .{
+            .value = value,
+            .leading_comments = try alloc.alloc(Comment, 0),
+            .trailing_comment = null,
+        } };
     } else |_| {}
 
     return .{ .string = try initScalar(alloc, text, .plain) };
@@ -671,20 +780,28 @@ fn countIndent(line: []const u8) usize {
 
 fn attachLeadingComments(node: *Node, alloc: Allocator, comments: []Comment) void {
     switch (node.*) {
+        .null => |*null_value| null_value.leading_comments = comments,
+        .bool => |*bool_value| bool_value.leading_comments = comments,
+        .int => |*int_value| int_value.leading_comments = comments,
+        .float => |*float_value| float_value.leading_comments = comments,
         .string => |*string| string.leading_comments = comments,
         .array => |*array| array.leading_comments = comments,
         .map => |*map| map.leading_comments = comments,
-        else => freeComments(alloc, comments),
     }
+    _ = alloc;
 }
 
 fn attachTrailingComment(node: *Node, alloc: Allocator, comment: Comment) void {
     switch (node.*) {
+        .null => |*null_value| null_value.trailing_comment = comment,
+        .bool => |*bool_value| bool_value.trailing_comment = comment,
+        .int => |*int_value| int_value.trailing_comment = comment,
+        .float => |*float_value| float_value.trailing_comment = comment,
         .string => |*string| string.trailing_comment = comment,
         .array => |*array| array.trailing_comment = comment,
         .map => |*map| map.trailing_comment = comment,
-        else => comment.deinit(alloc),
     }
+    _ = alloc;
 }
 
 fn isArrayItemLine(content: []const u8) bool {
@@ -1005,25 +1122,26 @@ test "parseScalarValue handles null bool int float and plain string" {
     {
         var value = try parseScalarValue(alloc, "null");
         defer value.deinit(alloc);
-        try std.testing.expectEqual(Node.null, value);
+        try std.testing.expectEqual(@as(usize, 0), value.null.leading_comments.len);
+        try std.testing.expect(value.null.trailing_comment == null);
     }
 
     {
         var value = try parseScalarValue(alloc, "true");
         defer value.deinit(alloc);
-        try std.testing.expectEqual(@as(bool, true), value.bool);
+        try std.testing.expectEqual(@as(bool, true), value.bool.value);
     }
 
     {
         var value = try parseScalarValue(alloc, "-42");
         defer value.deinit(alloc);
-        try std.testing.expectEqual(@as(i64, -42), value.int);
+        try std.testing.expectEqual(@as(i64, -42), value.int.value);
     }
 
     {
         var value = try parseScalarValue(alloc, "3.14");
         defer value.deinit(alloc);
-        try std.testing.expectEqual(@as(f64, 3.14), value.float);
+        try std.testing.expectEqual(@as(f64, 3.14), value.float.value);
     }
 
     {
@@ -1078,13 +1196,13 @@ test "parseScalarValue only classifies decimal numbers with dots as floats" {
     {
         var value = try parseScalarValue(alloc, "1.0");
         defer value.deinit(alloc);
-        try std.testing.expectEqual(@as(f64, 1.0), value.float);
+        try std.testing.expectEqual(@as(f64, 1.0), value.float.value);
     }
 
     {
         var value = try parseScalarValue(alloc, "-2.5");
         defer value.deinit(alloc);
-        try std.testing.expectEqual(@as(f64, -2.5), value.float);
+        try std.testing.expectEqual(@as(f64, -2.5), value.float.value);
     }
 
     {
@@ -1160,8 +1278,8 @@ test "parseYamlDocument builds nested map and array tree" {
     try std.testing.expectEqualStrings("flags", root.fields[1].key);
     const flags = root.fields[1].value.map;
     try std.testing.expectEqual(@as(usize, 2), flags.fields.len);
-    try std.testing.expectEqual(@as(bool, true), flags.fields[0].value.bool);
-    try std.testing.expectEqual(@as(f64, 3.5), flags.fields[1].value.float);
+    try std.testing.expectEqual(@as(bool, true), flags.fields[0].value.bool.value);
+    try std.testing.expectEqual(@as(f64, 3.5), flags.fields[1].value.float.value);
 
     try std.testing.expectEqualStrings("authors", root.fields[2].key);
     const authors = root.fields[2].value.array;
@@ -1185,7 +1303,8 @@ test "parseYamlDocument builds nested map and array tree" {
     try std.testing.expectEqual(@as(usize, 2), tags.items.len);
     try std.testing.expectEqualStrings("zig", tags.items[0].value.string.value);
     try std.testing.expectEqualStrings("yaml", tags.items[1].value.string.value);
-    try std.testing.expectEqual(Node.null, metadata.fields[1].value);
+    try std.testing.expectEqual(@as(usize, 0), metadata.fields[1].value.null.leading_comments.len);
+    try std.testing.expect(metadata.fields[1].value.null.trailing_comment == null);
 }
 
 test "parseYamlDocument attaches comments to document, fields, and items" {
@@ -1253,4 +1372,44 @@ test "parseYamlDocument attaches comments to document, fields, and items" {
     try std.testing.expectEqualStrings("zig lead", tags.items[0].leading_comments[0].text);
     try std.testing.expect(tags.items[0].trailing_comment != null);
     try std.testing.expectEqualStrings("zig inline", tags.items[0].trailing_comment.?.text);
+}
+
+test "parseYamlDocument attaches comments to nested scalar child values" {
+    const alloc = std.testing.allocator;
+
+    var doc = try parseYamlDocument(alloc,
+        \\flag:
+        \\  # flag lead
+        \\  true # flag inline
+        \\numbers:
+        \\  -
+        \\    # first number lead
+        \\    42 # first number inline
+    );
+    defer doc.deinit(alloc);
+
+    const root = doc.root.map;
+
+    switch (root.fields[0].value) {
+        .bool => |flag| {
+            try std.testing.expectEqual(@as(bool, true), flag.value);
+            try std.testing.expectEqual(@as(usize, 1), flag.leading_comments.len);
+            try std.testing.expectEqualStrings("flag lead", flag.leading_comments[0].text);
+            try std.testing.expect(flag.trailing_comment != null);
+            try std.testing.expectEqualStrings("flag inline", flag.trailing_comment.?.text);
+        },
+        else => return error.TestUnexpectedResult,
+    }
+
+    const numbers = root.fields[1].value.array;
+    switch (numbers.items[0].value) {
+        .int => |number| {
+            try std.testing.expectEqual(@as(i64, 42), number.value);
+            try std.testing.expectEqual(@as(usize, 1), number.leading_comments.len);
+            try std.testing.expectEqualStrings("first number lead", number.leading_comments[0].text);
+            try std.testing.expect(number.trailing_comment != null);
+            try std.testing.expectEqualStrings("first number inline", number.trailing_comment.?.text);
+        },
+        else => return error.TestUnexpectedResult,
+    }
 }
