@@ -134,9 +134,7 @@ fn findTrailingCommentStart(line: []const u8) ?usize {
         }
 
         if (char == '#') {
-            if (index == 0 or line[index - 1] == ' ') {
-                return index;
-            }
+            return index;
         }
     }
 
@@ -205,8 +203,9 @@ test "trailing comments split from content correctly" {
         const parts = try splitTrailingComment(alloc, "name: value#tight");
         defer parts.deinit(alloc);
 
-        try std.testing.expectEqualStrings("name: value#tight", parts.content);
-        try std.testing.expect(parts.comment == null);
+        try std.testing.expectEqualStrings("name: value", parts.content);
+        try std.testing.expect(parts.comment != null);
+        try std.testing.expectEqualStrings("tight", parts.comment.?.text);
     }
 
     {
@@ -219,14 +218,15 @@ test "trailing comments split from content correctly" {
     }
 }
 
-test "splitTrailingComment only treats hashes after whitespace as comments" {
+test "splitTrailingComment treats unquoted hashes as comments" {
     const alloc = std.testing.allocator;
 
     const parts = try splitTrailingComment(alloc, "url: abc#frag");
     defer parts.deinit(alloc);
 
-    try std.testing.expectEqualStrings("url: abc#frag", parts.content);
-    try std.testing.expect(parts.comment == null);
+    try std.testing.expectEqualStrings("url: abc", parts.content);
+    try std.testing.expect(parts.comment != null);
+    try std.testing.expectEqualStrings("frag", parts.comment.?.text);
 }
 
 test "single-quoted doubled quote keeps hash inside string" {
