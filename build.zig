@@ -32,6 +32,11 @@ const BuildOpts = struct {
     no_bin: bool = false,
 };
 
+const LuaTestDep = struct {
+    module: *std.Build.Module,
+    lib: *std.Build.Step.Compile,
+};
+
 pub fn build(b: *std.Build) !void {
     const target: Target = b.standardTargetOptions(.{});
     const optimize: OptimizeMode = b.standardOptimizeOption(.{});
@@ -97,6 +102,8 @@ pub fn build(b: *std.Build) !void {
         .no_bin = no_bin,
     };
 
+    var lua_test_dep: ?LuaTestDep = null;
+
     // Compile the main executable
     const exe_config = ExeConfig{
         .version = .{ .major = 0, .minor = 1, .patch = 0 },
@@ -159,6 +166,7 @@ pub fn build(b: *std.Build) !void {
         lua_mod.root_module.addImport(ziglua_dep.name, ziglua_dep.module);
 
         const luajit_lib = ziglua.artifact("lua");
+        lua_test_dep = .{ .module = ziglua_dep.module, .lib = luajit_lib };
         lua_mod.linkLibrary(luajit_lib);
 
         b.installArtifact(lua_mod);
@@ -280,7 +288,10 @@ pub fn build(b: *std.Build) !void {
         .dependencies = deps.items,
         .options = options,
     };
-    addTest(b, "test", "Run all unit tests", "src/lib/test.zig", test_opts);
+    const test_step = addTest(b, "test", "Run all unit tests", "src/lib/test.zig", test_opts);
+    if (lua_test_dep) |dep| {
+        addLuaApiTest(b, test_step, test_opts, dep);
+    }
 
     // Add custom test executables
     if (build_test_exes) {
@@ -353,7 +364,7 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
 /// @param[in] description: The description for 'zig build -l'
 /// @param[in] path: The zig file to test
 /// @param[in] opts: Build target and optimization settings, along with any dependencies needed
-fn addTest(b: *std.Build, cmd: []const u8, description: []const u8, path: []const u8, opts: BuildOpts) void {
+fn addTest(b: *std.Build, cmd: []const u8, description: []const u8, path: []const u8, opts: BuildOpts) *std.Build.Step {
     const test_exe = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path(path),
@@ -374,6 +385,31 @@ fn addTest(b: *std.Build, cmd: []const u8, description: []const u8, path: []cons
     run_step.has_side_effects = true; // Force the test to always be run on command
     const step = b.step(cmd, description);
     step.dependOn(&run_step.step);
+    return step;
+}
+
+fn addLuaApiTest(b: *std.Build, test_step: *std.Build.Step, opts: BuildOpts, dep: LuaTestDep) void {
+    const test_exe = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/app/lua_api.zig"),
+            .optimize = opts.optimize,
+            .target = opts.target,
+        }),
+        .test_runner = .{ .path = b.path("tools/test_runner.zig"), .mode = .simple },
+    });
+
+    if (opts.dependencies) |deps| {
+        for (deps) |item| {
+            test_exe.root_module.addImport(item.name, item.module);
+        }
+    }
+    test_exe.root_module.addImport("luajit", dep.module);
+    test_exe.root_module.addOptions("config", opts.options);
+    test_exe.linkLibrary(dep.lib);
+
+    const run_step = b.addRunArtifact(test_exe);
+    run_step.has_side_effects = true;
+    test_step.dependOn(&run_step.step);
 }
 
 fn isWasm(target: std.Build.ResolvedTarget) bool {

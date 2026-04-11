@@ -168,14 +168,11 @@ export fn parse_markdown(lua: ?*LuaState) callconv(.c) c_int {
     };
     const alloc = std.heap.page_allocator;
 
-    const opts = zd.parser.ParserOpts{ .copy_input = false, .verbose = false };
-    var parser = zd.Parser.init(alloc, opts);
-    defer parser.deinit();
-
-    parser.parseMarkdown(input) catch {
+    var parser = initMarkdownParser(alloc, input) catch {
         pushLuaString(state, "parse_markdown failed to parse markdown");
         return c.lua_error(state);
     };
+    defer parser.deinit();
 
     c.lua_createtable(state, 0, 1);
     if (parser.document.container().content.Document.frontmatter) |matter| {
@@ -297,6 +294,15 @@ fn getLuaStringArg(lua: *LuaState, index: c_int) ?[]const u8 {
     var len: usize = 0;
     const value: [*c]const u8 = c.lua_tolstring(lua, index, &len);
     return value[0..len];
+}
+
+fn initMarkdownParser(alloc: std.mem.Allocator, input: []const u8) !zd.Parser {
+    const opts = zd.parser.ParserOpts{ .copy_input = false, .verbose = false };
+    var parser = zd.Parser.init(alloc, opts);
+    errdefer parser.deinit();
+
+    try parser.parseMarkdown(input);
+    return parser;
 }
 
 test "parse_markdown exposes null frontmatter values as lua string null" {
