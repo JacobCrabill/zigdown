@@ -765,7 +765,7 @@ fn emitField(state: *EmitState, indent: usize, field: *const Field) EmitError!vo
 }
 
 fn emitFieldValue(state: *EmitState, indent: usize, field: *const Field) EmitError!void {
-    if (isScalarNode(&field.value) and nodeLeadingComments(&field.value).len == 0) {
+    if (canInlineScalarFieldValue(&field.value)) {
         try state.writer.writeAll(": ");
         try emitScalarValue(state.writer, &field.value);
         try state.writeTrailingComment(field.trailing_comment);
@@ -815,6 +815,10 @@ fn canInlineArrayMapItem(item: *const ArrayItem, map: Map) bool {
     return map.fields[0].leading_comments.len == 0;
 }
 
+fn canInlineScalarFieldValue(node: *const Node) bool {
+    return isScalarNode(node) and nodeLeadingComments(node).len == 0 and nodeTrailingComment(node) == null;
+}
+
 fn isScalarNode(node: *const Node) bool {
     return switch (node.*) {
         .null, .bool, .int, .float, .string => true,
@@ -851,9 +855,18 @@ fn emitScalarValue(writer: *Writer, node: *const Node) EmitError!void {
         .null => try writer.writeAll("null"),
         .bool => |value| try writer.writeAll(if (value.value) "true" else "false"),
         .int => |value| try writer.print("{d}", .{value.value}),
-        .float => |value| try writer.print("{d}", .{value.value}),
+        .float => |value| try emitFloatValue(writer, value.value),
         .string => |value| try emitScalarText(writer, value.style, value.value),
         .array, .map => unreachable,
+    }
+}
+
+fn emitFloatValue(writer: *Writer, value: f64) EmitError!void {
+    var buffer: [128]u8 = undefined;
+    const text = std.fmt.bufPrint(&buffer, "{d}", .{value}) catch unreachable;
+    try writer.writeAll(text);
+    if (std.mem.indexOfAny(u8, text, ".eE") == null) {
+        try writer.writeAll(".0");
     }
 }
 
@@ -1837,6 +1850,42 @@ test "emitYamlDocumentAlloc preserves comments on nested scalar child values" {
         "flag:\n  # lead\n  true # inline\nauthors:\n  - name:\n      # nested lead\n      Alice # nested inline",
         text,
     );
+}
+
+test "emitYamlDocumentAlloc preserves field and nested scalar trailing comments" {
+    const alloc = std.testing.allocator;
+
+    var doc = try parseYamlDocument(alloc,
+        \\flag: # field note
+        \\  true # scalar note
+        \\people:
+        \\  - name:
+        \\      Alice # name note
+    );
+    defer doc.deinit(alloc);
+
+    const text = try emitYamlDocumentAlloc(alloc, &doc);
+    defer alloc.free(text);
+
+    try std.testing.expectEqualStrings(
+        "flag: # field note\n  true # scalar note\npeople:\n  - name:\n      Alice # name note",
+        text,
+    );
+}
+
+test "emitYamlDocumentAlloc keeps floats parse stable" {
+    const alloc = std.testing.allocator;
+
+    var doc = try parseYamlDocument(alloc,
+        \\ratio: 0.0
+        \\negative: -2.0
+    );
+    defer doc.deinit(alloc);
+
+    const text = try emitYamlDocumentAlloc(alloc, &doc);
+    defer alloc.free(text);
+
+    try std.testing.expectEqualStrings("ratio: 0.0\nnegative: -2.0", text);
 }
 
 test "parseYamlDocument keeps root plain scalars with colons as scalars" {

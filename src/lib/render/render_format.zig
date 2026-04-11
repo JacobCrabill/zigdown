@@ -1266,6 +1266,40 @@ test "FormatRenderer" {
         .{
             .input =
             \\---
+            \\ratio: 0.0
+            \\---
+            ,
+            .output =
+            \\---
+            \\ratio: 0.0
+            \\---
+            \\
+            ,
+        },
+        .{
+            .input =
+            \\---
+            \\flag: # field note
+            \\  true # scalar note
+            \\people:
+            \\  - name:
+            \\      Alice # name note
+            \\---
+            ,
+            .output =
+            \\---
+            \\flag: # field note
+            \\  true # scalar note
+            \\people:
+            \\  - name:
+            \\      Alice # name note
+            \\---
+            \\
+            ,
+        },
+        .{
+            .input =
+            \\---
             \\nothing: null
             \\published: false
             \\count: 42
