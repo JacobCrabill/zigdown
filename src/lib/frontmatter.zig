@@ -53,8 +53,11 @@ pub fn splitTrailingComment(alloc: Allocator, line: []const u8) !CommentSplit {
     else
         .{ std.mem.trimRight(u8, line, " "), null };
 
+    const content = try alloc.dupe(u8, content_slice);
+    errdefer alloc.free(content);
+
     return .{
-        .content = try alloc.dupe(u8, content_slice),
+        .content = content,
         .comment = if (comment_slice) |comment|
             Comment{ .text = try alloc.dupe(u8, comment) }
         else
@@ -76,10 +79,13 @@ pub fn scanLine(alloc: Allocator, raw_line: []const u8) !LineParts {
     }
 
     if (line[0] == '#') {
+        const content = try alloc.dupe(u8, "");
+        errdefer alloc.free(content);
+
         return .{
             .kind = .comment_only,
             .indent = indent,
-            .content = try alloc.dupe(u8, ""),
+            .content = content,
             .comment = Comment{ .text = try alloc.dupe(u8, std.mem.trim(u8, line[1..], " ")) },
         };
     }
@@ -128,7 +134,9 @@ fn findTrailingCommentStart(line: []const u8) ?usize {
         }
 
         if (char == '#') {
-            return index;
+            if (index == 0 or line[index - 1] == ' ') {
+                return index;
+            }
         }
     }
 
@@ -197,8 +205,55 @@ test "trailing comments split from content correctly" {
         const parts = try splitTrailingComment(alloc, "name: value#tight");
         defer parts.deinit(alloc);
 
+        try std.testing.expectEqualStrings("name: value#tight", parts.content);
+        try std.testing.expect(parts.comment == null);
+    }
+
+    {
+        const parts = try splitTrailingComment(alloc, "name: value #tight");
+        defer parts.deinit(alloc);
+
         try std.testing.expectEqualStrings("name: value", parts.content);
         try std.testing.expect(parts.comment != null);
         try std.testing.expectEqualStrings("tight", parts.comment.?.text);
     }
+}
+
+test "splitTrailingComment only treats hashes after whitespace as comments" {
+    const alloc = std.testing.allocator;
+
+    const parts = try splitTrailingComment(alloc, "url: abc#frag");
+    defer parts.deinit(alloc);
+
+    try std.testing.expectEqualStrings("url: abc#frag", parts.content);
+    try std.testing.expect(parts.comment == null);
+}
+
+test "single-quoted doubled quote keeps hash inside string" {
+    const alloc = std.testing.allocator;
+
+    const parts = try splitTrailingComment(alloc, "title: 'it''s #still text' # note");
+    defer parts.deinit(alloc);
+
+    try std.testing.expectEqualStrings("title: 'it''s #still text'", parts.content);
+    try std.testing.expect(parts.comment != null);
+    try std.testing.expectEqualStrings("note", parts.comment.?.text);
+}
+
+test "splitTrailingComment cleans up allocations on failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, splitTrailingCommentAllocationTest, .{"name: value # note"});
+}
+
+test "scanLine comment-only cleans up allocations on failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, scanLineAllocationTest, .{"  # note"});
+}
+
+fn splitTrailingCommentAllocationTest(alloc: Allocator, line: []const u8) !void {
+    var parts = try splitTrailingComment(alloc, line);
+    defer parts.deinit(alloc);
+}
+
+fn scanLineAllocationTest(alloc: Allocator, line: []const u8) !void {
+    var parts = try scanLine(alloc, line);
+    defer parts.deinit(alloc);
 }
