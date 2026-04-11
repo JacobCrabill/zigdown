@@ -314,7 +314,7 @@ fn decodeDoubleQuotedString(alloc: Allocator, text: []const u8) ![]u8 {
 }
 
 fn isFloatText(text: []const u8) bool {
-    return std.mem.indexOfAny(u8, text, ".eE") != null;
+    return std.mem.indexOfScalar(u8, text, '.') != null;
 }
 
 fn freeComments(alloc: Allocator, comments: []Comment) void {
@@ -561,19 +561,33 @@ test "parseScalarValue decodes quoted strings" {
     }
 }
 
-test "parseScalarValue classifies exponent numbers as floats" {
+test "parseScalarValue only classifies decimal numbers with dots as floats" {
     const alloc = std.testing.allocator;
+
+    {
+        var value = try parseScalarValue(alloc, "1.0");
+        defer value.deinit(alloc);
+        try std.testing.expectEqual(@as(f64, 1.0), value.float);
+    }
+
+    {
+        var value = try parseScalarValue(alloc, "-2.5");
+        defer value.deinit(alloc);
+        try std.testing.expectEqual(@as(f64, -2.5), value.float);
+    }
 
     {
         var value = try parseScalarValue(alloc, "1e3");
         defer value.deinit(alloc);
-        try std.testing.expectEqual(@as(f64, 1e3), value.float);
+        try std.testing.expectEqualStrings("1e3", value.string.value);
+        try std.testing.expectEqual(ScalarStyle.plain, value.string.style);
     }
 
     {
         var value = try parseScalarValue(alloc, "-2E-4");
         defer value.deinit(alloc);
-        try std.testing.expectEqual(@as(f64, -2E-4), value.float);
+        try std.testing.expectEqualStrings("-2E-4", value.string.value);
+        try std.testing.expectEqual(ScalarStyle.plain, value.string.style);
     }
 }
 
