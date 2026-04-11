@@ -161,24 +161,29 @@ export fn format_markdown(lua: ?*LuaState) callconv(.c) c_int {
 /// Returns one Lua value:
 /// - A table with a `frontmatter` field containing parsed metadata or `nil`.
 export fn parse_markdown(lua: ?*LuaState) callconv(.c) c_int {
-    var len: usize = 0;
-    const input_a: [*c]const u8 = c.lua_tolstring(lua, 1, &len);
-    const input: []const u8 = input_a[0..len];
+    const state = lua.?;
+    const input = getLuaStringArg(state, 1) orelse {
+        pushLuaString(state, "parse_markdown expects a markdown string");
+        return c.lua_error(state);
+    };
     const alloc = std.heap.page_allocator;
 
     const opts = zd.parser.ParserOpts{ .copy_input = false, .verbose = false };
     var parser = zd.Parser.init(alloc, opts);
     defer parser.deinit();
 
-    parser.parseMarkdown(input) catch @panic("Parse error!");
+    parser.parseMarkdown(input) catch {
+        pushLuaString(state, "parse_markdown failed to parse markdown");
+        return c.lua_error(state);
+    };
 
-    c.lua_createtable(lua, 0, 1);
+    c.lua_createtable(state, 0, 1);
     if (parser.document.container().content.Document.frontmatter) |matter| {
-        pushFrontmatterNode(lua, &matter.document.root);
+        pushFrontmatterNode(state, &matter.document.root);
     } else {
-        c.lua_pushnil(lua);
+        c.lua_pushnil(state);
     }
-    c.lua_setfield(lua, -2, "frontmatter");
+    c.lua_setfield(state, -2, "frontmatter");
 
     return 1;
 }
@@ -286,6 +291,14 @@ fn pushLuaString(lua: ?*LuaState, value: []const u8) void {
     c.lua_pushlstring(lua, @ptrCast(value.ptr), value.len);
 }
 
+fn getLuaStringArg(lua: *LuaState, index: c_int) ?[]const u8 {
+    if (c.lua_isstring(lua, index) == 0) return null;
+
+    var len: usize = 0;
+    const value: [*c]const u8 = c.lua_tolstring(lua, index, &len);
+    return value[0..len];
+}
+
 test "parse_markdown exposes null frontmatter values as lua string null" {
     const lua = c.luaL_newstate() orelse return error.OutOfMemory;
     defer c.lua_close(lua);
@@ -347,6 +360,13 @@ test "parse_markdown keeps nested frontmatter maps and arrays representable in l
     try std.testing.expectEqual(@as(c_int, 1), c.lua_toboolean(lua, 3));
     try std.testing.expectEqual(c.LUA_TSTRING, c.lua_type(lua, 4));
     try std.testing.expectEqualStrings("reviewer", luaStringAt(lua, 4));
+}
+
+test "getLuaStringArg returns null for missing markdown argument" {
+    const lua = c.luaL_newstate() orelse return error.OutOfMemory;
+    defer c.lua_close(lua);
+
+    try std.testing.expect(getLuaStringArg(lua, 1) == null);
 }
 
 fn expectLuaChunkSuccess(lua: *LuaState, chunk: [:0]const u8) !void {
