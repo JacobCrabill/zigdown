@@ -220,14 +220,14 @@ pub fn parseScalarValue(alloc: Allocator, text: []const u8) !Node {
     }
 
     if (text.len >= 2 and text[0] == '\'' and text[text.len - 1] == '\'') {
-        return .{ .string = try initScalar(alloc, text[1 .. text.len - 1], .single_quoted) };
+        return .{ .string = try initDecodedScalar(alloc, text[1 .. text.len - 1], .single_quoted, decodeSingleQuotedString) };
     }
 
     if (text.len >= 2 and text[0] == '"' and text[text.len - 1] == '"') {
-        return .{ .string = try initScalar(alloc, text[1 .. text.len - 1], .double_quoted) };
+        return .{ .string = try initDecodedScalar(alloc, text[1 .. text.len - 1], .double_quoted, decodeDoubleQuotedString) };
     }
 
-    if (std.mem.indexOfScalar(u8, text, '.')) |_| {
+    if (isFloatText(text)) {
         if (std.fmt.parseFloat(f64, text)) |value| {
             return .{ .float = value };
         } else |_| {}
@@ -253,6 +253,68 @@ fn initScalar(alloc: Allocator, text: []const u8, style: ScalarStyle) !Scalar {
         .leading_comments = try alloc.alloc(Comment, 0),
         .trailing_comment = null,
     };
+}
+
+fn initDecodedScalar(
+    alloc: Allocator,
+    text: []const u8,
+    style: ScalarStyle,
+    decoder: fn (Allocator, []const u8) anyerror![]u8,
+) !Scalar {
+    return .{
+        .value = try decoder(alloc, text),
+        .style = style,
+        .leading_comments = try alloc.alloc(Comment, 0),
+        .trailing_comment = null,
+    };
+}
+
+fn decodeSingleQuotedString(alloc: Allocator, text: []const u8) ![]u8 {
+    var out = std.ArrayList(u8).empty;
+    defer out.deinit(alloc);
+
+    var index: usize = 0;
+    while (index < text.len) : (index += 1) {
+        if (text[index] == '\'' and index + 1 < text.len and text[index + 1] == '\'') {
+            try out.append(alloc, '\'');
+            index += 1;
+            continue;
+        }
+
+        try out.append(alloc, text[index]);
+    }
+
+    return out.toOwnedSlice(alloc);
+}
+
+fn decodeDoubleQuotedString(alloc: Allocator, text: []const u8) ![]u8 {
+    var out = std.ArrayList(u8).empty;
+    defer out.deinit(alloc);
+
+    var index: usize = 0;
+    while (index < text.len) : (index += 1) {
+        if (text[index] != '\\' or index + 1 >= text.len) {
+            try out.append(alloc, text[index]);
+            continue;
+        }
+
+        index += 1;
+        const escaped = switch (text[index]) {
+            'n' => '\n',
+            'r' => '\r',
+            't' => '\t',
+            '\\' => '\\',
+            '"' => '"',
+            else => text[index],
+        };
+        try out.append(alloc, escaped);
+    }
+
+    return out.toOwnedSlice(alloc);
+}
+
+fn isFloatText(text: []const u8) bool {
+    return std.mem.indexOfAny(u8, text, ".eE") != null;
 }
 
 fn freeComments(alloc: Allocator, comments: []Comment) void {
@@ -478,6 +540,40 @@ test "parseScalarValue preserves quoted string style" {
         defer value.deinit(alloc);
         try std.testing.expectEqualStrings("hello", value.string.value);
         try std.testing.expectEqual(ScalarStyle.double_quoted, value.string.style);
+    }
+}
+
+test "parseScalarValue decodes quoted strings" {
+    const alloc = std.testing.allocator;
+
+    {
+        var value = try parseScalarValue(alloc, "'it''s'");
+        defer value.deinit(alloc);
+        try std.testing.expectEqualStrings("it's", value.string.value);
+        try std.testing.expectEqual(ScalarStyle.single_quoted, value.string.style);
+    }
+
+    {
+        var value = try parseScalarValue(alloc, "\"line\\nindent\\tquote\\\"slash\\\\\"");
+        defer value.deinit(alloc);
+        try std.testing.expectEqualStrings("line\nindent\tquote\"slash\\", value.string.value);
+        try std.testing.expectEqual(ScalarStyle.double_quoted, value.string.style);
+    }
+}
+
+test "parseScalarValue classifies exponent numbers as floats" {
+    const alloc = std.testing.allocator;
+
+    {
+        var value = try parseScalarValue(alloc, "1e3");
+        defer value.deinit(alloc);
+        try std.testing.expectEqual(@as(f64, 1e3), value.float);
+    }
+
+    {
+        var value = try parseScalarValue(alloc, "-2E-4");
+        defer value.deinit(alloc);
+        try std.testing.expectEqual(@as(f64, -2E-4), value.float);
     }
 }
 
