@@ -10,6 +10,113 @@ pub const Comment = struct {
     }
 };
 
+pub const ScalarStyle = enum {
+    plain,
+    single_quoted,
+    double_quoted,
+};
+
+pub const Scalar = struct {
+    value: []const u8,
+    style: ScalarStyle = .plain,
+    leading_comments: []Comment,
+    trailing_comment: ?Comment = null,
+
+    pub fn deinit(self: Scalar, alloc: Allocator) void {
+        alloc.free(self.value);
+        freeComments(alloc, self.leading_comments);
+        if (self.trailing_comment) |comment| {
+            comment.deinit(alloc);
+        }
+    }
+};
+
+pub const ArrayItem = struct {
+    value: Node,
+    leading_comments: []Comment,
+    trailing_comment: ?Comment = null,
+
+    pub fn deinit(self: ArrayItem, alloc: Allocator) void {
+        var value = self.value;
+        value.deinit(alloc);
+        freeComments(alloc, self.leading_comments);
+        if (self.trailing_comment) |comment| {
+            comment.deinit(alloc);
+        }
+    }
+};
+
+pub const Array = struct {
+    items: []ArrayItem,
+    leading_comments: []Comment,
+    trailing_comment: ?Comment = null,
+
+    pub fn deinit(self: Array, alloc: Allocator) void {
+        for (self.items) |item| {
+            item.deinit(alloc);
+        }
+        alloc.free(self.items);
+        freeComments(alloc, self.leading_comments);
+        if (self.trailing_comment) |comment| {
+            comment.deinit(alloc);
+        }
+    }
+};
+
+pub const Field = struct {
+    key: []const u8,
+    key_style: ScalarStyle = .plain,
+    value: Node,
+    leading_comments: []Comment,
+    trailing_comment: ?Comment = null,
+
+    pub fn deinit(self: Field, alloc: Allocator) void {
+        alloc.free(self.key);
+        var value = self.value;
+        value.deinit(alloc);
+        freeComments(alloc, self.leading_comments);
+        if (self.trailing_comment) |comment| {
+            comment.deinit(alloc);
+        }
+    }
+};
+
+pub const Map = struct {
+    fields: []Field,
+    leading_comments: []Comment,
+    trailing_comment: ?Comment = null,
+
+    pub fn deinit(self: Map, alloc: Allocator) void {
+        for (self.fields) |field| {
+            field.deinit(alloc);
+        }
+        alloc.free(self.fields);
+        freeComments(alloc, self.leading_comments);
+        if (self.trailing_comment) |comment| {
+            comment.deinit(alloc);
+        }
+    }
+};
+
+pub const Node = union(enum) {
+    null,
+    bool: bool,
+    int: i64,
+    float: f64,
+    string: Scalar,
+    array: Array,
+    map: Map,
+
+    pub fn deinit(self: *Node, alloc: Allocator) void {
+        switch (self.*) {
+            .null, .bool, .int, .float => {},
+            .string => |string| string.deinit(alloc),
+            .array => |array| array.deinit(alloc),
+            .map => |map| map.deinit(alloc),
+        }
+    }
+};
+
 pub const LineKind = enum {
     blank,
     comment_only,
@@ -99,10 +206,60 @@ pub fn scanLine(alloc: Allocator, raw_line: []const u8) !LineParts {
     };
 }
 
+pub fn parseScalarValue(alloc: Allocator, text: []const u8) !Node {
+    if (std.mem.eql(u8, text, "null")) {
+        return .null;
+    }
+
+    if (std.mem.eql(u8, text, "true")) {
+        return .{ .bool = true };
+    }
+
+    if (std.mem.eql(u8, text, "false")) {
+        return .{ .bool = false };
+    }
+
+    if (text.len >= 2 and text[0] == '\'' and text[text.len - 1] == '\'') {
+        return .{ .string = try initScalar(alloc, text[1 .. text.len - 1], .single_quoted) };
+    }
+
+    if (text.len >= 2 and text[0] == '"' and text[text.len - 1] == '"') {
+        return .{ .string = try initScalar(alloc, text[1 .. text.len - 1], .double_quoted) };
+    }
+
+    if (std.mem.indexOfScalar(u8, text, '.')) |_| {
+        if (std.fmt.parseFloat(f64, text)) |value| {
+            return .{ .float = value };
+        } else |_| {}
+    }
+
+    if (std.fmt.parseInt(i64, text, 10)) |value| {
+        return .{ .int = value };
+    } else |_| {}
+
+    return .{ .string = try initScalar(alloc, text, .plain) };
+}
+
 fn countIndent(line: []const u8) usize {
     var indent: usize = 0;
     while (indent < line.len and line[indent] == ' ') : (indent += 1) {}
     return indent;
+}
+
+fn initScalar(alloc: Allocator, text: []const u8, style: ScalarStyle) !Scalar {
+    return .{
+        .value = try alloc.dupe(u8, text),
+        .style = style,
+        .leading_comments = try alloc.alloc(Comment, 0),
+        .trailing_comment = null,
+    };
+}
+
+fn freeComments(alloc: Allocator, comments: []Comment) void {
+    for (comments) |comment| {
+        comment.deinit(alloc);
+    }
+    alloc.free(comments);
 }
 
 fn trimLine(line: []const u8) []const u8 {
@@ -267,6 +424,61 @@ test "single-quoted backslash does not escape closing quote" {
     try std.testing.expectEqualStrings("title: 'text\\'", parts.content);
     try std.testing.expect(parts.comment != null);
     try std.testing.expectEqualStrings("note", parts.comment.?.text);
+}
+
+test "parseScalarValue handles null bool int float and plain string" {
+    const alloc = std.testing.allocator;
+
+    {
+        var value = try parseScalarValue(alloc, "null");
+        defer value.deinit(alloc);
+        try std.testing.expectEqual(Node.null, value);
+    }
+
+    {
+        var value = try parseScalarValue(alloc, "true");
+        defer value.deinit(alloc);
+        try std.testing.expectEqual(@as(bool, true), value.bool);
+    }
+
+    {
+        var value = try parseScalarValue(alloc, "-42");
+        defer value.deinit(alloc);
+        try std.testing.expectEqual(@as(i64, -42), value.int);
+    }
+
+    {
+        var value = try parseScalarValue(alloc, "3.14");
+        defer value.deinit(alloc);
+        try std.testing.expectEqual(@as(f64, 3.14), value.float);
+    }
+
+    {
+        var value = try parseScalarValue(alloc, "hello world");
+        defer value.deinit(alloc);
+        try std.testing.expectEqualStrings("hello world", value.string.value);
+        try std.testing.expectEqual(ScalarStyle.plain, value.string.style);
+        try std.testing.expectEqual(@as(usize, 0), value.string.leading_comments.len);
+        try std.testing.expect(value.string.trailing_comment == null);
+    }
+}
+
+test "parseScalarValue preserves quoted string style" {
+    const alloc = std.testing.allocator;
+
+    {
+        var value = try parseScalarValue(alloc, "'hello'");
+        defer value.deinit(alloc);
+        try std.testing.expectEqualStrings("hello", value.string.value);
+        try std.testing.expectEqual(ScalarStyle.single_quoted, value.string.style);
+    }
+
+    {
+        var value = try parseScalarValue(alloc, "\"hello\"");
+        defer value.deinit(alloc);
+        try std.testing.expectEqualStrings("hello", value.string.value);
+        try std.testing.expectEqual(ScalarStyle.double_quoted, value.string.style);
+    }
 }
 
 test "splitTrailingComment cleans up allocations on failure" {

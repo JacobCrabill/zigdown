@@ -12,6 +12,7 @@ pub const assets = @import("assets");
 pub const cli = @import("cli.zig");
 pub const cons = @import("console.zig");
 pub const debug = @import("debug.zig");
+pub const frontmatter = @import("frontmatter.zig");
 pub const lexer = @import("lexer.zig");
 pub const parser = @import("parser.zig");
 pub const render = @import("render.zig");
