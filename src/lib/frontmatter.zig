@@ -1282,6 +1282,10 @@ test "scanLine comment-only cleans up allocations on failure" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, scanLineAllocationTest, .{"  # note"});
 }
 
+test "parseEmptyYamlDocument cleans up allocations on failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, parseEmptyYamlDocumentAllocationTest, .{"# note"});
+}
+
 fn splitTrailingCommentAllocationTest(alloc: Allocator, line: []const u8) !void {
     var parts = try splitTrailingComment(alloc, line);
     defer parts.deinit(alloc);
@@ -1321,6 +1325,11 @@ fn parseFrontmatterDocument(alloc: Allocator, input: []const u8) !YamlDocument {
 fn parseEmptyYamlDocument(alloc: Allocator, input: []const u8) !YamlDocument {
     var comments = std.ArrayList(Comment).empty;
     defer comments.deinit(alloc);
+    errdefer {
+        for (comments.items) |comment| {
+            comment.deinit(alloc);
+        }
+    }
 
     var iterator = std.mem.splitScalar(u8, input, '\n');
     while (iterator.next()) |segment| {
@@ -1331,21 +1340,37 @@ fn parseEmptyYamlDocument(alloc: Allocator, input: []const u8) !YamlDocument {
             .blank => {},
             .comment_only => if (line.comment) |comment| {
                 line.comment = null;
+                errdefer comment.deinit(alloc);
                 try comments.append(alloc, comment);
             },
             .content => return ParseError.InvalidYaml,
         }
     }
 
+    const leading_comments = try comments.toOwnedSlice(alloc);
+    errdefer freeComments(alloc, leading_comments);
+
+    const fields = try alloc.alloc(Field, 0);
+    errdefer alloc.free(fields);
+
+    const root_leading_comments = try alloc.alloc(Comment, 0);
+    errdefer alloc.free(root_leading_comments);
+
+    const trailing_comments = try alloc.alloc(Comment, 0);
+    errdefer alloc.free(trailing_comments);
+
+    const raw = try alloc.dupe(u8, input);
+    errdefer alloc.free(raw);
+
     return .{
-        .leading_comments = try comments.toOwnedSlice(alloc),
+        .leading_comments = leading_comments,
         .root = .{ .map = .{
-            .fields = try alloc.alloc(Field, 0),
-            .leading_comments = try alloc.alloc(Comment, 0),
+            .fields = fields,
+            .leading_comments = root_leading_comments,
             .trailing_comment = null,
         } },
-        .trailing_comments = try alloc.alloc(Comment, 0),
-        .raw = try alloc.dupe(u8, input),
+        .trailing_comments = trailing_comments,
+        .raw = raw,
     };
 }
 
@@ -1402,6 +1427,11 @@ fn trimDocumentEndings(input: []const u8) []const u8 {
 fn scanLineAllocationTest(alloc: Allocator, line: []const u8) !void {
     var parts = try scanLine(alloc, line);
     defer parts.deinit(alloc);
+}
+
+fn parseEmptyYamlDocumentAllocationTest(alloc: Allocator, input: []const u8) !void {
+    var doc = try parseEmptyYamlDocument(alloc, input);
+    defer doc.deinit(alloc);
 }
 
 test "parseYamlDocument builds nested map and array tree" {
