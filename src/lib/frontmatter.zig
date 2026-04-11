@@ -47,11 +47,11 @@ pub fn splitTrailingComment(alloc: Allocator, line: []const u8) !CommentSplit {
 
     const content_slice, const comment_slice = if (hash_index) |index|
         .{
-            std.mem.trimRight(u8, line[0..index], " "),
-            std.mem.trim(u8, line[index + 1 ..], " "),
+            trimLineRight(line[0..index]),
+            trimLine(line[index + 1 ..]),
         }
     else
-        .{ std.mem.trimRight(u8, line, " "), null };
+        .{ trimLineRight(line), null };
 
     const content = try alloc.dupe(u8, content_slice);
     errdefer alloc.free(content);
@@ -67,9 +67,9 @@ pub fn splitTrailingComment(alloc: Allocator, line: []const u8) !CommentSplit {
 
 pub fn scanLine(alloc: Allocator, raw_line: []const u8) !LineParts {
     const indent = countIndent(raw_line);
-    const line = raw_line[indent..];
+    const line = trimLineRight(raw_line[indent..]);
 
-    if (line.len == 0 or std.mem.trim(u8, line, " ").len == 0) {
+    if (line.len == 0 or trimLine(line).len == 0) {
         return .{
             .kind = .blank,
             .indent = indent,
@@ -86,7 +86,7 @@ pub fn scanLine(alloc: Allocator, raw_line: []const u8) !LineParts {
             .kind = .comment_only,
             .indent = indent,
             .content = content,
-            .comment = Comment{ .text = try alloc.dupe(u8, std.mem.trim(u8, line[1..], " ")) },
+            .comment = Comment{ .text = try alloc.dupe(u8, trimLine(line[1..])) },
         };
     }
 
@@ -105,6 +105,14 @@ fn countIndent(line: []const u8) usize {
     return indent;
 }
 
+fn trimLine(line: []const u8) []const u8 {
+    return std.mem.trim(u8, line, " \r\n");
+}
+
+fn trimLineRight(line: []const u8) []const u8 {
+    return std.mem.trimRight(u8, line, " \r\n");
+}
+
 fn findTrailingCommentStart(line: []const u8) ?usize {
     var quote: ?u8 = null;
     var escaped = false;
@@ -116,7 +124,7 @@ fn findTrailingCommentStart(line: []const u8) ?usize {
                 continue;
             }
 
-            if (char == '\\') {
+            if (active_quote == '"' and char == '\\') {
                 escaped = true;
                 continue;
             }
@@ -155,7 +163,17 @@ test "scanLine classifies blank, comment-only, and content lines" {
     }
 
     {
-        const parts = try scanLine(alloc, "  # note here ");
+        const parts = try scanLine(alloc, "  \r");
+        defer parts.deinit(alloc);
+
+        try std.testing.expectEqual(LineKind.blank, parts.kind);
+        try std.testing.expectEqual(@as(usize, 2), parts.indent);
+        try std.testing.expectEqualStrings("", parts.content);
+        try std.testing.expect(parts.comment == null);
+    }
+
+    {
+        const parts = try scanLine(alloc, "  # note here \r");
         defer parts.deinit(alloc);
 
         try std.testing.expectEqual(LineKind.comment_only, parts.kind);
@@ -191,7 +209,7 @@ test "trailing comments split from content correctly" {
     const alloc = std.testing.allocator;
 
     {
-        const parts = try splitTrailingComment(alloc, "name: value   # trailing note  ");
+        const parts = try splitTrailingComment(alloc, "name: value   # trailing note  \r");
         defer parts.deinit(alloc);
 
         try std.testing.expectEqualStrings("name: value", parts.content);
@@ -236,6 +254,17 @@ test "single-quoted doubled quote keeps hash inside string" {
     defer parts.deinit(alloc);
 
     try std.testing.expectEqualStrings("title: 'it''s #still text'", parts.content);
+    try std.testing.expect(parts.comment != null);
+    try std.testing.expectEqualStrings("note", parts.comment.?.text);
+}
+
+test "single-quoted backslash does not escape closing quote" {
+    const alloc = std.testing.allocator;
+
+    const parts = try splitTrailingComment(alloc, "title: 'text\\' # note");
+    defer parts.deinit(alloc);
+
+    try std.testing.expectEqualStrings("title: 'text\\'", parts.content);
     try std.testing.expect(parts.comment != null);
     try std.testing.expectEqualStrings("note", parts.comment.?.text);
 }
