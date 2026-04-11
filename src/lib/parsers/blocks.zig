@@ -17,6 +17,7 @@ const inls = @import("../ast/inlines.zig");
 const leaves = @import("../ast/leaves.zig");
 const containers = @import("../ast/containers.zig");
 const blocks = @import("../ast/blocks.zig");
+const frontmatter = @import("../frontmatter.zig");
 const inline_parser = @import("inlines.zig");
 
 /// Parser utilities
@@ -206,6 +207,7 @@ pub const Parser = struct {
     lexer: Lexer,
     logger: Logger,
     text: ?[]const u8,
+    owns_text: bool,
     tokens: ArrayList(Token),
     cursor: usize = 0,
     cur_token: Token,
@@ -221,6 +223,7 @@ pub const Parser = struct {
             .tokens = ArrayList(Token).init(alloc),
             .logger = Logger{ .enabled = opts.verbose },
             .text = null,
+            .owns_text = false,
             .cursor = 0,
             .cur_token = undefined,
             .next_token = undefined,
@@ -232,10 +235,11 @@ pub const Parser = struct {
     /// Reset the Parser to the default state
     pub fn reset(self: *Self) void {
         if (self.text) |stext| {
-            if (self.opts.copy_input) {
+            if (self.owns_text) {
                 self.alloc.free(stext);
-                self.text = null;
             }
+            self.text = null;
+            self.owns_text = false;
         }
         self.tokens.clearRetainingCapacity();
         self.document.deinit();
@@ -253,13 +257,22 @@ pub const Parser = struct {
     pub fn parseMarkdown(self: *Self, text: []const u8) !void {
         self.reset();
 
-        // Allocate copy of the input text if requested
-        // Useful if the parsed document should outlast the input text buffer
-        if (self.opts.copy_input) {
-            self.text = try self.alloc.dupe(u8, text);
+        var split = try frontmatter.splitFrontmatter(self.alloc, text);
+
+        if (split.frontmatter) |matter| {
+            self.document.container().content.Document.frontmatter = matter;
+            split.frontmatter = null;
+            self.text = split.body;
+            self.owns_text = true;
+        } else if (self.opts.copy_input) {
+            self.text = split.body;
+            self.owns_text = true;
         } else {
+            self.alloc.free(split.body);
             self.text = text;
+            self.owns_text = false;
         }
+
         try self.tokenize();
 
         // Parse the document
@@ -1208,4 +1221,65 @@ test "paragraph with matched tildes has strikethrough inlines" {
     }
     try std.testing.expect(found_struck);
     try std.testing.expect(found_plain);
+}
+
+test "parseMarkdown stores parsed frontmatter on document root" {
+    const alloc = std.testing.allocator;
+    const input =
+        \\---
+        \\title: Example
+        \\tags:
+        \\  - zig
+        \\---
+        \\Body text
+    ;
+
+    var p = Parser.init(alloc, .{});
+    defer p.deinit();
+    try p.parseMarkdown(input);
+
+    const root = p.document.container();
+    const DocumentType = @TypeOf(root.content.Document);
+    const has_frontmatter = comptime DocumentType != void and @hasField(DocumentType, "frontmatter");
+
+    try std.testing.expect(has_frontmatter);
+    if (has_frontmatter) {
+        try std.testing.expect(root.content.Document.frontmatter != null);
+        try std.testing.expectEqualStrings(
+            "title: Example\ntags:\n  - zig",
+            root.content.Document.frontmatter.?.document.raw,
+        );
+    }
+
+    try std.testing.expectEqual(@as(usize, 1), root.children.items.len);
+    try std.testing.expect(root.children.items[0].isLeaf());
+    try std.testing.expect(root.children.items[0].leaf().content == .Paragraph);
+}
+
+test "parseMarkdown falls back to plain markdown on invalid frontmatter yaml" {
+    const alloc = std.testing.allocator;
+    const input =
+        \\---
+        \\true
+        \\false
+        \\---
+        \\Body text
+    ;
+
+    var p = Parser.init(alloc, .{});
+    defer p.deinit();
+    try p.parseMarkdown(input);
+
+    const root = p.document.container();
+    const DocumentType = @TypeOf(root.content.Document);
+    const has_frontmatter = comptime DocumentType != void and @hasField(DocumentType, "frontmatter");
+
+    try std.testing.expect(has_frontmatter);
+    if (has_frontmatter) {
+        try std.testing.expect(root.content.Document.frontmatter == null);
+    }
+
+    try std.testing.expect(root.children.items.len >= 1);
+    try std.testing.expect(root.children.items[0].isLeaf());
+    try std.testing.expect(root.children.items[0].leaf().content == .Paragraph);
 }

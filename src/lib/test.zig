@@ -1,4 +1,5 @@
 test {
+    _ = @import("frontmatter.zig");
     _ = @import("lexer.zig");
     _ = @import("parser.zig");
     _ = @import("ast/blocks.zig");

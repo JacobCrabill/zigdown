@@ -1,6 +1,7 @@
 /// containers.zig
 /// Container Block type implementations
 const std = @import("std");
+const frontmatter = @import("../frontmatter.zig");
 
 /// Containers are Blocks which contain other Blocks
 pub const ContainerType = enum(u8) {
@@ -12,11 +13,21 @@ pub const ContainerType = enum(u8) {
 };
 
 pub const ContainerData = union(ContainerType) {
-    Document: void,
+    Document: Document,
     Quote: void,
     List: List,
     ListItem: ListItem,
     Table: Table,
+};
+
+pub const Document = struct {
+    frontmatter: ?frontmatter.Frontmatter = null,
+
+    pub fn deinit(self: *Document, alloc: std.mem.Allocator) void {
+        if (self.frontmatter) |*matter| {
+            matter.deinit(alloc);
+        }
+    }
 };
 
 /// List blocks contain only ListItems

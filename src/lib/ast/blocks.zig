@@ -145,7 +145,7 @@ pub const Container = struct {
         };
 
         block.content = switch (kind) {
-            .Document => ContainerData{ .Document = {} },
+            .Document => ContainerData{ .Document = containers.Document{} },
             .Quote => ContainerData{ .Quote = {} },
             .List => ContainerData{ .List = containers.List{} },
             .ListItem => ContainerData{ .ListItem = containers.ListItem{} },
@@ -162,6 +162,7 @@ pub const Container = struct {
         self.children.deinit();
 
         switch (self.content) {
+            .Document => |*d| d.deinit(self.alloc),
             .Table => |*t| {
                 t.relative_width.deinit(t.gpa);
                 t.alignment.deinit(t.gpa);
