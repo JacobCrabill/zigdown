@@ -185,6 +185,26 @@ pub const YamlDocument = struct {
     }
 };
 
+pub const Frontmatter = struct {
+    document: YamlDocument,
+
+    pub fn deinit(self: *Frontmatter, alloc: Allocator) void {
+        self.document.deinit(alloc);
+    }
+};
+
+pub const SplitResult = struct {
+    frontmatter: ?Frontmatter,
+    body: []const u8,
+
+    pub fn deinit(self: *SplitResult, alloc: Allocator) void {
+        if (self.frontmatter) |*frontmatter| {
+            frontmatter.deinit(alloc);
+        }
+        alloc.free(self.body);
+    }
+};
+
 pub const LineKind = enum {
     blank,
     comment_only,
@@ -660,6 +680,20 @@ pub fn parseYamlDocument(alloc: Allocator, input: []const u8) !YamlDocument {
 
     var parser = Parser{ .alloc = alloc, .lines = lines.items };
     return parser.parseDocument(raw);
+}
+
+pub fn splitFrontmatter(alloc: Allocator, input: []const u8) !SplitResult {
+    const yaml_start = findFrontmatterStart(input) orelse return splitFallback(alloc, input);
+    const split = findFrontmatterEnd(input, yaml_start) orelse return splitFallback(alloc, input);
+
+    const yaml_input = trimDocumentEndings(input[yaml_start..split.yaml_end]);
+    var document = parseYamlDocument(alloc, yaml_input) catch return splitFallback(alloc, input);
+    errdefer document.deinit(alloc);
+
+    return .{
+        .frontmatter = .{ .document = document },
+        .body = try alloc.dupe(u8, input[split.body_start..]),
+    };
 }
 
 pub fn splitTrailingComment(alloc: Allocator, line: []const u8) !CommentSplit {
@@ -1248,6 +1282,68 @@ fn splitTrailingCommentAllocationTest(alloc: Allocator, line: []const u8) !void 
     defer parts.deinit(alloc);
 }
 
+const FrontmatterBounds = struct {
+    yaml_end: usize,
+    body_start: usize,
+};
+
+fn splitFallback(alloc: Allocator, input: []const u8) !SplitResult {
+    return .{
+        .frontmatter = null,
+        .body = try alloc.dupe(u8, input),
+    };
+}
+
+fn findFrontmatterStart(input: []const u8) ?usize {
+    var cursor: usize = 0;
+
+    while (cursor <= input.len) {
+        const line_end = std.mem.indexOfScalarPos(u8, input, cursor, '\n') orelse input.len;
+        const line = trimLineRight(input[cursor..line_end]);
+
+        if (trimLine(line).len == 0) {
+            if (line_end == input.len) return null;
+            cursor = line_end + 1;
+            continue;
+        }
+
+        if (countIndent(line) == 0 and std.mem.eql(u8, trimLine(line), "---")) {
+            return if (line_end < input.len) line_end + 1 else line_end;
+        }
+
+        return null;
+    }
+
+    return null;
+}
+
+fn findFrontmatterEnd(input: []const u8, start: usize) ?FrontmatterBounds {
+    var cursor = start;
+
+    while (cursor <= input.len) {
+        const line_end = std.mem.indexOfScalarPos(u8, input, cursor, '\n') orelse input.len;
+        const line = trimLineRight(input[cursor..line_end]);
+
+        if (countIndent(line) == 0 and std.mem.eql(u8, trimLine(line), "---")) {
+            return .{
+                .yaml_end = cursor,
+                .body_start = if (line_end < input.len) line_end + 1 else line_end,
+            };
+        }
+
+        if (line_end == input.len) return null;
+        cursor = line_end + 1;
+    }
+
+    return null;
+}
+
+fn trimDocumentEndings(input: []const u8) []const u8 {
+    var end = input.len;
+    while (end > 0 and (input[end - 1] == '\n' or input[end - 1] == '\r')) : (end -= 1) {}
+    return input[0..end];
+}
+
 fn scanLineAllocationTest(alloc: Allocator, line: []const u8) !void {
     var parts = try scanLine(alloc, line);
     defer parts.deinit(alloc);
@@ -1471,4 +1567,64 @@ test "parseYamlDocument keeps array plain scalars with colons as scalars" {
     try std.testing.expectEqualStrings("url inline", items.items[0].trailing_comment.?.text);
     try std.testing.expectEqualStrings("12:30", items.items[1].value.string.value);
     try std.testing.expectEqualStrings("host:port", items.items[2].value.string.value);
+}
+
+test "frontmatter splitter extracts yaml block after leading blank lines" {
+    const alloc = std.testing.allocator;
+
+    var split = try splitFrontmatter(
+        alloc,
+        "\n\n---\n" ++
+            "title: Example\n" ++
+            "tags:\n" ++
+            "  - zig\n" ++
+            "---\n" ++
+            "# Heading\n" ++
+            "Body text.",
+    );
+    defer split.deinit(alloc);
+
+    try std.testing.expect(split.frontmatter != null);
+    try std.testing.expectEqualStrings("# Heading\nBody text.", split.body);
+
+    const frontmatter = split.frontmatter.?;
+    try std.testing.expectEqualStrings("title: Example\ntags:\n  - zig", frontmatter.document.raw);
+
+    const root = frontmatter.document.root.map;
+    try std.testing.expectEqual(@as(usize, 2), root.fields.len);
+    try std.testing.expectEqualStrings("Example", root.fields[0].value.string.value);
+    try std.testing.expectEqualStrings("zig", root.fields[1].value.array.items[0].value.string.value);
+}
+
+test "frontmatter splitter falls back when closing delimiter is missing" {
+    const alloc = std.testing.allocator;
+
+    const input =
+        "\n---\n" ++
+        "title: Example\n" ++
+        "# Heading\n" ++
+        "Body text.";
+
+    var split = try splitFrontmatter(alloc, input);
+    defer split.deinit(alloc);
+
+    try std.testing.expect(split.frontmatter == null);
+    try std.testing.expectEqualStrings(input, split.body);
+}
+
+test "frontmatter splitter ignores delimiter later in document body" {
+    const alloc = std.testing.allocator;
+
+    const input =
+        "# Heading\n\n" ++
+        "---\n" ++
+        "title: Example\n" ++
+        "---\n" ++
+        "Body text.";
+
+    var split = try splitFrontmatter(alloc, input);
+    defer split.deinit(alloc);
+
+    try std.testing.expect(split.frontmatter == null);
+    try std.testing.expectEqualStrings(input, split.body);
 }
