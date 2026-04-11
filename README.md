@@ -181,17 +181,17 @@ from the default tree-sitter project on Github:
 #!/usr/bin/env bash
 
 # Ensure the TS_CONFIG_DIR is available
-export TS_CONFIG_DIR=$HOME/.config/tree-sitter/
+export TS_CONFIG_DIR=${HOME}/.config/tree-sitter/
 mkdir -p ${TS_CONFIG_DIR}/parsers
 cd ${TS_CONFIG_DIR}/parsers
 
 # Clone and build a TreeSitter parser library
 git clone https://github.com/tree-sitter/tree-sitter-cpp
 cd tree-sitter-cpp
-make install PREFIX=$HOME/.local/
+make install PREFIX=${HOME}/.local/
 
-# Add the install directory to LD_LIBRARY_PATH (if not done so already)
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.local/lib/
+# Add the library install directory to LD_LIBRARY_PATH (if not done so already)
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${HOME}/.local/lib/
 ```
 
 In addition to having the parser libraries available for `dlopen`, you will also need the highlight
