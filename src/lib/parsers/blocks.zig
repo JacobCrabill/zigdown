@@ -208,6 +208,7 @@ pub const Parser = struct {
     logger: Logger,
     text: ?[]const u8,
     owns_text: bool,
+    source_row_offset: usize,
     tokens: ArrayList(Token),
     cursor: usize = 0,
     cur_token: Token,
@@ -224,6 +225,7 @@ pub const Parser = struct {
             .logger = Logger{ .enabled = opts.verbose },
             .text = null,
             .owns_text = false,
+            .source_row_offset = 0,
             .cursor = 0,
             .cur_token = undefined,
             .next_token = undefined,
@@ -241,6 +243,7 @@ pub const Parser = struct {
             self.text = null;
             self.owns_text = false;
         }
+        self.source_row_offset = 0;
         self.tokens.clearRetainingCapacity();
         self.document.deinit();
         self.document = Block.initContainer(self.alloc, .Document, 0);
@@ -264,6 +267,8 @@ pub const Parser = struct {
             split.frontmatter = null;
             self.text = split.body;
             self.owns_text = true;
+            const body_start = text.len - split.body.len;
+            self.source_row_offset = std.mem.count(u8, text[0..body_start], "\n");
         } else if (self.opts.copy_input) {
             self.text = split.body;
             self.owns_text = true;
@@ -307,6 +312,7 @@ pub const Parser = struct {
     fn tokenize(self: *Self) !void {
         self.tokens.clearRetainingCapacity();
 
+        self.lexer.src = .{ .row = self.source_row_offset };
         self.tokens = try self.lexer.tokenize(self.alloc, self.text.?);
 
         // Initialize current and next tokens
@@ -1254,6 +1260,32 @@ test "parseMarkdown stores parsed frontmatter on document root" {
     try std.testing.expectEqual(@as(usize, 1), root.children.items.len);
     try std.testing.expect(root.children.items[0].isLeaf());
     try std.testing.expect(root.children.items[0].leaf().content == .Paragraph);
+}
+
+test "parseMarkdown preserves document line numbers when frontmatter is present" {
+    const alloc = std.testing.allocator;
+    const input =
+        \\---
+        \\title: Example
+        \\---
+        \\# Heading
+        \\Body text
+    ;
+
+    var p = Parser.init(alloc, .{});
+    defer p.deinit();
+    try p.parseMarkdown(input);
+
+    const root = p.document.container();
+    try std.testing.expectEqual(@as(usize, 2), root.children.items.len);
+
+    const heading = root.children.items[0].leaf();
+    try std.testing.expect(heading.content == .Heading);
+    try std.testing.expectEqual(@as(usize, 3), heading.inlines.items[0].content.text.line);
+
+    const paragraph = root.children.items[1].leaf();
+    try std.testing.expect(paragraph.content == .Paragraph);
+    try std.testing.expectEqual(@as(usize, 4), paragraph.inlines.items[0].content.text.line);
 }
 
 test "parseMarkdown falls back to plain markdown on invalid frontmatter yaml" {
