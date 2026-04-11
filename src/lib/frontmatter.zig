@@ -840,6 +840,10 @@ fn splitFieldParts(content: []const u8) ?FieldParts {
         }
 
         if (char == ':') {
+            if (index + 1 < content.len and !std.ascii.isWhitespace(content[index + 1])) {
+                continue;
+            }
+
             const key = trimLineRight(content[0..index]);
             const value = trimLine(content[index + 1 ..]);
             return .{
@@ -1412,4 +1416,48 @@ test "parseYamlDocument attaches comments to nested scalar child values" {
         },
         else => return error.TestUnexpectedResult,
     }
+}
+
+test "parseYamlDocument keeps root plain scalars with colons as scalars" {
+    const alloc = std.testing.allocator;
+
+    var doc = try parseYamlDocument(alloc,
+        \\value: http://example.com # url inline
+        \\time: 12:30
+        \\socket: host:port
+    );
+    defer doc.deinit(alloc);
+
+    const root = doc.root.map;
+    try std.testing.expectEqual(@as(usize, 3), root.fields.len);
+
+    try std.testing.expectEqualStrings("http://example.com", root.fields[0].value.string.value);
+    try std.testing.expect(root.fields[0].trailing_comment != null);
+    try std.testing.expectEqualStrings("url inline", root.fields[0].trailing_comment.?.text);
+    try std.testing.expectEqualStrings("12:30", root.fields[1].value.string.value);
+    try std.testing.expectEqualStrings("host:port", root.fields[2].value.string.value);
+}
+
+test "parseYamlDocument keeps array plain scalars with colons as scalars" {
+    const alloc = std.testing.allocator;
+
+    var doc = try parseYamlDocument(alloc,
+        \\items:
+        \\  # url lead
+        \\  - http://example.com # url inline
+        \\  - 12:30
+        \\  - host:port
+    );
+    defer doc.deinit(alloc);
+
+    const items = doc.root.map.fields[0].value.array;
+    try std.testing.expectEqual(@as(usize, 3), items.items.len);
+
+    try std.testing.expectEqual(@as(usize, 1), items.items[0].leading_comments.len);
+    try std.testing.expectEqualStrings("url lead", items.items[0].leading_comments[0].text);
+    try std.testing.expectEqualStrings("http://example.com", items.items[0].value.string.value);
+    try std.testing.expect(items.items[0].trailing_comment != null);
+    try std.testing.expectEqualStrings("url inline", items.items[0].trailing_comment.?.text);
+    try std.testing.expectEqualStrings("12:30", items.items[1].value.string.value);
+    try std.testing.expectEqualStrings("host:port", items.items[2].value.string.value);
 }
