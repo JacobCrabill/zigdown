@@ -1260,7 +1260,7 @@ fn findTrailingCommentStart(line: []const u8) ?usize {
             continue;
         }
 
-        if (char == '#') {
+        if (char == '#' and (index == 0 or std.ascii.isWhitespace(line[index - 1]))) {
             return index;
         }
     }
@@ -1340,9 +1340,8 @@ test "trailing comments split from content correctly" {
         const parts = try splitTrailingComment(alloc, "name: value#tight");
         defer parts.deinit(alloc);
 
-        try std.testing.expectEqualStrings("name: value", parts.content);
-        try std.testing.expect(parts.comment != null);
-        try std.testing.expectEqualStrings("tight", parts.comment.?.text);
+        try std.testing.expectEqualStrings("name: value#tight", parts.content);
+        try std.testing.expect(parts.comment == null);
     }
 
     {
@@ -1355,15 +1354,24 @@ test "trailing comments split from content correctly" {
     }
 }
 
-test "splitTrailingComment treats unquoted hashes as comments" {
+test "splitTrailingComment keeps unseparated hashes in plain scalars" {
     const alloc = std.testing.allocator;
 
-    const parts = try splitTrailingComment(alloc, "url: abc#frag");
-    defer parts.deinit(alloc);
+    {
+        const parts = try splitTrailingComment(alloc, "url: https://example.com/#frag");
+        defer parts.deinit(alloc);
 
-    try std.testing.expectEqualStrings("url: abc", parts.content);
-    try std.testing.expect(parts.comment != null);
-    try std.testing.expectEqualStrings("frag", parts.comment.?.text);
+        try std.testing.expectEqualStrings("url: https://example.com/#frag", parts.content);
+        try std.testing.expect(parts.comment == null);
+    }
+
+    {
+        const parts = try splitTrailingComment(alloc, "name: C#");
+        defer parts.deinit(alloc);
+
+        try std.testing.expectEqualStrings("name: C#", parts.content);
+        try std.testing.expect(parts.comment == null);
+    }
 }
 
 test "single-quoted doubled quote keeps hash inside string" {
@@ -1917,20 +1925,26 @@ test "parseYamlDocument keeps root plain scalars with colons as scalars" {
     const alloc = std.testing.allocator;
 
     var doc = try parseYamlDocument(alloc,
-        \\value: http://example.com # url inline
+        \\value: https://example.com/#frag
+        \\name: C#
+        \\commented: keep # url inline
         \\time: 12:30
         \\socket: host:port
     );
     defer doc.deinit(alloc);
 
     const root = doc.root.map;
-    try std.testing.expectEqual(@as(usize, 3), root.fields.len);
+    try std.testing.expectEqual(@as(usize, 5), root.fields.len);
 
-    try std.testing.expectEqualStrings("http://example.com", root.fields[0].value.string.value);
-    try std.testing.expect(root.fields[0].trailing_comment != null);
-    try std.testing.expectEqualStrings("url inline", root.fields[0].trailing_comment.?.text);
-    try std.testing.expectEqualStrings("12:30", root.fields[1].value.string.value);
-    try std.testing.expectEqualStrings("host:port", root.fields[2].value.string.value);
+    try std.testing.expectEqualStrings("https://example.com/#frag", root.fields[0].value.string.value);
+    try std.testing.expect(root.fields[0].trailing_comment == null);
+    try std.testing.expectEqualStrings("C#", root.fields[1].value.string.value);
+    try std.testing.expect(root.fields[1].trailing_comment == null);
+    try std.testing.expectEqualStrings("keep", root.fields[2].value.string.value);
+    try std.testing.expect(root.fields[2].trailing_comment != null);
+    try std.testing.expectEqualStrings("url inline", root.fields[2].trailing_comment.?.text);
+    try std.testing.expectEqualStrings("12:30", root.fields[3].value.string.value);
+    try std.testing.expectEqualStrings("host:port", root.fields[4].value.string.value);
 }
 
 test "parseYamlDocument keeps array plain scalars with colons as scalars" {
