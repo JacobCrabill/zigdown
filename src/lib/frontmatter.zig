@@ -868,7 +868,7 @@ fn emitScalarValue(writer: *Writer, node: *const Node) EmitError!void {
 }
 
 fn emitFloatValue(writer: *Writer, value: f64) EmitError!void {
-    var buffer: [128]u8 = undefined;
+    var buffer: [std.fmt.float.bufferSize(.decimal, f64)]u8 = undefined;
     const text = std.fmt.bufPrint(&buffer, "{d}", .{value}) catch unreachable;
     try writer.writeAll(text);
     if (std.mem.indexOfAny(u8, text, ".eE") == null) {
@@ -1900,6 +1900,58 @@ test "emitYamlDocumentAlloc keeps floats parse stable" {
     defer alloc.free(text);
 
     try std.testing.expectEqualStrings("ratio: 0.0\nnegative: -2.0", text);
+}
+
+test "emitYamlDocumentAlloc keeps exponent floats parse stable" {
+    const alloc = std.testing.allocator;
+
+    var doc = try parseYamlDocument(alloc,
+        \\scaled: 1.0e5
+        \\negative: -2.5e4
+    );
+    defer doc.deinit(alloc);
+
+    const text = try emitYamlDocumentAlloc(alloc, &doc);
+    defer alloc.free(text);
+
+    var reparsed = try parseYamlDocument(alloc, text);
+    defer reparsed.deinit(alloc);
+
+    const root = reparsed.root.map;
+    try std.testing.expectEqual(@as(usize, 2), root.fields.len);
+
+    switch (root.fields[0].value) {
+        .float => |value| try std.testing.expectEqual(@as(f64, 1.0e5), value.value),
+        else => return error.TestUnexpectedResult,
+    }
+
+    switch (root.fields[1].value) {
+        .float => |value| try std.testing.expectEqual(@as(f64, -2.5e4), value.value),
+        else => return error.TestUnexpectedResult,
+    }
+}
+
+test "emitYamlDocumentAlloc keeps large floats parse stable" {
+    const alloc = std.testing.allocator;
+
+    var doc = try parseYamlDocument(alloc,
+        \\huge: 1.0e200
+    );
+    defer doc.deinit(alloc);
+
+    const text = try emitYamlDocumentAlloc(alloc, &doc);
+    defer alloc.free(text);
+
+    var reparsed = try parseYamlDocument(alloc, text);
+    defer reparsed.deinit(alloc);
+
+    const root = reparsed.root.map;
+    try std.testing.expectEqual(@as(usize, 1), root.fields.len);
+
+    switch (root.fields[0].value) {
+        .float => |value| try std.testing.expectEqual(@as(f64, 1.0e200), value.value),
+        else => return error.TestUnexpectedResult,
+    }
 }
 
 test "emitYamlDocumentAlloc preserves item and scalar trailing comments on scalar array items" {
