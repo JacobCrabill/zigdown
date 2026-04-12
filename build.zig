@@ -102,7 +102,11 @@ pub fn build(b: *std.Build) !void {
         .no_bin = no_bin,
     };
 
+    const lua_host_supported = isLuaHostSupported(target);
     var lua_test_dep: ?LuaTestDep = null;
+    if (lua_host_supported) {
+        lua_test_dep = resolveLuaTestDep(b, target, optimize) orelse return;
+    }
 
     // Compile the main executable
     const exe_config = ExeConfig{
@@ -117,36 +121,16 @@ pub fn build(b: *std.Build) !void {
     addExecutable(b, exe_config, exe_opts);
 
     if (build_lua) {
-        const target_os: std.Target.Os.Tag = target.query.os_tag orelse builtin.os.tag;
-        const target_cpu: std.Target.Cpu.Arch = target.query.cpu_arch orelse builtin.cpu.arch;
-        const target_abi: std.Target.Abi = target.query.abi orelse builtin.abi;
-        if (!(target_cpu == builtin.cpu.arch and target_os == builtin.os.tag)) {
-            std.debug.print("ERROR: ziglua does not support cross-compilation!\n", .{});
+        if (!lua_host_supported) {
+            const target_abi: std.Target.Abi = target.query.abi orelse builtin.abi;
+            if (target_abi == .musl) {
+                std.debug.print("ERROR: ziglua does not support MUSL libC!\n", .{});
+            } else {
+                std.debug.print("ERROR: ziglua does not support cross-compilation!\n", .{});
+            }
             return error.UnsupportedOptions;
         }
-        if (target_abi == .musl) {
-            std.debug.print("ERROR: ziglua does not support MUSL libC!\n", .{});
-            return error.UnsupportedOptions;
-        }
-        const ziglua_opt: ?*std.Build.Dependency = b.lazyDependency("ziglua", .{
-            .optimize = optimize,
-            .target = target,
-            .shared = false,
-            .lang = .luajit,
-        });
-        if (ziglua_opt == null) return; // This will then go and fetch the dependency
-
-        // TODO: Zig's build system appears to have a bug where it refuses to fetch needed
-        // lazy dependencies of lazy dependencies.
-        // To fix the ziglua build, we must directly reference and use its luajit lazy dependency
-        // so that ziglua will actually build luajit.
-        _ = b.lazyDependency("luajit", .{
-            .optimize = optimize,
-            .target = target,
-        }) orelse return;
-
-        const ziglua = ziglua_opt.?;
-        const ziglua_dep = Dependency{ .name = "luajit", .module = ziglua.module("zlua") };
+        const dep = lua_test_dep orelse unreachable;
 
         // Compile Zigdown as a Lua module compatible with Neovim / LuaJIT 5.1
         const lua_mod = b.addLibrary(.{
@@ -159,15 +143,12 @@ pub fn build(b: *std.Build) !void {
             .linkage = .dynamic,
         });
         if (exe_opts.dependencies) |deplist| {
-            for (deplist) |dep| {
-                lua_mod.root_module.addImport(dep.name, dep.module);
+            for (deplist) |item| {
+                lua_mod.root_module.addImport(item.name, item.module);
             }
         }
-        lua_mod.root_module.addImport(ziglua_dep.name, ziglua_dep.module);
-
-        const luajit_lib = ziglua.artifact("lua");
-        lua_test_dep = .{ .module = ziglua_dep.module, .lib = luajit_lib };
-        lua_mod.linkLibrary(luajit_lib);
+        lua_mod.root_module.addImport("luajit", dep.module);
+        lua_mod.linkLibrary(dep.lib);
 
         b.installArtifact(lua_mod);
 
@@ -410,6 +391,36 @@ fn addLuaApiTest(b: *std.Build, test_step: *std.Build.Step, opts: BuildOpts, dep
     const run_step = b.addRunArtifact(test_exe);
     run_step.has_side_effects = true;
     test_step.dependOn(&run_step.step);
+}
+
+fn isLuaHostSupported(target: Target) bool {
+    const target_os: std.Target.Os.Tag = target.query.os_tag orelse builtin.os.tag;
+    const target_cpu: std.Target.Cpu.Arch = target.query.cpu_arch orelse builtin.cpu.arch;
+    const target_abi: std.Target.Abi = target.query.abi orelse builtin.abi;
+    return target_cpu == builtin.cpu.arch and target_os == builtin.os.tag and target_abi != .musl;
+}
+
+fn resolveLuaTestDep(b: *std.Build, target: Target, optimize: OptimizeMode) ?LuaTestDep {
+    const ziglua = b.lazyDependency("ziglua", .{
+        .optimize = optimize,
+        .target = target,
+        .shared = false,
+        .lang = .luajit,
+    }) orelse return null;
+
+    // TODO: Zig's build system appears to have a bug where it refuses to fetch needed
+    // lazy dependencies of lazy dependencies.
+    // To fix the ziglua build, we must directly reference and use its luajit lazy dependency
+    // so that ziglua will actually build luajit.
+    _ = b.lazyDependency("luajit", .{
+        .optimize = optimize,
+        .target = target,
+    }) orelse return null;
+
+    return .{
+        .module = ziglua.module("zlua"),
+        .lib = ziglua.artifact("lua"),
+    };
 }
 
 fn isWasm(target: std.Build.ResolvedTarget) bool {
