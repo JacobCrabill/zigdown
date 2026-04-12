@@ -37,6 +37,12 @@ const LuaTestDep = struct {
     lib: *std.Build.Step.Compile,
 };
 
+const LuaDepResolution = union(enum) {
+    available: LuaTestDep,
+    missing_ziglua,
+    missing_luajit,
+};
+
 pub fn build(b: *std.Build) !void {
     const target: Target = b.standardTargetOptions(.{});
     const optimize: OptimizeMode = b.standardOptimizeOption(.{});
@@ -103,9 +109,9 @@ pub fn build(b: *std.Build) !void {
     };
 
     const lua_host_supported = isLuaHostSupported(target);
-    var lua_test_dep: ?LuaTestDep = null;
+    var lua_dep_resolution: ?LuaDepResolution = null;
     if (lua_host_supported) {
-        lua_test_dep = resolveLuaTestDep(b, target, optimize) orelse return;
+        lua_dep_resolution = resolveLuaTestDep(b, target, optimize);
     }
 
     // Compile the main executable
@@ -130,7 +136,11 @@ pub fn build(b: *std.Build) !void {
             }
             return error.UnsupportedOptions;
         }
-        const dep = lua_test_dep orelse unreachable;
+        const dep = switch (lua_dep_resolution orelse unreachable) {
+            .available => |dep| dep,
+            .missing_ziglua => return failMissingLuaDependency("ziglua"),
+            .missing_luajit => return failMissingLuaDependency("luajit"),
+        };
 
         // Compile Zigdown as a Lua module compatible with Neovim / LuaJIT 5.1
         const lua_mod = b.addLibrary(.{
@@ -270,8 +280,11 @@ pub fn build(b: *std.Build) !void {
         .options = options,
     };
     const test_step = addTest(b, "test", "Run all unit tests", "src/lib/test.zig", test_opts);
-    if (lua_test_dep) |dep| {
-        addLuaApiTest(b, test_step, test_opts, dep);
+    if (lua_dep_resolution) |dep_resolution| {
+        switch (dep_resolution) {
+            .available => |dep| addLuaApiTest(b, test_step, test_opts, dep),
+            else => {},
+        }
     }
 
     // Add custom test executables
@@ -400,13 +413,21 @@ fn isLuaHostSupported(target: Target) bool {
     return target_cpu == builtin.cpu.arch and target_os == builtin.os.tag and target_abi != .musl;
 }
 
-fn resolveLuaTestDep(b: *std.Build, target: Target, optimize: OptimizeMode) ?LuaTestDep {
+fn failMissingLuaDependency(dep_name: []const u8) error{MissingDependency} {
+    std.debug.print(
+        "ERROR: failed to resolve optional Lua dependency '{s}'. `zig build test` will skip Lua API tests, but `zig build -Dlua=true zigdown-lua` requires it.\n",
+        .{dep_name},
+    );
+    return error.MissingDependency;
+}
+
+fn resolveLuaTestDep(b: *std.Build, target: Target, optimize: OptimizeMode) LuaDepResolution {
     const ziglua = b.lazyDependency("ziglua", .{
         .optimize = optimize,
         .target = target,
         .shared = false,
         .lang = .luajit,
-    }) orelse return null;
+    }) orelse return .missing_ziglua;
 
     // TODO: Zig's build system appears to have a bug where it refuses to fetch needed
     // lazy dependencies of lazy dependencies.
@@ -415,12 +436,12 @@ fn resolveLuaTestDep(b: *std.Build, target: Target, optimize: OptimizeMode) ?Lua
     _ = b.lazyDependency("luajit", .{
         .optimize = optimize,
         .target = target,
-    }) orelse return null;
+    }) orelse return .missing_luajit;
 
-    return .{
+    return .{ .available = .{
         .module = ziglua.module("zlua"),
         .lib = ziglua.artifact("lua"),
-    };
+    } };
 }
 
 fn isWasm(target: std.Build.ResolvedTarget) bool {
