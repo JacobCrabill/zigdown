@@ -7,3 +7,4 @@ zig-out/
 .zig-cache/
 .ccls-cache/
 docs/
+.worktrees/
