@@ -659,12 +659,15 @@ pub const Parser = struct {
         var cblock = block.container();
         var table = &cblock.content.Table;
 
-        // Check the 2nd row - this should be the "header" / formatting row
-        if (table.row == 1) {
+        // If any row has a different number of columns, cancel
+        if (table.row > 0) {
             if (utils.countKind(trimmed_line, .PIPE) != table.ncol + 1) {
                 return false;
             }
+        }
 
+        // Check the 2nd row - this should be the "header" / formatting row
+        if (table.row == 1) {
             // Parse the alignment and relative widths of each column
             var start: ?usize = utils.indexOfTokenPos(trimmed_line, 0, .PIPE);
             var end: ?usize = utils.indexOfTokenPos(trimmed_line, start.? + 1, .PIPE);
