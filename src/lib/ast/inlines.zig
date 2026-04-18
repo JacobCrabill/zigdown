@@ -15,6 +15,7 @@ const Token = tokens.Token;
 pub const InlineType = enum(u8) {
     autolink,
     codespan,
+    escaped,
     image,
     linebreak,
     link,
@@ -24,21 +25,11 @@ pub const InlineType = enum(u8) {
 pub const InlineData = union(InlineType) {
     autolink: Autolink,
     codespan: Codespan,
+    escaped: u8,
     image: Image,
     linebreak: void,
     link: Link,
     text: Text,
-
-    pub fn init(kind: InlineType) InlineData {
-        switch (kind) {
-            .Autolink => return InlineData{ .autolink = .{} },
-            .Codespan => return InlineData{ .codespan = .{} },
-            .Link => return InlineData{ .link = .{} },
-            .Linebreak => return InlineData{ .linebreak = .{} },
-            .Image => return InlineData{ .image = .{} },
-            .Text => return InlineData{ .text = .{} },
-        }
-    }
 
     pub fn deinit(self: *InlineData) void {
         switch (self.*) {
@@ -56,6 +47,10 @@ pub const InlineData = union(InlineType) {
             .codespan, .linebreak => {
                 debug.printIndent(depth);
                 debug.print("Inline {s}\n", .{@tagName(self)});
+            },
+            .escaped => |ch| {
+                debug.printIndent(depth);
+                debug.print("Escaped: '\\{c}'\n", .{ch});
             },
             .link => |link| {
                 debug.printIndent(depth);
@@ -76,13 +71,6 @@ pub const Inline = struct {
     alloc: Allocator,
     open: bool = true,
     content: InlineData = undefined,
-
-    pub fn init(alloc: Allocator, kind: InlineType) !Inline {
-        return .{
-            .alloc = alloc,
-            .content = InlineData.init(kind),
-        };
-    }
 
     pub fn initWithContent(alloc: Allocator, content: InlineData) Inline {
         return .{

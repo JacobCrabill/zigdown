@@ -809,6 +809,7 @@ pub const FormatRenderer = struct {
         switch (item.content) {
             .autolink => |l| self.renderAutolink(l),
             .codespan => |c| self.renderInlineCode(c),
+            .escaped => |ch| self.write(&.{ '\\', ch }),
             .image => |i| self.renderImage(i),
             .linebreak => {},
             .link => |l| self.renderLink(l),

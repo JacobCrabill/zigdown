@@ -591,9 +591,9 @@ test validateLink {
         .{ .link = "]()", .valid = false },
         .{ .link = "[[]()", .valid = false },
         .{ .link = "[](()", .valid = false },
+        .{ .link = "[foo\\](`bar)", .valid = false },
         // FIXME: These should NOT be valid, but currently are
         .{ .link = "[foo`](`bar)", .valid = true },
-        .{ .link = "[foo\\](`bar)", .valid = true },
     };
 
     const Lexer = @import("../lexer.zig").Lexer;

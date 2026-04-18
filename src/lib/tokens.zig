@@ -46,6 +46,7 @@ pub const TokenType = enum {
     BOLD,
     EMBOLD,
     COLON,
+    ESCAPED,
     UNKNOWN,
 };
 
@@ -179,6 +180,22 @@ pub const DirectiveTokenizer = struct {
     }
 };
 
+/// Matches a backslash followed by any ASCII punctuation character.
+/// Produces an ESCAPED token whose .text is the two-character sequence (e.g. "\|").
+/// This allows downstream parsers to treat the following character as literal text
+/// rather than as a structural delimiter.
+pub const EscapeTokenizer = struct {
+    pub fn peek(text: []const u8) ?Token {
+        if (text.len < 2 or text[0] != '\\') return null;
+        const next = text[1];
+        if (!utils.isPunctuation(next)) return null;
+        return Token{
+            .kind = .ESCAPED,
+            .text = text[0..2],
+        };
+    }
+};
+
 /// Handles multi-byte unicode codepoints.
 ///
 /// If we DO encounter a >1-byte (non-ASCII) codepoint, we will assume it is
@@ -235,6 +252,7 @@ pub const Tokenizers = .{
     SingularTokenizer('{', TokenType.LCURLY),
     SingularTokenizer('}', TokenType.RCURLY),
     SingularTokenizer('/', TokenType.SLASH),
+    EscapeTokenizer,
     SingularTokenizer('\\', TokenType.BSLASH),
     SingularTokenizer('|', TokenType.PIPE),
     SingularTokenizer(':', TokenType.COLON),
@@ -275,4 +293,38 @@ pub fn concatWords(alloc: Allocator, tokens: []const Token) ![]const u8 {
     }
 
     return try std.mem.concat(alloc, u8, words.items);
+}
+
+test "EscapeTokenizer: backslash-pipe produces ESCAPED token" {
+    const tok = EscapeTokenizer.peek("\\|rest").?;
+    try std.testing.expectEqual(TokenType.ESCAPED, tok.kind);
+    try std.testing.expectEqualStrings("\\|", tok.text);
+}
+
+test "EscapeTokenizer: lone backslash does not produce ESCAPED token" {
+    try std.testing.expect(EscapeTokenizer.peek("\\") == null);
+}
+
+test "EscapeTokenizer: backslash-letter does not produce ESCAPED token" {
+    try std.testing.expect(EscapeTokenizer.peek("\\n") == null);
+}
+
+test "Lexer: escaped pipe tokenizes as ESCAPED" {
+    const lexer = @import("lexer.zig");
+    var lex = lexer.Lexer{};
+    var tokens = try lex.tokenize(std.testing.allocator, "\\|");
+    defer tokens.deinit();
+    try std.testing.expectEqual(@as(usize, 2), tokens.items.len); // ESCAPED + EOF
+    try std.testing.expectEqual(TokenType.ESCAPED, tokens.items[0].kind);
+    try std.testing.expectEqualStrings("\\|", tokens.items[0].text);
+}
+
+test "Lexer: escaped backslash tokenizes as ESCAPED" {
+    const lexer = @import("lexer.zig");
+    var lex = lexer.Lexer{};
+    var tokens = try lex.tokenize(std.testing.allocator, "\\\\");
+    defer tokens.deinit();
+    try std.testing.expectEqual(@as(usize, 2), tokens.items.len); // ESCAPED + EOF
+    try std.testing.expectEqual(TokenType.ESCAPED, tokens.items[0].kind);
+    try std.testing.expectEqualStrings("\\\\", tokens.items[0].text);
 }

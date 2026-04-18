@@ -268,6 +268,12 @@ pub const InlineParser = struct {
                     space_token.text = " ";
                     try utils.appendSingleToken(self.alloc, &inlines, space_token, style);
                 },
+                .ESCAPED => {
+                    try inlines.append(Inline.initWithContent(
+                        self.alloc,
+                        inls.InlineData{ .escaped = tok.text[1] },
+                    ));
+                },
                 .SPACE => {
                     if (prev_type == .SPACE or prev_type == .BREAK) continue;
                     try utils.appendSingleToken(self.alloc, &inlines, tok, style);

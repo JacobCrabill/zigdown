@@ -113,6 +113,7 @@ test "Tokenize" {
         \\~underline~
         \\```
         \\*Ääbc*
+        \\\
     ;
 
     const expected_tokens = [_]Token{
@@ -155,6 +156,8 @@ test "Tokenize" {
         .{ .kind = .STAR, .text = "*" },
         .{ .kind = .WORD, .text = "Ääbc" },
         .{ .kind = .STAR, .text = "*" },
+        .{ .kind = .BREAK, .text = "\n" },
+        .{ .kind = .BSLASH, .text = "\\" },
     };
 
     var lex = Lexer{};

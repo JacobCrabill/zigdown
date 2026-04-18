@@ -368,6 +368,7 @@ pub const HtmlRenderer = struct {
         switch (item.content) {
             .autolink => |l| try self.renderAutolink(l),
             .codespan => |c| try self.renderInlineCode(c),
+            .escaped => |ch| self.write(&.{ch}),
             .image => |i| try self.renderImage(i),
             .linebreak => {},
             .link => |l| try self.renderLink(l),

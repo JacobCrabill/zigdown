@@ -661,7 +661,9 @@ pub const Parser = struct {
 
         // If any row has a different number of columns, cancel
         if (table.row > 0) {
-            if (utils.countKind(trimmed_line, .PIPE) != table.ncol + 1) {
+            const pipe_count = utils.countKind(trimmed_line, .PIPE);
+            if (pipe_count != table.ncol + 1) {
+                self.logger.log("Incorrect column count: Expected {d}, got {d}\n", .{ table.ncol, pipe_count -| 1 });
                 return false;
             }
         }
@@ -1307,4 +1309,38 @@ test "paragraph with matched tildes has strikethrough inlines" {
     }
     try std.testing.expect(found_struck);
     try std.testing.expect(found_plain);
+}
+
+test "Parser: escaped pipe in table cell is not a column separator" {
+    const alloc = std.testing.allocator;
+    const input =
+        \\| A |
+        \\| --- |
+        \\| foo \| bar |
+    ;
+
+    var p = Parser.init(alloc, .{});
+    defer p.deinit();
+    try p.parseMarkdown(input);
+
+    const root = p.document.container();
+    const table = &root.children.items[0];
+    try std.testing.expect(table.container().content == .Table);
+    // 1 column
+    try std.testing.expectEqual(@as(usize, 1), table.container().content.Table.ncol);
+    // 3 rows: header, separator, data
+    try std.testing.expectEqual(@as(usize, 3), table.container().content.Table.row);
+    // 2 children: 1 header cell "A" + 1 data cell "foo \| bar"
+    try std.testing.expectEqual(@as(usize, 2), table.container().children.items.len);
+
+    // The data cell (index 1) should contain an 'escaped' inline for '|'
+    const cell = &table.container().children.items[1];
+    try std.testing.expect(cell.isLeaf());
+    var found_escaped = false;
+    for (cell.leaf().inlines.items) |inl| {
+        if (inl.content == .escaped and inl.content.escaped == '|') {
+            found_escaped = true;
+        }
+    }
+    try std.testing.expect(found_escaped);
 }
