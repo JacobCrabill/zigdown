@@ -5,7 +5,7 @@
 ![CI Status](https://github.com/JacobCrabill/zigdown/actions/workflows/main.yml/badge.svg)
 
 > [!TIP]
-> Zig 0.15.1 Required
+> Zig 0.15.x Required
 
 - [Tools & Features](#tools-&-features)
   - [Command-Line Tools](#command-line-tools)
@@ -83,6 +83,7 @@ a psuedo-static web site, or present a set of files interactively as an in-termi
 - [x] Neovim integration (Lua)
 - [x] Markdown formatter
 - [x] HTML-encode all text in the HTML renderer
+- [x] Character escaping
 
 ### Future Work / Missing Pieces
 
@@ -96,7 +97,6 @@ a psuedo-static web site, or present a set of files interactively as an in-termi
       - Requires filling in some libC stub functions (the TS parsers use quite a few functions from
         the C standard library that are not available in WASM)
       - To run the exising WASM demo, do `./tools/run_wasm_demo.sh`.
-- [ ] Character escaping
 
 ## Caveats
 
@@ -120,7 +120,7 @@ subset of all Markdown syntax, and ignoring anything I personally find useless o
 ## Usage
 
 The current version of Zig this code compiles with is
-[0.15.2](https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz).  I highly recommend
+[0.15.2](https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz). I highly recommend
 using the [Zig version manager](https://github.com/tristanisham/zvm) to install and manage various
 Zig versions.
 
