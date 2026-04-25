@@ -10,16 +10,15 @@ const BORDER = "=" ** 80;
 // use in custom panic handler
 var current_test: ?[]const u8 = null;
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     var mem: [8192]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&mem);
-
     const allocator = fba.allocator();
+    const io = init.io;
 
-    const env = Env.init(allocator);
-    defer env.deinit(allocator);
+    const env = Env.initFromMap(init.environ_map);
 
-    var slowest = SlowTracker.init(allocator, 5);
+    var slowest = SlowTracker.init(io, allocator, 5);
     defer slowest.deinit();
 
     var pass: usize = 0;
@@ -27,7 +26,7 @@ pub fn main() !void {
     var skip: usize = 0;
     var leak: usize = 0;
 
-    var printer = Printer.init();
+    var printer = Printer.init(io);
     printer.fmt("\r\x1b[0K", .{}); // beginning of line and clear to end of line
 
     for (builtin.test_functions, 0..) |t, idx| {
@@ -84,7 +83,7 @@ pub fn main() !void {
                 fail += 1;
                 printer.status(.fail, "\n{s}\n[{d}] \"{s}\" - {s}\n{s}\n", .{ BORDER, idx, friendly_name, @errorName(err), BORDER });
                 if (@errorReturnTrace()) |trace| {
-                    std.debug.dumpStackTrace(trace.*);
+                    std.debug.dumpErrorReturnTrace(trace);
                 }
                 if (env.fail_first) {
                     break;
@@ -122,7 +121,7 @@ pub fn main() !void {
     printer.fmt("\n", .{});
     try slowest.display(&printer);
     printer.fmt("\n", .{});
-    std.posix.exit(if (fail == 0) 0 else 1);
+    std.process.exit(if (fail == 0) 0 else 1);
 }
 
 fn friendlyName(name: []const u8) []const u8 {
@@ -137,21 +136,26 @@ fn friendlyName(name: []const u8) []const u8 {
 }
 
 const Printer = struct {
-    stdout: std.fs.File = undefined,
+    io: std.Io,
+    stdout: std.Io.File,
+    buf: [256]u8,
 
-    fn init() Printer {
+    fn init(io: std.Io) Printer {
         return .{
-            .stdout = std.fs.File.stdout(),
+            .io = io,
+            .stdout = std.Io.File.stdout(),
+            .buf = undefined,
         };
     }
 
     fn fmt(self: *Printer, comptime format: []const u8, args: anytype) void {
-        var stdout_writer = self.stdout.writer(&.{});
+        var stdout_writer = self.stdout.writer(self.io, &self.buf);
         stdout_writer.interface.print(format, args) catch unreachable;
+        stdout_writer.flush() catch {};
     }
 
     fn status(self: *Printer, s: Status, comptime format: []const u8, args: anytype) void {
-        var stdout_writer = self.stdout.writer(&.{});
+        var stdout_writer = self.stdout.writer(self.io, &self.buf);
         var writer = &stdout_writer.interface;
         const color = switch (s) {
             .pass => "\x1b[32m",
@@ -162,6 +166,7 @@ const Printer = struct {
         writer.writeAll(color) catch @panic("writeAll failed?!");
         writer.print(format, args) catch @panic("std.fmt.format failed?!");
         writer.writeAll("\x1b[0m") catch @panic("write failed?!");
+        stdout_writer.flush() catch {};
     }
 };
 
@@ -172,18 +177,49 @@ const Status = enum {
     text,
 };
 
+/// A simple timer using std.Io.Clock for monotonic timing.
+pub const Timer = struct {
+    io: std.Io,
+    timestamp: std.Io.Timestamp,
+
+    pub fn start(io: std.Io) Timer {
+        return .{
+            .io = io,
+            .timestamp = std.Io.Clock.awake.now(io),
+        };
+    }
+
+    pub fn reset(timer: *Timer) void {
+        timer.timestamp = std.Io.Clock.awake.now(timer.io);
+    }
+
+    pub fn lap(timer: *Timer) u64 {
+        const elapsed = timer.timestamp.untilNow(timer.io, .awake);
+        timer.reset();
+        return @intCast(@max(0, elapsed.nanoseconds));
+    }
+
+    pub fn read(timer: *Timer) f64 {
+        const elapsed = timer.timestamp.untilNow(timer.io, .awake);
+        const t: f64 = @floatFromInt(elapsed.nanoseconds);
+        return t / std.time.ns_per_s;
+    }
+};
+
 const SlowTracker = struct {
     const SlowestQueue = std.PriorityDequeue(TestInfo, void, compareTiming);
     max: usize,
+    allocator: Allocator,
     slowest: SlowestQueue,
-    timer: std.time.Timer,
+    timer: Timer,
 
-    fn init(allocator: Allocator, count: u32) SlowTracker {
-        const timer = std.time.Timer.start() catch @panic("failed to start timer");
-        var slowest = SlowestQueue.init(allocator, {});
-        slowest.ensureTotalCapacity(count) catch @panic("OOM");
+    fn init(io: std.Io, allocator: Allocator, count: u32) SlowTracker {
+        const timer = Timer.start(io);
+        var slowest = SlowestQueue.initContext({});
+        slowest.ensureTotalCapacity(allocator, count) catch @panic("OOM");
         return .{
             .max = count,
+            .allocator = allocator,
             .timer = timer,
             .slowest = slowest,
         };
@@ -194,8 +230,8 @@ const SlowTracker = struct {
         name: []const u8,
     };
 
-    fn deinit(self: SlowTracker) void {
-        self.slowest.deinit();
+    fn deinit(self: *SlowTracker) void {
+        self.slowest.deinit(self.allocator);
     }
 
     fn startTiming(self: *SlowTracker) void {
@@ -203,39 +239,36 @@ const SlowTracker = struct {
     }
 
     fn endTiming(self: *SlowTracker, test_name: []const u8) u64 {
-        var timer = self.timer;
-        const ns = timer.lap();
+        const ns = self.timer.lap();
+        const allocator = self.allocator;
 
-        var slowest = &self.slowest;
-
-        if (slowest.count() < self.max) {
+        if (self.slowest.count() < self.max) {
             // Capacity is fixed to the # of slow tests we want to track
             // If we've tracked fewer tests than this capacity, than always add
-            slowest.add(TestInfo{ .ns = ns, .name = test_name }) catch @panic("failed to track test timing");
+            self.slowest.push(allocator, TestInfo{ .ns = ns, .name = test_name }) catch @panic("failed to track test timing");
             return ns;
         }
 
         {
             // Optimization to avoid shifting the dequeue for the common case
             // where the test isn't one of our slowest.
-            const fastest_of_the_slow = slowest.peekMin() orelse unreachable;
+            const fastest_of_the_slow = self.slowest.peekMin() orelse unreachable;
             if (fastest_of_the_slow.ns > ns) {
                 // the test was faster than our fastest slow test, don't add
                 return ns;
             }
         }
 
-        // the previous fastest of our slow tests, has been pushed off.
-        _ = slowest.removeMin();
-        slowest.add(TestInfo{ .ns = ns, .name = test_name }) catch @panic("failed to track test timing");
+        // The previous fastest of our slow tests has been pushed off.
+        _ = self.slowest.popMin();
+        self.slowest.push(allocator, TestInfo{ .ns = ns, .name = test_name }) catch @panic("failed to track test timing");
         return ns;
     }
 
     fn display(self: *SlowTracker, printer: *Printer) !void {
-        var slowest = self.slowest;
-        const count = slowest.count();
+        const count = self.slowest.count();
         printer.fmt("Slowest {d} test{s}: \n", .{ count, if (count != 1) "s" else "" });
-        while (slowest.removeMinOrNull()) |info| {
+        while (self.slowest.popMin()) |info| {
             const ms = @as(f64, @floatFromInt(info.ns)) / 1_000_000.0;
             printer.fmt("  {d:.2}ms\t{s}\n", .{ ms, info.name });
         }
@@ -252,35 +285,17 @@ const Env = struct {
     fail_first: bool,
     filter: ?[]const u8,
 
-    fn init(allocator: Allocator) Env {
+    fn initFromMap(map: *const std.process.Environ.Map) Env {
         return .{
-            .verbose = readEnvBool(allocator, "TEST_VERBOSE", true),
-            .fail_first = readEnvBool(allocator, "TEST_FAIL_FIRST", false),
-            .filter = readEnv(allocator, "TEST_FILTER"),
+            .verbose = getBool(map, "TEST_VERBOSE", true),
+            .fail_first = getBool(map, "TEST_FAIL_FIRST", false),
+            .filter = map.get("TEST_FILTER"),
         };
     }
 
-    fn deinit(self: Env, allocator: Allocator) void {
-        if (self.filter) |f| {
-            allocator.free(f);
-        }
-    }
-
-    fn readEnv(allocator: Allocator, key: []const u8) ?[]const u8 {
-        const v = std.process.getEnvVarOwned(allocator, key) catch |err| {
-            if (err == error.EnvironmentVariableNotFound) {
-                return null;
-            }
-            std.log.warn("failed to get env var {s} due to err {}", .{ key, err });
-            return null;
-        };
-        return v;
-    }
-
-    fn readEnvBool(allocator: Allocator, key: []const u8, deflt: bool) bool {
-        const value = readEnv(allocator, key) orelse return deflt;
-        defer allocator.free(value);
-        return std.ascii.eqlIgnoreCase(value, "true");
+    fn getBool(map: *const std.process.Environ.Map, key: []const u8, default: bool) bool {
+        const val = map.get(key) orelse return default;
+        return std.ascii.eqlIgnoreCase(val, "true");
     }
 };
 

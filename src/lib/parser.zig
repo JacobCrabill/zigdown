@@ -4,8 +4,8 @@ pub const InlineParser = @import("parsers/inlines.zig").InlineParser;
 
 pub const ParseResult = struct { time_s: f64, parser: Parser };
 
-pub fn parseFile(gpa: std.mem.Allocator, dir: std.fs.Dir, file: []const u8) !Parser {
-    const contents = try utils.readFile(gpa, dir, file);
+pub fn parseFile(io: std.Io, gpa: std.mem.Allocator, dir: std.Io.Dir, file: []const u8) !Parser {
+    const contents = try utils.readFile(io, gpa, dir, file);
     defer gpa.free(contents);
     var p = Parser.init(gpa, .{});
     try p.parseMarkdown(contents);
@@ -13,7 +13,7 @@ pub fn parseFile(gpa: std.mem.Allocator, dir: std.fs.Dir, file: []const u8) !Par
 }
 
 /// Parse a Markdown file and return the time taken and the Parser object
-pub fn timedParse(alloc: std.mem.Allocator, input: []const u8, verbose: bool) !ParseResult {
+pub fn timedParse(io: std.Io, alloc: std.mem.Allocator, input: []const u8, verbose: bool) !ParseResult {
     // Parse the input text
     const opts = ParserOpts{
         .copy_input = false,
@@ -21,7 +21,7 @@ pub fn timedParse(alloc: std.mem.Allocator, input: []const u8, verbose: bool) !P
     };
     var p = Parser.init(alloc, opts);
 
-    var ptimer = @import("utils.zig").Timer.start();
+    var ptimer = @import("utils.zig").Timer.start(io);
     try p.parseMarkdown(input);
     const ptime_s = ptimer.read();
 

@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: ghcr.io/jacobcrabill/alpine-zig:0.15.1
+      image: ghcr.io/jacobcrabill/alpine-zig:0.16.0
 
     steps:
       - uses: actions/checkout@v4

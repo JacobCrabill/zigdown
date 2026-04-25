@@ -402,7 +402,7 @@ fn createTestAst(alloc: Allocator) !Block {
     // Create a Link
     var link = inls.Link.init(alloc);
     link.url = "www.google.com";
-    try link.text.append(Text{ .text = "Google", .style = .{ .underline = true } });
+    try link.text.append(alloc, Text{ .text = "Google", .style = .{ .underline = true } });
 
     // Add the Text and the Link to the Paragraph
     try std.testing.expect(isLeaf(paragraph));
@@ -451,6 +451,7 @@ test "Basic AST Construction" {
 
 test "Print basic AST" {
     const alloc = std.testing.allocator;
+    const io = std.testing.io;
 
     var root = try createTestAst(alloc);
     defer root.deinit();
@@ -458,7 +459,7 @@ test "Print basic AST" {
     var alloc_writer = std.Io.Writer.Allocating.init(alloc);
     defer alloc_writer.deinit();
 
-    debug.setStream(&alloc_writer.writer);
+    debug.init(io, &alloc_writer.writer);
 
     debug.print("Print basic AST result:\n", .{});
     root.print(1);

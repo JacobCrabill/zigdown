@@ -6,8 +6,8 @@ const debug = @import("debug.zig");
 const utils = @import("utils.zig");
 
 const Allocator = std.mem.Allocator;
-const File = std.fs.File;
-const Dir = std.fs.Dir;
+const File = std.Io.File;
+const Dir = std.Io.Dir;
 const Base64Encoder = std.base64.standard.Encoder;
 
 const os = std.os;
@@ -239,10 +239,33 @@ pub fn getTerminalSize() !TermSize {
     }
 
     if (builtin.os.tag == .windows) {
-        var binfo: windows.CONSOLE_SCREEN_BUFFER_INFO = undefined;
-        const stdio_h = try windows.GetStdHandle(windows.STD_OUTPUT_HANDLE);
+        // These Win32 APIs were removed from the Zig stdlib in 0.16.0; declare them ourselves
+        const W = struct {
+            const SMALL_RECT = extern struct {
+                Left: windows.SHORT,
+                Top: windows.SHORT,
+                Right: windows.SHORT,
+                Bottom: windows.SHORT,
+            };
+            const CONSOLE_SCREEN_BUFFER_INFO = extern struct {
+                dwSize: windows.COORD,
+                dwCursorPosition: windows.COORD,
+                wAttributes: windows.WORD,
+                srWindow: SMALL_RECT,
+                dwMaximumWindowSize: windows.COORD,
+            };
+            const STD_OUTPUT_HANDLE: windows.DWORD = 0xFFFFFFF5;
+            extern "kernel32" fn GetStdHandle(nStdHandle: windows.DWORD) windows.HANDLE;
+            extern "kernel32" fn GetConsoleScreenBufferInfo(
+                hConsoleOutput: windows.HANDLE,
+                lpConsoleScreenBufferInfo: *CONSOLE_SCREEN_BUFFER_INFO,
+            ) c_int;
+        };
 
-        if (windows.kernel32.GetConsoleScreenBufferInfo(stdio_h, &binfo) > 0) {
+        var binfo: W.CONSOLE_SCREEN_BUFFER_INFO = undefined;
+        const stdio_h = W.GetStdHandle(W.STD_OUTPUT_HANDLE);
+
+        if (W.GetConsoleScreenBufferInfo(stdio_h, &binfo) != 0) {
             const cols: i32 = binfo.srWindow.Right - binfo.srWindow.Left + 1;
             const rows: i32 = binfo.srWindow.Bottom - binfo.srWindow.Top + 1;
             return TermSize{ .rows = @intCast(rows), .cols = @intCast(cols) };
@@ -260,11 +283,13 @@ test getTerminalSize {
 
 test "Display image" {
     const alloc = std.testing.allocator;
+    const io = std.testing.io;
+
     var stream = std.Io.Writer.Allocating.init(alloc);
     defer stream.deinit();
-    debug.setStream(&stream.writer);
+    debug.init(io, &stream.writer);
     debug.print("Rendering Zero the Ziguana here:\n", .{});
-    const bytes = try utils.readFile(alloc, std.fs.cwd(), "src/assets/img/zig-zero.png");
+    const bytes = try utils.readFile(io, alloc, std.Io.Dir.cwd(), "src/assets/img/zig-zero.png");
     defer alloc.free(bytes);
     try sendImagePNG(&stream.writer, alloc, bytes, 100, 60);
     debug.print("\n--------------------------------\n", .{});

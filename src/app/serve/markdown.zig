@@ -8,15 +8,18 @@ const ArrayList = std.array_list.Managed;
 
 pub const Self = @This();
 
+var g_io: std.Io = undefined;
 var alloc: Allocator = undefined;
-var root_dir: std.fs.Dir = undefined;
+var root_dir: std.Io.Dir = undefined;
 var css: html.Css = .{};
 
 pub fn init(
+    io: std.Io,
     a: std.mem.Allocator,
-    dir: std.fs.Dir,
+    dir: std.Io.Dir,
     in_css: html.Css,
 ) void {
+    g_io = io;
     alloc = a;
     root_dir = dir;
     css = in_css;
@@ -66,13 +69,15 @@ fn renderMarkdownImpl(path: []const u8) ?[]const u8 {
     const sub_path = path[prefix.len..];
 
     // Open file
-    var file: std.fs.File = root_dir.openFile(sub_path, .{ .mode = .read_only }) catch |err| {
+    var file: std.Io.File = root_dir.openFile(g_io, sub_path, .{ .mode = .read_only }) catch |err| {
         std.log.err("Error opening markdown file {s}: {any}", .{ sub_path, err });
         return null;
     };
-    defer file.close();
+    defer file.close(g_io);
 
-    const md_text = file.readToEndAlloc(alloc, 1_000_000) catch |err| {
+    var read_buf: [4096]u8 = undefined;
+    var fr = file.reader(g_io, &read_buf);
+    const md_text = fr.interface.allocRemaining(alloc, .limited(1_000_000)) catch |err| {
         std.log.err("Error reading file: {any}", .{err});
         return null;
     };
@@ -91,7 +96,7 @@ fn renderMarkdownImpl(path: []const u8) ?[]const u8 {
     var alloc_writer = std.Io.Writer.Allocating.init(alloc);
 
     // Render slide
-    var h_renderer = zd.HtmlRenderer.init(&alloc_writer.writer, alloc, .{});
+    var h_renderer = zd.HtmlRenderer.init(g_io, alloc, &alloc_writer.writer, .{});
     defer h_renderer.deinit();
     h_renderer.css = css;
 

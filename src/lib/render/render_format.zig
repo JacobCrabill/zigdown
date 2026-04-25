@@ -18,7 +18,7 @@ const errorMsg = debug.errorMsg;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.array_list.Managed;
-const Writer = std.io.Writer;
+const Writer = std.Io.Writer;
 
 const Block = blocks.Block;
 const Container = blocks.Container;
@@ -57,10 +57,11 @@ pub const FormatRenderer = struct {
         strike,
     };
 
+    io: std.Io,
+    alloc: std.mem.Allocator,
     stream: *Writer,
     opts: Config = undefined,
     column: usize = 0,
-    alloc: std.mem.Allocator,
     leader_stack: ArrayList(Text),
     needs_leaders: bool = true,
     cur_style: TextStyle = .{},
@@ -73,11 +74,12 @@ pub const FormatRenderer = struct {
     style_stack: ArrayList(StyleFlag) = undefined,
 
     /// Create a new FormatRenderer
-    pub fn init(stream: *Writer, alloc: Allocator, opts: Config) Self {
+    pub fn init(io: std.Io, alloc: Allocator, stream: *Writer, opts: Config) Self {
         return Self{
-            .opts = opts,
-            .stream = stream,
+            .io = io,
             .alloc = alloc,
+            .stream = stream,
+            .opts = opts,
             .leader_stack = ArrayList(Text).init(alloc),
             .scratch = Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
             .prerender = Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
@@ -613,7 +615,7 @@ pub const FormatRenderer = struct {
             var root: Block = .initContainer(alloc, .Document, 0);
             try root.addChild(item);
 
-            var sub_renderer: FormatRenderer = .init(&alloc_writer.writer, alloc, sub_opts);
+            var sub_renderer: FormatRenderer = .init(self.io, alloc, &alloc_writer.writer, sub_opts);
             try sub_renderer.renderBlock(root);
 
             const text = utils.trimTrailingWhitespace(utils.trimLeadingWhitespace(alloc_writer.writer.buffered()));
@@ -938,12 +940,12 @@ pub const FormatRenderer = struct {
 // Tests
 //////////////////////////////////////////////////////////
 
-fn testRender(alloc: Allocator, input: []const u8, out_stream: *Writer, width: usize) !void {
+fn testRender(io: std.Io, alloc: Allocator, input: []const u8, out_stream: *Writer, width: usize) !void {
     var p = @import("../parser.zig").Parser.init(alloc, .{});
     try p.parseMarkdown(input);
     defer p.deinit();
 
-    var r = FormatRenderer.init(out_stream, alloc, .{ .width = width });
+    var r = FormatRenderer.init(io, alloc, out_stream, .{ .width = width });
     defer r.deinit();
     try r.renderBlock(p.document);
 
@@ -1359,7 +1361,7 @@ test "FormatRenderer" {
         var writer = std.Io.Writer.Allocating.init(alloc);
         defer writer.deinit();
 
-        try testRender(alloc, data.input, &writer.writer, data.width);
+        try testRender(std.testing.io, alloc, data.input, &writer.writer, data.width);
         try std.testing.expectEqualSlices(u8, data.output, writer.writer.buffered());
 
         // _ = arena.reset(.retain_capacity);

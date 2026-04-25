@@ -3,7 +3,6 @@ const builtin = @import("builtin");
 const Build = std.Build;
 const Allocator = std.mem.Allocator;
 
-const ArrayList = std.array_list.Managed;
 const Target = std.Build.ResolvedTarget;
 const OptimizeMode = std.builtin.OptimizeMode;
 const Options = std.Build.Step.Options;
@@ -37,6 +36,7 @@ pub fn build(b: *std.Build) !void {
     const optimize: OptimizeMode = b.standardOptimizeOption(.{});
 
     const wasm_optimize = b.option(OptimizeMode, "wasm-optimize", "Optimization mode for WASM targets") orelse .ReleaseSmall;
+    const no_wasm = b.option(bool, "no-wasm", "Skip building the WASM target") orelse true;
 
     const build_lua = b.option(bool, "lua", "[WIP] Build Zigdown as a Lua module") orelse false;
     const build_test_exes = b.option(bool, "build-test-exes", "Build the custom test executables") orelse false;
@@ -62,10 +62,10 @@ pub fn build(b: *std.Build) !void {
     options.addOption(bool, "extra_tests", do_extra_tests);
 
     // Split the comma-separated list of builtin languages to a list of languages for our config struct
-    var ts_language_list = ArrayList([]const u8).init(b.allocator);
+    var ts_language_list: std.ArrayList([]const u8) = .empty;
     var iter = std.mem.tokenizeScalar(u8, ts_parser_list, ',');
     while (iter.next()) |name| {
-        try ts_language_list.append(name);
+        try ts_language_list.append(b.allocator, name);
     }
     options.addOption([]const []const u8, builtin_ts_option, ts_language_list.items);
 
@@ -80,13 +80,13 @@ pub fn build(b: *std.Build) !void {
     mod.addOptions("config", options);
 
     // Get all of our dependencies, both from build.zig.zon and our TreeSitter module
-    var deps: ArrayList(Dependency) = try getDependencies(b, target, optimize, ts_language_list.items);
+    var deps: std.ArrayList(Dependency) = try getDependencies(b, target, optimize, ts_language_list.items);
 
     // Add all dependencies to our "root" Zigdown module, then add that to the dependencies list
     for (deps.items) |dep| {
         mod.addImport(dep.name, dep.module);
     }
-    try deps.append(mod_dep);
+    try deps.append(b.allocator, mod_dep);
 
     const exe_opts = BuildOpts{
         .target = target,
@@ -159,7 +159,7 @@ pub fn build(b: *std.Build) !void {
         lua_mod.root_module.addImport(ziglua_dep.name, ziglua_dep.module);
 
         const luajit_lib = ziglua.artifact("lua");
-        lua_mod.linkLibrary(luajit_lib);
+        lua_mod.root_module.linkLibrary(luajit_lib);
 
         b.installArtifact(lua_mod);
 
@@ -208,14 +208,17 @@ pub fn build(b: *std.Build) !void {
     // TODO: Still requires some implementation of much of libC to link.
     // See: https://github.com/floooh/pacman.zig/blob/main/build.zig for an
     // example of using Emscripten as the linker
+    // NOTE: Currently broken due to std.Io.Threaded stdlib issue on this host.
+    //       Use `-Dno-wasm` to skip.
     ////////////////////////////////////////////////////////////////////////////
+    if (!no_wasm) {
     const wasm_target = b.resolveTargetQuery(.{
         .cpu_arch = .wasm32,
         .os_tag = .freestanding,
         .abi = .musl,
     });
 
-    var wasm_deps: ArrayList(Dependency) = try getDependencies(b, wasm_target, wasm_optimize, ts_language_list.items);
+    var wasm_deps: std.ArrayList(Dependency) = try getDependencies(b, wasm_target, wasm_optimize, ts_language_list.items);
 
     const wasm_mod = b.addModule("zigdown_wasm", .{
         .root_source_file = b.path("src/lib/zigdown.zig"),
@@ -229,7 +232,7 @@ pub fn build(b: *std.Build) !void {
     for (wasm_deps.items) |dep| {
         wasm_mod.addImport(dep.name, dep.module);
     }
-    try wasm_deps.append(wasm_mod_dep);
+    try wasm_deps.append(b.allocator, wasm_mod_dep);
 
     const wasm = b.addExecutable(.{
         .name = "zigdown-wasm",
@@ -269,6 +272,7 @@ pub fn build(b: *std.Build) !void {
         b.installArtifact(wasm);
         b.getInstallStep().dependOn(wasm_step);
     }
+    } // end if (!no_wasm)
 
     ////////////////////////////////////////////////////////////////////////////
     // Add unit tests
@@ -386,8 +390,8 @@ fn isWasm(target: std.Build.ResolvedTarget) bool {
     return false;
 }
 
-fn getDependencies(b: *std.Build, target: Target, optimize: OptimizeMode, ts_language_list: []const []const u8) !ArrayList(Dependency) {
-    var dependencies = ArrayList(Dependency).init(b.allocator);
+fn getDependencies(b: *std.Build, target: Target, optimize: OptimizeMode, ts_language_list: []const []const u8) !std.ArrayList(Dependency) {
+    var dependencies: std.ArrayList(Dependency) = .empty;
 
     // Module for baked-in data and files
     const asset_mod = b.addModule("assets", .{
@@ -433,7 +437,7 @@ fn getDependencies(b: *std.Build, target: Target, optimize: OptimizeMode, ts_lan
         }
     }
 
-    try dependencies.append(asset_dep);
+    try dependencies.append(b.allocator, asset_dep);
 
     if (!isWasm(target)) {
         ///////////////////////////////////////////////////////////////////////////
@@ -442,30 +446,30 @@ fn getDependencies(b: *std.Build, target: Target, optimize: OptimizeMode, ts_lan
         // STB-Image
         const stbi = b.dependency("stbi", .{ .optimize = optimize, .target = target });
         const stbi_dep = Dependency{ .name = "stb_image", .module = stbi.module("stb_image") };
-        try dependencies.append(stbi_dep);
+        try dependencies.append(b.allocator, stbi_dep);
 
         const target_os: std.Target.Os.Tag = target.query.os_tag orelse builtin.os.tag;
         if (target_os != .windows) {
             // PlutoSVG
             const plutosvg = b.dependency("plutosvg", .{ .optimize = optimize, .target = target });
             const plutosvg_dep = Dependency{ .name = "plutosvg", .module = plutosvg.module("plutosvg") };
-            try dependencies.append(plutosvg_dep);
+            try dependencies.append(b.allocator, plutosvg_dep);
         }
 
         // Flags
         const flags = b.dependency("flags", .{ .optimize = optimize, .target = target });
         const flags_dep = Dependency{ .name = "flags", .module = flags.module("flags") };
-        try dependencies.append(flags_dep);
+        try dependencies.append(b.allocator, flags_dep);
 
         // Treez (TreeSitter wrapper library)
         const treez = b.dependency("treez", .{ .optimize = optimize, .target = target });
         const treez_dep = Dependency{ .name = "treez", .module = treez.module("treez") };
-        try dependencies.append(treez_dep);
+        try dependencies.append(b.allocator, treez_dep);
         asset_mod.addImport(treez_dep.name, treez_dep.module);
 
         const known_folders = b.dependency("known_folders", .{ .optimize = optimize, .target = target });
         const known_folders_dep = Dependency{ .name = "known-folders", .module = known_folders.module("known-folders") };
-        try dependencies.append(known_folders_dep);
+        try dependencies.append(b.allocator, known_folders_dep);
     }
 
     return dependencies;

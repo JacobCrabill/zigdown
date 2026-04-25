@@ -4,7 +4,6 @@ const theme = @import("../theme.zig");
 const debug = @import("../debug.zig");
 const tokens = @import("../tokens.zig");
 
-const ArrayList = std.array_list.Managed;
 const Allocator = std.mem.Allocator;
 
 const TextStyle = theme.TextStyle;
@@ -130,14 +129,14 @@ pub const Text = struct {
 pub const Link = struct {
     alloc: Allocator,
     url: []const u8,
-    text: ArrayList(Text),
+    text: std.ArrayList(Text) = .empty,
     heap_url: bool = false, // Whether the URL string has been Heap-allocated
 
     pub fn init(alloc: Allocator) Link {
         return .{
             .alloc = alloc,
             .url = undefined,
-            .text = ArrayList(Text).init(alloc),
+            .text = .empty,
         };
     }
 
@@ -145,7 +144,7 @@ pub const Link = struct {
         for (self.text.items) |*text| {
             text.deinit();
         }
-        self.text.deinit();
+        self.text.deinit(self.alloc);
 
         if (self.heap_url and self.url.len > 0)
             self.alloc.free(self.url);
@@ -179,7 +178,7 @@ pub const Codespan = struct {
 pub const Image = struct {
     alloc: Allocator,
     src: []const u8,
-    alt: ArrayList(Text),
+    alt: std.ArrayList(Text) = .empty,
     kind: Kind = .local, // Local file, or web URL
     format: Format = .other,
     heap_src: bool = false, // Whether the src string has been heap-allocated
@@ -204,7 +203,7 @@ pub const Image = struct {
         return .{
             .alloc = alloc,
             .src = "",
-            .alt = ArrayList(Text).init(alloc),
+            .alt = .empty,
         };
     }
 
@@ -212,7 +211,7 @@ pub const Image = struct {
         for (self.alt.items) |*text| {
             text.deinit();
         }
-        self.alt.deinit();
+        self.alt.deinit(self.alloc);
 
         if (self.heap_src and self.src.len > 0)
             self.alloc.free(self.src);
