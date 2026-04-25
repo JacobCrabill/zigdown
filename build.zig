@@ -159,7 +159,7 @@ pub fn build(b: *std.Build) !void {
         lua_mod.root_module.addImport(ziglua_dep.name, ziglua_dep.module);
 
         const luajit_lib = ziglua.artifact("lua");
-        lua_mod.linkLibrary(luajit_lib);
+        lua_mod.root_module.linkLibrary(luajit_lib);
 
         b.installArtifact(lua_mod);
 

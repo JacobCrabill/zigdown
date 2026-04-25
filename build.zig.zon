@@ -1,8 +1,8 @@
 .{
     .name = .zigdown,
     .fingerprint = 0xec26eaf34f894e33,
-    .version = "1.2.1",
-    .minimum_zig_version = "0.15.1",
+    .version = "2.0.0",
+    .minimum_zig_version = "0.16.0",
     .paths = .{
         "lua",
         "plugin",
@@ -17,24 +17,26 @@
             .hash = "zig_stb_image-2.28.0-2-9dD1dfoYBQCzF7IA9_-tSbsF1PgN7HGfzDzGVRG2BoUY",
         },
         .plutosvg = .{
-            .url = "https://github.com/JacobCrabill/zig-plutosvg/archive/b2dcac090852c9b26f16798dbbb35c3da1f65773.tar.gz",
-            .hash = "plutosvg-0.0.6-1-LyMxgYguAABq-4Xf7BWKdsl27x3fq5EUgsYS1LmGq9bW",
+            .url = "https://github.com/JacobCrabill/zig-plutosvg/archive/7704671d5130040fb8a25e45c8112809aa89ae6c.tar.gz",
+            .hash = "plutosvg-0.0.6-2-LyMxgdAuAACyA7po0YLhr75Net3boHUgEf3SP2k7DY-1",
         },
         .flags = .{
             .url = "https://github.com/JacobCrabill/zig-flags/archive/8f65f0d5bf0d92b950ddf16afb34533491831c7d.tar.gz",
             .hash = "flags-0.11.0-a_9h3gR2AACtwEzEcKhIsYPEgNPbBeGYKhbYL4lsmJ1N",
         },
         .treez = .{
-            .url = "https://github.com/JacobCrabill/treez/archive/980316cb4fd0da6075a6a8f86bd1a3927bf68ad3.tar.gz",
-            .hash = "treez-0.2.0-4JX9hV6mAAA-T-vae75m4eZSgIxKsv6uUae21-Dzhh8l",
+            .url = "https://github.com/JacobCrabill/treez/archive/4cac205434a0ce8ff6c986375a7f25a2173a4fe5.tar.gz",
+            .hash = "treez-0.2.0-4JX9hYSkAADQS8OfymQPA93UH4NBkW37lsLv_LlIIrcF",
         },
         .known_folders = .{
-            .url = "git+https://github.com/ziglibs/known-folders.git#ab5cf5feb936fa3b72c95d3ad0c0c67791937ba1",
-            .hash = "known_folders-0.0.0-Fy-PJtTTAADUOhGKM0sxzG4eMkNQxRvx9e5dfHVyaeA3",
+            .url = "https://github.com/ziglibs/known-folders/archive/5865fd0f1bc5241de8355fcf2066692bf1b0ea02.tar.gz",
+            .hash = "known_folders-0.0.0-Fy-PJpLKAAAmMEnwre7fFcfsxBGULd24N8Bp2pWEu3sf",
         },
         .ziglua = .{
-            .url = "https://github.com/JacobCrabill/ziglua/archive/011758bab2c2b5a4b6e678e33a8dbb24570d4394.tar.gz",
-            .hash = "zlua-0.2.0-hGRpC2sYBQCawPfqP3rxM95KUN3IYdRNKTAeSussl7kM",
+            // .url = "https://github.com/JacobCrabill/ziglua/archive/011758bab2c2b5a4b6e678e33a8dbb24570d4394.tar.gz",
+            // .hash = "zlua-0.2.0-hGRpC2sYBQCawPfqP3rxM95KUN3IYdRNKTAeSussl7kM",
+            .url = "https://github.com/natecraddock/ziglua/archive/22cad3abc50bca7c73145e07ed2835926e2dda44.tar.gz",
+            .hash = "zlua-0.1.0-hGRpC5dqBQCm1fzCu23-RM5xE9_6JSnUitX9HFi9jSYA",
             .lazy = true,
         },
         // Needed in order for ziglua to build luajit.
