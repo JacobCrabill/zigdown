@@ -2,20 +2,21 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const Allocator = std.mem.Allocator;
-const Dir = std.fs.Dir;
-const File = std.fs.File;
+const Dir = std.Io.Dir;
+const File = std.Io.File;
 const os = std.os;
 
 const Self = @This();
 
+io: std.Io = undefined,
 tty: File = undefined,
 orig_termios: std.c.termios = undefined,
-writer: *std.io.Writer = undefined,
+writer: *std.Io.Writer = undefined,
 
-pub fn init(writer: *std.io.Writer) !Self {
+pub fn init(io: std.Io, writer: *std.Io.Writer) !Self {
     // Store the original terminal settings for later
     // Apply the settings to enable raw TTY ('uncooked' terminal input)
-    const tty = std.fs.File.stdin();
+    const tty = std.Io.File.stdin();
 
     var orig_termios: std.c.termios = undefined;
     _ = std.c.tcgetattr(tty.handle, &orig_termios);
@@ -49,6 +50,7 @@ pub fn init(writer: *std.io.Writer) !Self {
     try writer.flush();
 
     return Self{
+        .io = io,
         .tty = tty,
         .writer = writer,
         .orig_termios = orig_termios,
@@ -64,15 +66,17 @@ pub fn deinit(self: Self) void {
     self.writer.writeAll("\x1B[?25h") catch {}; // Show the cursor
     self.writer.flush() catch {};
 
-    self.tty.close();
+    self.tty.close(self.io);
 }
 
 pub fn read(self: Self) u8 {
     while (true) {
-        var buffer: [1]u8 = undefined;
-        const nb = self.tty.read(&buffer) catch return 0;
+        var read_buf: [1]u8 = undefined;
+        var fr = self.tty.reader(self.io, &read_buf);
+        var out: [1]u8 = undefined;
+        const nb = fr.interface.readSliceShort(&out) catch return 0;
         if (nb < 1) continue;
-        return buffer[0];
+        return out[0];
     }
 }
 

@@ -5,7 +5,7 @@
 ![CI Status](https://github.com/JacobCrabill/zigdown/actions/workflows/main.yml/badge.svg)
 
 > [!TIP]
-> Zig 0.15.x Required
+> Zig 0.16.x Required
 
 - [Tools & Features](#tools-&-features)
   - [Command-Line Tools](#command-line-tools)
@@ -120,7 +120,7 @@ subset of all Markdown syntax, and ignoring anything I personally find useless o
 ## Usage
 
 The current version of Zig this code compiles with is
-[0.15.2](https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz). I highly recommend
+[0.16.0](https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz). I highly recommend
 using the [Zig version manager](https://github.com/tristanisham/zvm) to install and manage various
 Zig versions.
 

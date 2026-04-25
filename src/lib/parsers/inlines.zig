@@ -345,7 +345,7 @@ pub const InlineParser = struct {
         const uri_text: []const Token = utils.trimTrailingWhitespace(utils.trimLeadingWhitespace(line[lp_idx..rp_idx]));
 
         // Create a text block with position information
-        var link_text_block = ArrayList(inls.Text).init(self.alloc);
+        var link_text_block: std.ArrayList(inls.Text) = .empty;
 
         // Process each token in the link text individually to preserve position information
         var style = TextStyle{};
@@ -376,7 +376,7 @@ pub const InlineParser = struct {
                             .line = tok.src.row,
                             .col = tok.src.col,
                         };
-                        try link_text_block.append(text);
+                        try link_text_block.append(self.alloc, text);
                     } else {
                         style.italic = !style.italic;
                     }
@@ -394,7 +394,7 @@ pub const InlineParser = struct {
                             .line = tok.src.row,
                             .col = tok.src.col,
                         };
-                        try link_text_block.append(text);
+                        try link_text_block.append(self.alloc, text);
                     }
                 },
                 .BREAK => {
@@ -406,7 +406,7 @@ pub const InlineParser = struct {
                         .line = tok.src.row,
                         .col = tok.src.col,
                     };
-                    try link_text_block.append(text);
+                    try link_text_block.append(self.alloc, text);
                 },
                 else => {
                     // Add each token as its own Text object
@@ -417,7 +417,7 @@ pub const InlineParser = struct {
                         .line = tok.src.row,
                         .col = tok.src.col,
                     };
-                    try link_text_block.append(text);
+                    try link_text_block.append(self.alloc, text);
                 },
             }
         }

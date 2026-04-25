@@ -6,7 +6,7 @@ const html = @import("assets").html;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.array_list.Managed;
-const Dir = std.fs.Dir;
+const Dir = std.Io.Dir;
 
 const MimeMap = std.StringHashMap([]const u8);
 const RouteMap = std.StringHashMap(*const fn (r: *std.http.Server.Request) void);
@@ -43,14 +43,14 @@ const Context = struct {
     }
 };
 
-pub fn serve(alloc: Allocator, config: ServeOpts) !void {
+pub fn serve(io: std.Io, alloc: Allocator, config: ServeOpts) !void {
     var context = try Context.init(alloc);
     defer context.deinit();
-    context.dir = std.fs.cwd();
+    context.dir = std.Io.Dir.cwd();
 
     if (config.root_directory) |dir| {
         context.dir_path = dir;
-        context.dir = try std.fs.cwd().openDir(dir, .{ .iterate = true });
+        context.dir = try std.Io.Dir.cwd().openDir(io, dir, .{ .iterate = true });
     }
 
     if (config.root_file) |file| {
@@ -58,41 +58,33 @@ pub fn serve(alloc: Allocator, config: ServeOpts) !void {
     }
 
     // Parse the server address and start the server
-    const address = std.net.Address.parseIp(server_addr, config.port) catch unreachable;
-    var server = try address.listen(.{ .reuse_address = true });
-    defer server.deinit();
+    const address = std.Io.net.IpAddress.parse(server_addr, config.port) catch unreachable;
+    var server = try address.listen(io, .{ .reuse_address = true });
+    defer server.deinit(io);
 
-    md.init(alloc, context.dir, config.css);
+    md.init(io, alloc, context.dir, config.css);
 
-    var t_accept = try std.Thread.spawn(.{}, runServer, .{ &context, &server });
+    var t_accept = try std.Thread.spawn(.{}, runServer, .{ io, &context, &server });
     defer t_accept.join();
 
     if (context.file) |file| {
         const url = try std.fmt.allocPrint(alloc, "http://localhost:{d}/{s}", .{ config.port, file });
         defer alloc.free(url);
         log.info("Serving at {s}\n", .{url});
-        var proc: std.process.Child = undefined;
-        if (builtin.os.tag == .windows) {
-            const argv = &[_][]const u8{ "start", url };
-            proc = std.process.Child.init(argv, alloc);
-        } else if (builtin.os.tag.isDarwin()) {
-            const argv = &[_][]const u8{ "open", url };
-            proc = std.process.Child.init(argv, alloc);
-        } else {
-            const argv = &[_][]const u8{ "xdg-open", url };
-            proc = std.process.Child.init(argv, alloc);
-        }
-        try proc.spawn();
+        const cmd = if (builtin.os.tag == .windows) "start"
+            else if (builtin.os.tag.isDarwin()) "open"
+            else "xdg-open";
+        _ = try std.process.spawn(io, .{ .argv = &.{ cmd, url } });
     }
 }
 
 /// Run the HTTP server forever
-fn runServer(context: *Context, server: *std.net.Server) !void {
+fn runServer(io: std.Io, context: *Context, server: *std.Io.net.Server) !void {
     while (true) {
-        const connection = try server.accept();
-        _ = std.Thread.spawn(.{}, accept, .{ context, connection }) catch |err| {
+        const connection = try server.accept(io);
+        _ = std.Thread.spawn(.{}, accept, .{ io, context, connection }) catch |err| {
             log.err("unable to accept connection: {s}", .{@errorName(err)});
-            connection.stream.close();
+            connection.close(io);
             continue;
         };
     }
@@ -100,17 +92,17 @@ fn runServer(context: *Context, server: *std.net.Server) !void {
 
 /// Accept a new connection request
 fn accept(
+    io: std.Io,
     context: *const Context,
-    connection: std.net.Server.Connection,
+    connection: std.Io.net.Stream,
 ) void {
-    defer connection.stream.close();
+    defer connection.close(io);
 
     var read_buffer: [8000]u8 = undefined;
     var write_buffer: [8000]u8 = undefined;
-    //var br: std.io.Reader = .fixed(&read_buffer);
-    var net_reader = connection.stream.reader(&read_buffer);
-    var net_writer = connection.stream.writer(&write_buffer);
-    const reader: *std.Io.Reader = net_reader.interface();
+    var net_reader = connection.reader(io, &read_buffer);
+    var net_writer = connection.writer(io, &write_buffer);
+    const reader: *std.Io.Reader = &net_reader.interface;
     const writer: *std.Io.Writer = &net_writer.interface;
     var server = std.http.Server.init(reader, writer);
     while (server.reader.state == .ready) {
@@ -121,7 +113,7 @@ fn accept(
                 return;
             },
         };
-        serveRequest(&request, context) catch |err| {
+        serveRequest(io, &request, context) catch |err| {
             log.err("unable to serve {s}: {s}", .{ request.head.target, @errorName(err) });
             return;
         };
@@ -129,7 +121,7 @@ fn accept(
 }
 
 /// Serve an HTTP request
-fn serveRequest(request: *std.http.Server.Request, context: *const Context) !void {
+fn serveRequest(io: std.Io, request: *std.http.Server.Request, context: *const Context) !void {
     const path = request.head.target;
 
     if (std.mem.endsWith(u8, path, ".md")) {
@@ -168,7 +160,7 @@ fn serveRequest(request: *std.http.Server.Request, context: *const Context) !voi
             .{ .name = "content-type", .value = "text/css" },
         } });
     } else {
-        serveFile(request, context) catch {
+        serveFile(io, request, context) catch {
             try request.respond(html.error_page, .{
                 .extra_headers = &.{
                     .{ .name = "content-type", .value = "text/html" },
@@ -187,6 +179,7 @@ const cache_control_header: std.http.Header = .{
 };
 
 fn serveFile(
+    io: std.Io,
     request: *std.http.Server.Request,
     context: *const Context,
 ) !void {
@@ -199,7 +192,7 @@ fn serveFile(
     const ftype: []const u8 = std.fs.path.extension(path);
     const content_type = context.mimes.get(ftype) orelse "text/plain";
 
-    const file_contents = try context.dir.readFileAlloc(arena.allocator(), path, 10 * 1024 * 1024);
+    const file_contents = try context.dir.readFileAlloc(io, path, arena.allocator(), .limited(10 * 1024 * 1024));
     // defer context.alloc.free(file_contents);
 
     try request.respond(file_contents, .{

@@ -6,8 +6,8 @@ const debug = @import("debug.zig");
 const utils = @import("utils.zig");
 
 const Allocator = std.mem.Allocator;
-const File = std.fs.File;
-const Dir = std.fs.Dir;
+const File = std.Io.File;
+const Dir = std.Io.Dir;
 const Base64Encoder = std.base64.standard.Encoder;
 
 const os = std.os;
@@ -260,11 +260,13 @@ test getTerminalSize {
 
 test "Display image" {
     const alloc = std.testing.allocator;
+    const io = std.testing.io;
+
     var stream = std.Io.Writer.Allocating.init(alloc);
     defer stream.deinit();
-    debug.setStream(&stream.writer);
+    debug.init(io, &stream.writer);
     debug.print("Rendering Zero the Ziguana here:\n", .{});
-    const bytes = try utils.readFile(alloc, std.fs.cwd(), "src/assets/img/zig-zero.png");
+    const bytes = try utils.readFile(io, alloc, std.Io.Dir.cwd(), "src/assets/img/zig-zero.png");
     defer alloc.free(bytes);
     try sendImagePNG(&stream.writer, alloc, bytes, 100, 60);
     debug.print("\n--------------------------------\n", .{});

@@ -23,7 +23,7 @@ const errorMsg = debug.errorMsg;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.array_list.Managed;
-const Writer = *std.io.Writer;
+const Writer = *std.Io.Writer;
 
 const Block = blocks.Block;
 const Container = blocks.Container;
@@ -59,7 +59,7 @@ const TreezError = error{
 /// Render a Markdown document to the console using ANSI escape characters
 pub const ConsoleRenderer = struct {
     const Self = @This();
-    const RenderError = std.fs.File.WriteError || Renderer.RenderError || TreezError;
+    const RenderError = std.Io.File.WriteError || Renderer.RenderError || TreezError;
 
     /// Console rendering configuration
     pub const Config = struct {
@@ -78,10 +78,11 @@ pub const ConsoleRenderer = struct {
         termsize: gfx.TermSize = .{},
     };
 
+    io: std.Io,
+    alloc: std.mem.Allocator,
     stream: Writer,
     prerender: std.Io.Writer.Allocating = undefined,
     column: usize = 0,
-    alloc: std.mem.Allocator,
     leader_stack: ArrayList(Text),
     needs_leaders: bool = true,
     opts: Config = undefined,
@@ -90,12 +91,13 @@ pub const ConsoleRenderer = struct {
     root: ?Block = null,
 
     /// Create a new ConsoleRenderer
-    pub fn init(stream: Writer, alloc: Allocator, opts: Config) Self {
+    pub fn init(io: std.Io, alloc: Allocator, stream: Writer, opts: Config) Self {
         // Initialize the TreeSitter query functionality in case we need it
-        ts_queries.init(alloc);
+        ts_queries.init(io, alloc);
         return Self{
-            .stream = stream,
+            .io = io,
             .alloc = alloc,
+            .stream = stream,
             .leader_stack = ArrayList(Text).init(alloc),
             .opts = opts,
             // .prerender = std.Io.Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
@@ -697,7 +699,7 @@ pub const ConsoleRenderer = struct {
                 .rendering_to_buffer = true,
             };
 
-            var sub_renderer = ConsoleRenderer.init(&alloc_writer.writer, alloc, sub_opts);
+            var sub_renderer = ConsoleRenderer.init(self.io, alloc, &alloc_writer.writer, sub_opts);
             try sub_renderer.renderBlock(item);
             sub_renderer.renderEnd();
 
@@ -1039,7 +1041,7 @@ pub const ConsoleRenderer = struct {
             .rendering_to_buffer = true,
         };
 
-        var sub_renderer = ConsoleRenderer.init(&alloc_writer.writer, alloc, sub_opts);
+        var sub_renderer = ConsoleRenderer.init(self.io, alloc, &alloc_writer.writer, sub_opts);
         try sub_renderer.renderBlock(item);
         sub_renderer.renderEnd();
 
@@ -1095,7 +1097,7 @@ pub const ConsoleRenderer = struct {
 
         if (utils.isDirectiveToC(directive)) {
             // Generate and render a Table of Contents for the whole document
-            var toc: Block = try utils.generateTableOfContents(self.alloc, &self.root.?);
+            var toc: Block = try utils.generateTableOfContents(self.io, self.alloc, &self.root.?);
             defer toc.deinit();
             self.writeLeaders();
             try self.renderBlock(toc);
@@ -1128,7 +1130,7 @@ pub const ConsoleRenderer = struct {
             .rendering_to_buffer = true,
         };
 
-        var sub_renderer = ConsoleRenderer.init(&alloc_writer.writer, alloc, sub_opts);
+        var sub_renderer = ConsoleRenderer.init(self.io, alloc, &alloc_writer.writer, sub_opts);
         try sub_renderer.renderBlock(item);
         sub_renderer.renderEnd();
 
@@ -1265,18 +1267,20 @@ pub const ConsoleRenderer = struct {
             const root_dir = if (self.opts.root_dir) |rd| rd else "./";
             const path = try std.fs.path.joinZ(self.alloc, &.{ root_dir, image.src });
             defer self.alloc.free(path);
-            var img: std.fs.File = std.fs.cwd().openFile(path, .{}) catch |err| {
+            var img: std.Io.File = std.Io.Dir.cwd().openFile(self.io, path, .{}) catch |err| {
                 debug.print("Error loading image {s}: {any}\n", .{ path, err });
                 break :blk;
             };
-            defer img.close();
-            img_bytes = try img.readToEndAlloc(self.alloc, 1e9);
+            defer img.close(self.io);
+            var img_read_buf: [4096]u8 = undefined;
+            var img_fr = img.reader(self.io, &img_read_buf);
+            img_bytes = try img_fr.interface.allocRemaining(self.alloc, .unlimited);
         } else if (!self.opts.nofetch) blk: {
             // Assume the image src is a remote file to be downloaded
             var writer = std.Io.Writer.Allocating.init(self.alloc);
             defer writer.deinit();
 
-            utils.fetchFile(self.alloc, image.src, &writer.writer) catch |err| {
+            utils.fetchFile(self.io, self.alloc, image.src, &writer.writer) catch |err| {
                 debug.print("Error fetching '{s}': {any}\n", .{ image.src, err });
                 break :blk;
             };
@@ -1412,12 +1416,12 @@ pub const ConsoleRenderer = struct {
 // Tests
 //////////////////////////////////////////////////////////
 
-fn testRender(alloc: Allocator, input: []const u8, out_stream: Writer, width: usize) !void {
+fn testRender(io: std.Io, alloc: Allocator, input: []const u8, out_stream: Writer, width: usize) !void {
     var p = @import("../parser.zig").Parser.init(alloc, .{});
     try p.parseMarkdown(input);
     defer p.deinit();
 
-    var r = ConsoleRenderer.init(out_stream, alloc, .{
+    var r = ConsoleRenderer.init(io, alloc, out_stream, .{
         .width = width,
         .indent = 2,
         .rendering_to_buffer = true,
@@ -1488,7 +1492,7 @@ test "ConsoleRenderer" {
         var writer = std.Io.Writer.Allocating.init(alloc);
         defer writer.deinit();
 
-        try testRender(alloc, data.input, &writer.writer, data.width);
+        try testRender(std.testing.io, alloc, data.input, &writer.writer, data.width);
 
         try std.testing.expectEqualStrings(data.expected, writer.writer.buffered());
     }
@@ -1506,7 +1510,7 @@ test "ConsoleRenderer strikethrough ANSI codes" {
     {
         var writer = std.Io.Writer.Allocating.init(alloc);
         defer writer.deinit();
-        try testRender(alloc, "~foo~", &writer.writer, 90);
+        try testRender(std.testing.io, alloc, "~foo~", &writer.writer, 90);
         const out = writer.writer.buffered();
         try std.testing.expect(std.mem.indexOf(u8, out, strike_on) != null);
         try std.testing.expect(std.mem.indexOf(u8, out, strike_off) != null);
@@ -1516,7 +1520,7 @@ test "ConsoleRenderer strikethrough ANSI codes" {
     {
         var writer = std.Io.Writer.Allocating.init(alloc);
         defer writer.deinit();
-        try testRender(alloc, "~3 items", &writer.writer, 90);
+        try testRender(std.testing.io, alloc, "~3 items", &writer.writer, 90);
         const out = writer.writer.buffered();
         try std.testing.expect(std.mem.indexOf(u8, out, strike_on) == null);
         try std.testing.expect(std.mem.indexOf(u8, out, strike_off) == null);

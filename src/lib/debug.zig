@@ -8,27 +8,29 @@ const Token = @import("tokens.zig").Token;
 
 /// Global debug stream instance.
 /// Intended to be set once from main() via setStream().
-var stream: ?*std.io.Writer = null;
-var file_stream: std.fs.File.Writer = undefined;
+var stream: ?*std.Io.Writer = null;
+var file_stream: std.Io.File.Writer = undefined;
 var write_buf: [1024]u8 = undefined;
+var g_io: std.Io = undefined;
 
 /// Set the global debug output stream.
 ///
 /// This can be, for example, a buffered writer for use in tests.
-pub fn setStream(out_stream: *std.io.Writer) void {
+pub fn init(in_io: std.Io, out_stream: *std.Io.Writer) void {
+    g_io = in_io;
     stream = out_stream;
 }
 
 /// Get the global debug output stream.
 ///
 /// This should be used by all debug printing, e.g. from Block types.
-pub fn getStream() *std.io.Writer {
+pub fn getStream() *std.Io.Writer {
     if (stream) |s| {
         return s;
     } else {
         @branchHint(.cold);
         if (!wasm.is_wasm) {
-            file_stream = std.fs.File.stderr().writer(&write_buf);
+            file_stream = std.Io.File.stderr().writer(g_io, &write_buf);
             stream = &file_stream.interface;
             return stream.?;
         } else {

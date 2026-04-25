@@ -1,8 +1,8 @@
 .{
     .name = .zigdown,
     .fingerprint = 0xec26eaf34f894e33,
-    .version = "1.2.2",
-    .minimum_zig_version = "0.15.1",
+    .version = "2.0.0",
+    .minimum_zig_version = "0.16.0",
     .paths = .{
         "lua",
         "plugin",
@@ -17,24 +17,26 @@
             .hash = "zig_stb_image-2.28.0-2-9dD1dfoYBQCzF7IA9_-tSbsF1PgN7HGfzDzGVRG2BoUY",
         },
         .plutosvg = .{
-            .url = "https://github.com/JacobCrabill/zig-plutosvg/archive/b2dcac090852c9b26f16798dbbb35c3da1f65773.tar.gz",
-            .hash = "plutosvg-0.0.6-1-LyMxgYguAABq-4Xf7BWKdsl27x3fq5EUgsYS1LmGq9bW",
+            .url = "https://github.com/JacobCrabill/zig-plutosvg/archive/7704671d5130040fb8a25e45c8112809aa89ae6c.tar.gz",
+            .hash = "plutosvg-0.0.6-2-LyMxgdAuAACyA7po0YLhr75Net3boHUgEf3SP2k7DY-1",
         },
         .flags = .{
-            .url = "https://github.com/JacobCrabill/zig-flags/archive/8f65f0d5bf0d92b950ddf16afb34533491831c7d.tar.gz",
-            .hash = "flags-0.11.0-a_9h3gR2AACtwEzEcKhIsYPEgNPbBeGYKhbYL4lsmJ1N",
+            .url = "https://github.com/JacobCrabill/zig-flags/archive/de90d081cd4ef7907fbdd8e1e3853fcee9bcf1b9.tar.gz",
+            .hash = "flags-0.12.0-a_9h3p94AACZ_64EtswSKUGy_mvh8IVL8CIiu0SVebvS",
         },
         .treez = .{
-            .url = "https://github.com/JacobCrabill/treez/archive/980316cb4fd0da6075a6a8f86bd1a3927bf68ad3.tar.gz",
-            .hash = "treez-0.2.0-4JX9hV6mAAA-T-vae75m4eZSgIxKsv6uUae21-Dzhh8l",
+            .url = "https://github.com/JacobCrabill/treez/archive/2d1f27c92a2d4a2179740a8ba4bd866b328dd24f.tar.gz",
+            .hash = "treez-0.2.0-4JX9hYSkAABbotzNQsOTNzU8wcDglGCo9Ffik-qi1o_a",
         },
         .known_folders = .{
-            .url = "git+https://github.com/ziglibs/known-folders.git#ab5cf5feb936fa3b72c95d3ad0c0c67791937ba1",
-            .hash = "known_folders-0.0.0-Fy-PJtTTAADUOhGKM0sxzG4eMkNQxRvx9e5dfHVyaeA3",
+            .url = "https://github.com/ziglibs/known-folders/archive/5865fd0f1bc5241de8355fcf2066692bf1b0ea02.tar.gz",
+            .hash = "known_folders-0.0.0-Fy-PJpLKAAAmMEnwre7fFcfsxBGULd24N8Bp2pWEu3sf",
         },
         .ziglua = .{
-            .url = "https://github.com/JacobCrabill/ziglua/archive/011758bab2c2b5a4b6e678e33a8dbb24570d4394.tar.gz",
-            .hash = "zlua-0.2.0-hGRpC2sYBQCawPfqP3rxM95KUN3IYdRNKTAeSussl7kM",
+            // .url = "https://github.com/JacobCrabill/ziglua/archive/011758bab2c2b5a4b6e678e33a8dbb24570d4394.tar.gz",
+            // .hash = "zlua-0.2.0-hGRpC2sYBQCawPfqP3rxM95KUN3IYdRNKTAeSussl7kM",
+            .url = "https://github.com/natecraddock/ziglua/archive/22cad3abc50bca7c73145e07ed2835926e2dda44.tar.gz",
+            .hash = "zlua-0.1.0-hGRpC5dqBQCm1fzCu23-RM5xE9_6JSnUitX9HFi9jSYA",
             .lazy = true,
         },
         // Needed in order for ziglua to build luajit.
@@ -47,44 +49,44 @@
 
         // Individual TreeSitter language parsers
         .tree_sitter_bash = .{
-            .url = "https://github.com/tree-sitter/tree-sitter-bash/archive/49c31006d8307dcb12bc5770f35b6d5b9e2be68e.tar.gz",
-            .hash = "N-V-__8AAG_cogDl9X3jxLCGR6dsBzkjlX8TYhtdCCvonOUr",
+            .url = "https://github.com/tree-sitter/tree-sitter-bash/archive/a06c2e4415e9bc0346c6b86d401879ffb44058f7.tar.gz",
+            .hash = "N-V-__8AANjenwCy_cXlIbU8nqBzGxMlEHVokLZJYrmIXtoz",
         },
         .tree_sitter_c = .{
-            .url = "https://github.com/tree-sitter/tree-sitter-c/archive/e8841a6a9431b7365ac9055688429e1deb8db90f.tar.gz",
-            .hash = "N-V-__8AALWcSAD2F6Vd1LSqa0js-e6kawfanpXMUnMhQeq6",
+            .url = "https://github.com/tree-sitter/tree-sitter-c/archive/b780e47fc780ddc8da13afa35a3f4ed5c157823d.tar.gz",
+            .hash = "tree_sitter_c-0.24.2-y5boS-ptQADHoCoVfjGT_nFtFQ5LbomIkW0fxG3_cmdB",
         },
         .tree_sitter_cmake = .{
             .url = "https://github.com/uyha/tree-sitter-cmake/archive/fe48221d4d9842d916d66b5e71ab3c6307ec28b3.tar.gz",
             .hash = "N-V-__8AACLOCQCV8GF5uI_qg4S3tygmCZMpxB9qk4L2evjb",
         },
         .tree_sitter_cpp = .{
-            .url = "https://github.com/tree-sitter/tree-sitter-cpp/archive/f41b4f66a42100be405f96bdc4ebc4a61095d3e8.tar.gz",
-            .hash = "N-V-__8AABV0FwF4Ttn0MFCCLOxdUUKUC07SL-wqYa-2ySus",
+            .url = "https://github.com/tree-sitter/tree-sitter-cpp/archive/8b5b49eb196bec7040441bee33b2c9a4838d6967.tar.gz",
+            .hash = "N-V-__8AAMePmwGeojPhBaBC10aGwaQIOU4vg1H17IWakWs-",
         },
         .tree_sitter_json = .{
             .url = "https://github.com/tree-sitter/tree-sitter-json/archive/4d770d31f732d50d3ec373865822fbe659e47c75.tar.gz",
             .hash = "N-V-__8AACVXAgCEl--zqcqoXlvXpEMk5BTS748bsLVslERc",
         },
         .tree_sitter_lua = .{
-            .url = "https://github.com/tree-sitter-grammars/tree-sitter-lua/archive/7040a79f95b0bf7517a9809a8d0ecd41197027ac.tar.gz",
-            .hash = "N-V-__8AAExZCQBbT7NCZKdW4KxnVtSRvSVqTtJt0FEqfSa9",
+            .url = "https://github.com/tree-sitter-grammars/tree-sitter-lua/archive/10fe0054734eec83049514ea2e718b2a56acd0c9.tar.gz",
+            .hash = "N-V-__8AAE5ZCQA-BW5BOioWVkGcPTjhC5x1Qv07BH3Xt3dR",
         },
         .tree_sitter_make = .{
-            .url = "https://github.com/tree-sitter-grammars/tree-sitter-make/archive/5e9e8f8ff3387b0edcaa90f46ddf3629f4cfeb1d.tar.gz",
-            .hash = "N-V-__8AAD6dEwA9hwePYcn8FdDAJEeYqCBBlYI2Oey6O5g2",
+            .url = "https://github.com/tree-sitter-grammars/tree-sitter-make/archive/70613f3d812cbabbd7f38d104d60a409c4008b43.tar.gz",
+            .hash = "N-V-__8AAMVsEgC0rug9JAAca82MW3tyFJrFdRA3ou6VEipn",
         },
         .tree_sitter_python = .{
-            .url = "https://github.com/tree-sitter/tree-sitter-python/archive/de0c01e7102e755f6c2e1b3055ae6ca85f261a10.tar.gz",
-            .hash = "N-V-__8AANVLPgC-yBA9l867GoeMn95l0Y_Q9CAzcizA7qlT",
+            .url = "https://github.com/tree-sitter/tree-sitter-python/archive/26855eabccb19c6abf499fbc5b8dc7cc9ab8bc64.tar.gz",
+            .hash = "N-V-__8AAOiqPgC9tH5tYSAYNsMWLoPiSxcmkHvIhMnezomx",
         },
         .tree_sitter_rust = .{
-            .url = "https://github.com/tree-sitter/tree-sitter-rust/archive/c447dcce961ac438aaeaf117347749fe7d1e8365.tar.gz",
-            .hash = "N-V-__8AAJ3uaABprqh1hqE6xstGrAJWc4xL3u1HfJ6Plj6E",
+            .url = "https://github.com/tree-sitter/tree-sitter-rust/archive/77a3747266f4d621d0757825e6b11edcbf991ca5.tar.gz",
+            .hash = "N-V-__8AAHJYbgAipcanYj2A6rnj9wtGzjGzANkrOsqiFAxm",
         },
         .tree_sitter_yaml = .{
-            .url = "https://github.com/tree-sitter-grammars/tree-sitter-yaml/archive/1805917414a9a8ba2473717fd69447277a175fae.tar.gz",
-            .hash = "N-V-__8AABBcGwBNXXnYqPiNmGDO5T2k7__Tglt1pwNFI_YN",
+            .url = "https://github.com/tree-sitter-grammars/tree-sitter-yaml/archive/a1c4812a73ec5e089de8e441fdea3a921e8d5079.tar.gz",
+            .hash = "N-V-__8AAEkcHQB61IN4Zp5o83gmDa69AUnJUBSFIVM9lGg-",
         },
         .tree_sitter_zig = .{
             .url = "https://github.com/tree-sitter-grammars/tree-sitter-zig/archive/b670c8df85a1568f498aa5c8cae42f51a90473c0.tar.gz",

@@ -4,8 +4,8 @@ const RawTTY = zd.RawTTY;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.array_list.Managed;
-const Dir = std.fs.Dir;
-const File = std.fs.File;
+const Dir = std.Io.Dir;
+const File = std.Io.File;
 
 const gfx = zd.gfx;
 const cons = zd.cons;
@@ -27,7 +27,7 @@ pub const Source = struct {
 /// alloc:   The allocator to use for all file reading, parsing, and rendering
 /// source:  Struct specifying the location of the slides (.md files) to render
 /// recurse: If true, all *.md files in all child directories of {dir}/{dirname} will be used
-pub fn present(alloc: Allocator, writer: *std.io.Writer, source: Source, recurse: bool) !void {
+pub fn present(io: std.Io, alloc: Allocator, writer: *std.Io.Writer, source: Source, recurse: bool) !void {
     // Store all of the Markdown file paths, in iterator order
     var slides = ArrayList([]const u8).init(alloc);
     defer {
@@ -38,9 +38,9 @@ pub fn present(alloc: Allocator, writer: *std.io.Writer, source: Source, recurse
     }
 
     if (source.slides) |file| {
-        try loadSlidesFromFile(alloc, source.dir, file, &slides);
+        try loadSlidesFromFile(io, alloc, source.dir, file, &slides);
     } else {
-        try loadSlidesFromDirectory(alloc, source.dir, recurse, &slides);
+        try loadSlidesFromDirectory(io, alloc, source.dir, recurse, &slides);
 
         // Sort the slides
         std.sort.heap([]const u8, slides.items, {}, cmpStr);
@@ -51,7 +51,7 @@ pub fn present(alloc: Allocator, writer: *std.io.Writer, source: Source, recurse
         return error.NoSlidesFound;
     }
 
-    const raw_tty = try RawTTY.init(writer);
+    const raw_tty = try RawTTY.init(io, writer);
     defer raw_tty.deinit();
 
     // Begin the presentation, using stdin to go forward/backward
@@ -61,9 +61,9 @@ pub fn present(alloc: Allocator, writer: *std.io.Writer, source: Source, recurse
     while (!quit) {
         if (update) {
             const slide: []const u8 = slides.items[i];
-            if (std.fs.openFileAbsolute(slide, .{})) |file| {
-                defer file.close();
-                try renderFile(alloc, writer, source.root, file, i + 1, slides.items.len);
+            if (std.Io.Dir.openFileAbsolute(io, slide, .{})) |file| {
+                defer file.close(io);
+                try renderFile(io, alloc, writer, source.root, file, i + 1, slides.items.len);
                 update = false;
             } else |err| {
                 _ = try writer.write(cons.clear_screen);
@@ -118,12 +118,14 @@ pub fn present(alloc: Allocator, writer: *std.io.Writer, source: Source, recurse
 /// The given directory is used as the 'root_dir' option for the renderer -
 /// this is used to determine the path to relative includes such as images
 /// and links
-fn renderFile(alloc: Allocator, writer: *std.io.Writer, dir: []const u8, file: File, slide_no: usize, n_slides: usize) !void {
+fn renderFile(io: std.Io, alloc: Allocator, writer: *std.Io.Writer, dir: []const u8, file: File, slide_no: usize, n_slides: usize) !void {
     var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
 
     // Read slide file
-    const md_text = try file.readToEndAlloc(arena.allocator(), 1e9);
+    var read_buf: [4096]u8 = undefined;
+    var fr = file.reader(io, &read_buf);
+    const md_text = try fr.interface.allocRemaining(arena.allocator(), .unlimited);
 
     // Parse slide
     var parser: Parser = Parser.init(arena.allocator(), .{ .copy_input = false, .verbose = false });
@@ -152,7 +154,7 @@ fn renderFile(alloc: Allocator, writer: *std.io.Writer, dir: []const u8, file: F
         .max_image_cols = columns - 4,
         .termsize = tsize,
     };
-    var c_renderer = ConsoleRenderer.init(writer, arena.allocator(), opts);
+    var c_renderer = ConsoleRenderer.init(io, arena.allocator(), writer, opts);
     defer c_renderer.deinit();
     try c_renderer.renderBlock(parser.document);
 
@@ -166,16 +168,17 @@ fn renderFile(alloc: Allocator, writer: *std.io.Writer, dir: []const u8, file: F
 /// dir:     The directory to search
 /// recurse: If true, also recursively search all child directories of 'dir'
 /// slides:  The array to append all slide filenames to
-fn loadSlidesFromDirectory(alloc: Allocator, dir: Dir, recurse: bool, slides: *ArrayList([]const u8)) !void {
+fn loadSlidesFromDirectory(io: std.Io, alloc: Allocator, dir: Dir, recurse: bool, slides: *ArrayList([]const u8)) !void {
     var iter = dir.iterate();
-    while (try iter.next()) |entry| {
+    while (try iter.next(io)) |entry| {
         switch (entry.kind) {
             .file => {
                 var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-                const realpath = dir.realpath(entry.name, &path_buf) catch |err| {
+                const path_len = dir.realPathFile(io, entry.name, &path_buf) catch |err| {
                     log.err("Error loading slide: {s}", .{entry.name});
                     return err;
                 };
+                const realpath = path_buf[0..path_len];
                 if (std.mem.eql(u8, ".md", std.fs.path.extension(realpath))) {
                     log.debug("Adding slide: {s}", .{realpath});
                     const slide: []const u8 = try alloc.dupe(u8, realpath);
@@ -184,8 +187,8 @@ fn loadSlidesFromDirectory(alloc: Allocator, dir: Dir, recurse: bool, slides: *A
             },
             .directory => {
                 if (recurse) {
-                    const child_dir: Dir = try dir.openDir(entry.name, .{ .iterate = true });
-                    try loadSlidesFromDirectory(alloc, child_dir, recurse, slides);
+                    const child_dir: Dir = try dir.openDir(io, entry.name, .{ .iterate = true });
+                    try loadSlidesFromDirectory(io, alloc, child_dir, recurse, slides);
                 }
             },
             else => {},
@@ -194,8 +197,10 @@ fn loadSlidesFromDirectory(alloc: Allocator, dir: Dir, recurse: bool, slides: *A
 }
 
 /// Load a list of slides to present from a single text file
-fn loadSlidesFromFile(alloc: Allocator, dir: Dir, file: File, slides: *ArrayList([]const u8)) !void {
-    const buf = try file.readToEndAlloc(alloc, 1_000_000);
+fn loadSlidesFromFile(io: std.Io, alloc: Allocator, dir: Dir, file: File, slides: *ArrayList([]const u8)) !void {
+    var read_buf: [4096]u8 = undefined;
+    var fr = file.reader(io, &read_buf);
+    const buf = try fr.interface.allocRemaining(alloc, .limited(1_000_000));
     defer alloc.free(buf);
 
     var lines = std.mem.splitScalar(u8, buf, '\n');
@@ -203,10 +208,11 @@ fn loadSlidesFromFile(alloc: Allocator, dir: Dir, file: File, slides: *ArrayList
         if (name.len < 1) break;
 
         var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-        const realpath = dir.realpath(name, &path_buf) catch |err| {
+        const path_len = dir.realPathFile(io, name, &path_buf) catch |err| {
             log.err("Error loading slide: {s}", .{name});
             return err;
         };
+        const realpath = path_buf[0..path_len];
         if (std.mem.eql(u8, ".md", std.fs.path.extension(realpath))) {
             log.debug("Adding slide: {s}", .{realpath});
             const slide: []const u8 = try alloc.dupe(u8, realpath);
