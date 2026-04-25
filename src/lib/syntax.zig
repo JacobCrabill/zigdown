@@ -146,18 +146,9 @@ pub fn getHighlights(alloc: Allocator, code: []const u8, lang_name: []const u8) 
     // De-alias the language if needed
     const language = ts_queries.alias(lang_name) orelse lang_name;
 
-    const lang: ?*const treez.Language = getLanguage(alloc, language);
+    const tlang: *const treez.Language = getLanguage(alloc, language) orelse return error.LangNotFound;
 
-    if (lang == null) return error.LangNotFound;
-
-    // Get the highlights query
-    const highlights_opt: ?[]const u8 = ts_queries.get(alloc, language);
-    defer if (highlights_opt) |h| alloc.free(h);
-
-    if (highlights_opt == null) return error.HighlightsNotFound;
-
-    const tlang = lang.?;
-    const highlights = highlights_opt.?;
+    const query = ts_queries.getCompiledQuery(tlang, language) orelse return error.HighlightsNotFound;
 
     var parser = try treez.Parser.create();
     defer parser.destroy();
@@ -166,9 +157,6 @@ pub fn getHighlights(alloc: Allocator, code: []const u8, lang_name: []const u8) 
 
     const tree = try parser.parseString(null, code);
     defer tree.destroy();
-
-    const query = try treez.Query.create(tlang, highlights);
-    defer query.destroy();
 
     const cursor = try treez.Query.Cursor.create();
     defer cursor.destroy();

@@ -137,11 +137,11 @@ fn friendlyName(name: []const u8) []const u8 {
 }
 
 const Printer = struct {
-    stdout: std.fs.File = undefined,
+    stdout: std.Io.File = undefined,
 
     fn init() Printer {
         return .{
-            .stdout = std.fs.File.stdout(),
+            .stdout = std.Io.File.stdout(),
         };
     }
 

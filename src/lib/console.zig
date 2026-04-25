@@ -1,7 +1,7 @@
 const std = @import("std");
 const theme = @import("theme.zig");
 
-const Writer = *std.io.Writer;
+const Writer = *std.Io.Writer;
 
 const Color = theme.Color;
 const Style = theme.Style;

@@ -17,7 +17,7 @@ const wasm = @import("../wasm.zig");
 pub const Renderer = @import("Renderer.zig");
 
 const Allocator = std.mem.Allocator;
-const Writer = *std.io.Writer;
+const Writer = *std.Io.Writer;
 
 const Block = blocks.Block;
 const Container = blocks.Container;
@@ -52,20 +52,22 @@ pub const HtmlRenderer = struct {
         break_line: []const u8 = "<br>\n",
     };
 
-    stream: Writer,
+    io: std.Io,
     alloc: Allocator,
+    stream: Writer,
     root: ?Block = null,
     config: Config,
     css: Css = .{},
 
     /// Create a new HtmlRenderer
-    pub fn init(stream: Writer, alloc: Allocator, config: Config) Self {
+    pub fn init(io: std.Io, alloc: Allocator, stream: Writer, config: Config) Self {
         if (!wasm.is_wasm) {
-            ts_queries.init(alloc);
+            ts_queries.init(io, alloc);
         }
         return HtmlRenderer{
-            .stream = stream,
+            .io = io,
             .alloc = alloc,
+            .stream = stream,
             .config = config,
         };
     }
@@ -237,7 +239,7 @@ pub const HtmlRenderer = struct {
         const h: leaves.Heading = leaf.content.Heading;
 
         // Generate the link name for the heading
-        const id_s = try utils.pathToUri(self.alloc, h.text, .{ .replace_whitespace = true, .lowercase = true });
+        const id_s = try utils.pathToUri(self.io, self.alloc, h.text, .{ .replace_whitespace = true, .lowercase = true });
 
         if (h.level == 1) {
             self.write("<div class=\"title\">");
@@ -340,7 +342,7 @@ pub const HtmlRenderer = struct {
         defer self.alloc.free(directive);
         if (utils.isDirectiveToC(directive)) {
             // Generate and render a Table of Contents for the whole document
-            var toc: Block = try utils.generateTableOfContents(self.alloc, &self.root.?);
+            var toc: Block = try utils.generateTableOfContents(self.io, self.alloc, &self.root.?);
             defer toc.deinit();
             try self.renderBlock(toc);
             return;

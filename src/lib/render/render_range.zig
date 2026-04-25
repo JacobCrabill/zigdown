@@ -23,7 +23,7 @@ const errorMsg = debug.errorMsg;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.array_list.Managed;
-const Writer = *std.io.Writer;
+const Writer = *std.Io.Writer;
 
 const Block = blocks.Block;
 const Container = blocks.Container;
@@ -80,9 +80,10 @@ pub const RangeRenderer = struct {
         style: TextStyle = undefined,
     };
 
+    io: std.Io,
+    alloc: std.mem.Allocator,
     stream: Writer,
     prerender: std.Io.Writer.Allocating = undefined,
-    alloc: std.mem.Allocator,
     leader_stack: ArrayList(Text),
     needs_leaders: bool = true,
     opts: Config = undefined,
@@ -100,12 +101,13 @@ pub const RangeRenderer = struct {
     style_ranges: ArrayList(StyleRange) = undefined,
 
     /// Create a new RangeRenderer
-    pub fn init(stream: Writer, alloc: Allocator, opts: Config) Self {
+    pub fn init(io: std.Io, alloc: Allocator, stream: Writer, opts: Config) Self {
         // Initialize the TreeSitter query functionality in case we need it
-        ts_queries.init(alloc);
+        ts_queries.init(io, alloc);
         return Self{
-            .stream = stream,
+            .io = io,
             .alloc = alloc,
+            .stream = stream,
             .leader_stack = ArrayList(Text).init(alloc),
             .opts = opts,
             .prerender = std.Io.Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
@@ -682,7 +684,7 @@ pub const RangeRenderer = struct {
                 .root_dir = self.opts.root_dir,
             };
 
-            var sub_renderer = RangeRenderer.init(&alloc_writer.writer, alloc, sub_opts);
+            var sub_renderer = RangeRenderer.init(self.io, alloc, &alloc_writer.writer, sub_opts);
             try sub_renderer.renderBlock(item);
             sub_renderer.renderEnd();
 
@@ -1014,7 +1016,7 @@ pub const RangeRenderer = struct {
             .root_dir = self.opts.root_dir,
         };
 
-        var sub_renderer = RangeRenderer.init(&alloc_writer.writer, alloc, sub_opts);
+        var sub_renderer = RangeRenderer.init(self.io, alloc, &alloc_writer.writer, sub_opts);
         try sub_renderer.renderBlock(item);
         sub_renderer.renderEnd();
 
@@ -1088,7 +1090,7 @@ pub const RangeRenderer = struct {
 
         if (utils.isDirectiveToC(directive)) {
             // Generate and render a Table of Contents for the whole document
-            var toc: Block = try utils.generateTableOfContents(self.alloc, &self.root.?);
+            var toc: Block = try utils.generateTableOfContents(self.io, self.alloc, &self.root.?);
             defer toc.deinit();
             self.writeLeaders();
             try self.renderBlock(toc);
@@ -1120,7 +1122,7 @@ pub const RangeRenderer = struct {
             .root_dir = self.opts.root_dir,
         };
 
-        var sub_renderer = RangeRenderer.init(&alloc_writer.writer, alloc, sub_opts);
+        var sub_renderer = RangeRenderer.init(self.io, alloc, &alloc_writer.writer, sub_opts);
         try sub_renderer.renderBlock(item);
         sub_renderer.renderEnd();
 
@@ -1260,7 +1262,7 @@ pub const RangeRenderer = struct {
         //     const root_dir = if (self.opts.root_dir) |rd| rd else "./";
         //     const path = try std.fs.path.joinZ(self.alloc, &.{ root_dir, image.src });
         //     defer self.alloc.free(path);
-        //     var img: std.fs.File = std.fs.cwd().openFile(path, .{}) catch |err| {
+        //     var img: std.Io.File = std.fs.cwd().openFile(path, .{}) catch |err| {
         //         debug.print("Error loading image {s}: {any}\n", .{ path, err });
         //         break :blk;
         //     };
@@ -1406,10 +1408,10 @@ pub const RangeRenderer = struct {
 // Tests
 //////////////////////////////////////////////////////////
 
-fn testRender(alloc: Allocator, input: []const u8, out_stream: *std.io.Writer, width: usize) !void {
+fn testRender(io: std.Io, alloc: Allocator, input: []const u8, out_stream: *std.Io.Writer, width: usize) !void {
     var p = @import("../parser.zig").Parser.init(alloc, .{});
     try p.parseMarkdown(input);
-    var r = RangeRenderer.init(out_stream, alloc, .{ .width = width });
+    var r = RangeRenderer.init(io, alloc, out_stream, .{ .width = width });
     try r.renderBlock(p.document);
 }
 
@@ -1438,7 +1440,7 @@ test "RangeRenderer" {
         defer arena.deinit();
         var alloc_writer = std.Io.Writer.Allocating.init(arena.allocator());
 
-        try testRender(arena.allocator(), data.input, &alloc_writer.writer, data.width);
+        try testRender(std.testing.io, arena.allocator(), data.input, &alloc_writer.writer, data.width);
         try std.testing.expectEqualSlices(u8, data.output, alloc_writer.writer.buffered());
     }
 }

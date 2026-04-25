@@ -24,9 +24,10 @@ pub const RenderMethod = enum(u8) {
 
 /// Generic rendering options mostly applicable to all renderers
 pub const RenderOptions = struct {
+    io: std.Io,
     alloc: Allocator,
     document: blocks.Block,
-    out_stream: *std.io.Writer,
+    out_stream: *std.Io.Writer,
     document_dir: ?[]const u8 = null,
     width: ?usize = null,
     config: cli.RenderConfig,
@@ -40,7 +41,7 @@ pub fn render(opts: RenderOptions) !void {
     // The type of the config union tells us which method to use.
     switch (opts.config) {
         .html => |cfg| {
-            var h_renderer = HtmlRenderer.init(opts.out_stream, arena.allocator(), .{
+            var h_renderer = HtmlRenderer.init(opts.io, arena.allocator(), opts.out_stream, .{
                 .css = if (cfg.command) |cmd| cmd.css else .{},
                 .body_only = cfg.body_only,
             });
@@ -59,14 +60,15 @@ pub fn render(opts: RenderOptions) !void {
                 columns = @min(tsize.cols, columns);
             }
 
-            var render_buf: std.io.Writer.Allocating = .init(opts.alloc);
+            var render_buf: std.Io.Writer.Allocating = .init(opts.alloc);
             defer render_buf.deinit();
 
-            const render_writer: *std.io.Writer = if (cfg.pager) &render_buf.writer else opts.out_stream;
+            const render_writer: *std.Io.Writer = if (cfg.pager) &render_buf.writer else opts.out_stream;
 
             var c_renderer = ConsoleRenderer.init(
-                render_writer,
+                opts.io,
                 arena.allocator(),
+                render_writer,
                 .{
                     .root_dir = opts.document_dir,
                     .indent = 2,
@@ -87,7 +89,7 @@ pub fn render(opts: RenderOptions) !void {
 
                 // If we're paging the output, the render above was to a temporary buffer.
                 // Take that output and page it to the console
-                try pageOutput(opts.alloc, opts.out_stream, render_buf.written());
+                try pageOutput(opts.io, opts.alloc, opts.out_stream, render_buf.written());
             }
         },
         .range => {
@@ -109,7 +111,7 @@ pub fn render(opts: RenderOptions) !void {
                 .max_image_cols = columns - 4,
                 .termsize = tsize,
             };
-            var r_renderer = RangeRenderer.init(opts.out_stream, arena.allocator(), render_opts);
+            var r_renderer = RangeRenderer.init(opts.io, arena.allocator(), opts.out_stream, render_opts);
             defer r_renderer.deinit();
             try r_renderer.renderBlock(opts.document);
 
@@ -121,7 +123,7 @@ pub fn render(opts: RenderOptions) !void {
                 .indent = 0,
                 .width = opts.width orelse 90,
             };
-            var formatter = FormatRenderer.init(opts.out_stream, arena.allocator(), render_opts);
+            var formatter = FormatRenderer.init(opts.io, arena.allocator(), opts.out_stream, render_opts);
             defer formatter.deinit();
             try formatter.renderBlock(opts.document);
         },
@@ -135,8 +137,8 @@ pub fn render(opts: RenderOptions) !void {
 /// alloc:  The allocator to use for all file reading, parsing, and rendering.
 /// writer: The writer for the tty to page the output to.
 /// output: The rendered output to page.
-pub fn pageOutput(alloc: Allocator, writer: *std.io.Writer, output: []const u8) !void {
-    const raw_tty = try RawTTY.init(writer);
+pub fn pageOutput(io: std.Io, alloc: Allocator, writer: *std.Io.Writer, output: []const u8) !void {
+    const raw_tty = try RawTTY.init(io, writer);
     defer raw_tty.deinit();
 
     var lines: std.ArrayList([]const u8) = try splitLines(alloc, output);

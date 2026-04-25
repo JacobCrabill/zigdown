@@ -1,0 +1,14 @@
+.{
+    .name = .flags,
+    .version = "0.11.0",
+    .fingerprint = 0xb0541bade61ff6b,
+    .minimum_zig_version = "0.15.1",
+    // Want to limit these to only the things that really constitute "the library".
+    // The hash needn't be updated by some small change to the README.
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+    },
+}

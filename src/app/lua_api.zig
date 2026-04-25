@@ -48,6 +48,8 @@ export fn render_markdown(lua: ?*LuaState) callconv(.c) c_int {
     const input_a: [*c]const u8 = c.lua_tolstring(lua, 1, &len);
     const input: []const u8 = input_a[0..len];
     const alloc = std.heap.page_allocator;
+    var threaded_io: std.Io.Threaded = .init(alloc, .{});
+    const io = threaded_io.io();
 
     // Number of columns to render (output width).
     // We handle the case of the user not providing the argument by defaulting to 100.
@@ -80,7 +82,7 @@ export fn render_markdown(lua: ?*LuaState) callconv(.c) c_int {
         .max_image_cols = if (columns > 4) @intCast(columns - 4) else @intCast(columns),
         .termsize = tsize,
     };
-    var r_renderer = zd.render.RangeRenderer.init(&alloc_writer.writer, alloc, render_opts);
+    var r_renderer = zd.render.RangeRenderer.init(io, alloc, &alloc_writer.writer, render_opts);
     defer r_renderer.deinit();
     r_renderer.renderBlock(md) catch @panic("Render error!");
 

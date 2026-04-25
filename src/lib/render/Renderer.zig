@@ -21,7 +21,7 @@ pub const VTable = struct {
 pub const RenderError = SystemError || Writer.Error || Block.Error;
 
 const Block = blocks.Block;
-const Writer = std.io.Writer;
+const Writer = std.Io.Writer;
 
 const SystemError = error{
     OutOfMemory,
