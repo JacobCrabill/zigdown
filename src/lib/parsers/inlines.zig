@@ -175,9 +175,14 @@ pub const InlineParser = struct {
                     if (style.strike) {
                         // Already inside a strikethrough span — close it unconditionally.
                         style.strike = false;
-                    } else if (utils.findFirstOf(tokens, i + 1, &.{.TILDE}) != null) {
-                        // Only open a span when a matching closing ~ exists later in the same block.
-                        style.strike = true;
+                    } else if (utils.findFirstOf(tokens, i + 1, &.{.TILDE})) |idx| {
+                        if (idx > i + 1 and !utils.isWhitespace(tokens[idx - 1].kind)) {
+                            // Only open a span when a matching closing ~ exists later in the same block.
+                            style.strike = true;
+                        } else {
+                            // No closing ~ in scope — treat as a literal character.
+                            try utils.appendSingleToken(self.alloc, &inlines, tok, style);
+                        }
                     } else {
                         // No closing ~ in scope — treat as a literal character.
                         try utils.appendSingleToken(self.alloc, &inlines, tok, style);
