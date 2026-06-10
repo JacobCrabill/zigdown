@@ -21,8 +21,8 @@
             .hash = "plutosvg-0.0.6-2-LyMxgdAuAACyA7po0YLhr75Net3boHUgEf3SP2k7DY-1",
         },
         .flags = .{
-            .url = "https://github.com/JacobCrabill/zig-flags/archive/8f65f0d5bf0d92b950ddf16afb34533491831c7d.tar.gz",
-            .hash = "flags-0.11.0-a_9h3gR2AACtwEzEcKhIsYPEgNPbBeGYKhbYL4lsmJ1N",
+            .url = "https://github.com/JacobCrabill/zig-flags/archive/de90d081cd4ef7907fbdd8e1e3853fcee9bcf1b9.tar.gz",
+            .hash = "flags-0.12.0-a_9h3p94AACZ_64EtswSKUGy_mvh8IVL8CIiu0SVebvS",
         },
         .treez = .{
             .url = "https://github.com/JacobCrabill/treez/archive/2d1f27c92a2d4a2179740a8ba4bd866b328dd24f.tar.gz",
