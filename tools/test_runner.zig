@@ -57,7 +57,9 @@ pub fn main(init: std.process.Init) !void {
         const friendly_name = friendlyName(t.name);
         current_test = friendly_name;
         std.testing.allocator_instance = .{};
+        std.testing.io_instance = .init(std.testing.allocator, .{});
         const result = t.func();
+        std.testing.io_instance.deinit();
         current_test = null;
 
         if (is_unnamed_test) {
