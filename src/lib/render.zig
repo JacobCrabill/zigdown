@@ -84,7 +84,7 @@ pub fn render(opts: RenderOptions) !void {
 
             if (cfg.pager) {
                 if (@import("builtin").os.tag == .windows) {
-                    debug.print("ERROR: Output paging is not supported on Windows", .{});
+                    debug.logger.err("ERROR: Output paging is not supported on Windows", .{});
                     return error.UnsupportedOS;
                 }
 

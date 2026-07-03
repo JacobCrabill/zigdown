@@ -55,30 +55,38 @@ pub fn getStream() *std.Io.Writer {
     }
 }
 
+pub fn flush() void {
+    getStream().flush() catch {};
+}
+
 /// Write bytes to the debug output stream.
 pub fn write(bytes: []const u8) void {
     getStream().write(bytes) catch {};
+    getStream().flush() catch {};
 }
 
-/// Print a formatted message to the debug output stream at the 'info' level.
+/// Print a formatted message to the debug output stream.
 pub fn print(comptime fmt: []const u8, args: anytype) void {
-    getStream().print(fmt, args) catch {};
+    const s = getStream();
+    s.print(fmt, args) catch {};
+    s.flush() catch {};
 }
 
 /// Print a newline to the debug output stream.
 pub fn println() void {
     getStream().writeAll("\n") catch {};
-}
-
-pub fn flush() void {
     getStream().flush() catch {};
 }
 
 pub fn printIndent(depth: u8) void {
     var i: u8 = 0;
     while (i < depth) : (i += 1) {
-        print("│ ", .{});
+        printIndentChar();
     }
+}
+
+fn printIndentChar() void {
+    getStream().writeAll("│ ") catch {};
 }
 
 pub fn errorReturn(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) !void {
@@ -88,7 +96,8 @@ pub fn errorReturn(comptime src: std.builtin.SourceLocation, comptime fmt: []con
     }
     cons.printStyled(getStream(), .{ .fg_color = .Red, .bold = true }, "{s}-{d}: ERROR: ", .{ src.fn_name, src.line });
     cons.printStyled(getStream(), .{ .bold = true }, fmt, args);
-    print("\n", .{});
+    getStream().writeAll("\n") catch {};
+    getStream().flush() catch {};
     return error.ParseError;
 }
 
@@ -99,67 +108,67 @@ pub fn errorMsg(comptime src: std.builtin.SourceLocation, comptime fmt: []const 
     }
     cons.printStyled(getStream(), .{ .fg_color = .Red, .bold = true }, "{s}-{d}: ERROR: ", .{ src.fn_name, src.line });
     cons.printStyled(getStream(), .{ .bold = true }, fmt, args);
-    print("\n", .{});
+    getStream().writeAll("\n") catch {};
+    getStream().flush() catch {};
 }
 
 /// Helper struct to log debug messages (normal host-cpu logger)
 pub const Logger = struct {
     const Self = @This();
+    prefix: ?[]const u8 = null,
     depth: usize = 0,
     enabled: bool = false,
 
-    /// Log a debug message (alias for debug)
-    pub fn log(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (self.enabled) {
-            self.doIndent();
-            self.raw(fmt, args);
-        }
+    pub fn init() Self {
+        return .{};
+    }
+
+    pub fn scoped(comptime module_name: []const u8) Self {
+        return .{ .prefix = module_name };
     }
 
     /// Log a debug message
     pub fn debug(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (self.enabled) {
-            self.doIndent();
-            self.raw(fmt, args);
-        }
+        if (!self.enabled) return;
+        self.doIndent();
+        self._logLevelWithNewline("debug", fmt, args);
     }
 
     /// Log an info message
     pub fn info(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (self.enabled) {
-            self.doIndent();
-            self.raw(fmt, args);
-        }
+        if (!self.enabled) return;
+        self.doIndent();
+        self._logLevelWithNewline("info", fmt, args);
     }
 
     /// Log a warning message
     pub fn warn(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (self.enabled) {
-            self.doIndent();
-            self.raw(fmt, args);
-        }
+        if (!self.enabled) return;
+        self.doIndent();
+        self._logLevelWithNewline("warn", fmt, args);
     }
 
     /// Log an error message
     pub fn err(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (self.enabled) {
-            self.doIndent();
-            self.raw(fmt, args);
-        }
+        if (!self.enabled) return;
+        self.doIndent();
+        self._logLevelWithNewline("err", fmt, args);
+    }
+
+    /// Log a debug message (alias for debug)
+    pub fn log(self: Self, comptime fmt: []const u8, args: anytype) void {
+        self.debug(fmt, args);
     }
 
     /// Raw print without indentation or log level prefix
     pub fn raw(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (self.enabled) {
-            if (wasm.is_wasm) {
-                wasm.logger.print(fmt, args) catch {};
-            } else {
-                print(fmt, args);
-            }
-        }
+        if (!self.enabled) return;
+        const s = getStream();
+        s.print(fmt, args) catch {};
     }
 
     pub fn printTypes(self: Self, tokens: []const Token, indent: bool) void {
+        if (!self.enabled) return;
         if (indent) self.doIndent();
         for (tokens) |tok| {
             self.raw("{s}, ", .{@tagName(tok.kind)});
@@ -168,6 +177,7 @@ pub const Logger = struct {
     }
 
     pub fn printText(self: Self, tokens: []const Token, indent: bool) void {
+        if (!self.enabled) return;
         if (indent) self.doIndent();
         self.raw("\"", .{});
         for (tokens) |tok| {
@@ -182,43 +192,30 @@ pub const Logger = struct {
 
     fn doIndent(self: Self) void {
         var i: usize = 0;
+        const s = getStream();
         while (i < self.depth) : (i += 1) {
-            self.raw("│ ", .{});
+            s.writeAll("│ ") catch {};
         }
+    }
+
+    fn _logLevelWithNewline(self: Self, comptime level_str: []const u8, comptime fmt: []const u8, args: anytype) void {
+        const s = getStream();
+        if (self.prefix != null) {
+            s.print("{s}({s}): ", .{ level_str, self.prefix.? }) catch {};
+        } else if (level_str.len != 0) {
+            s.print("{s}: ", .{level_str}) catch {};
+        }
+        s.print(fmt, args) catch {};
+        s.writeAll("\n") catch {};
+        s.flush() catch {};
     }
 };
 
 /// Scoped logger for module-specific logging.
 /// Provides debug, info, warn, err methods with a module name prefix.
-pub fn scopedLogger(comptime module_name: []const u8) ScopedLogger {
-    return .{ .module_name = module_name };
+pub fn scopedLogger(comptime module_name: []const u8) Logger {
+    return Logger.scoped(module_name);
 }
 
-/// A scoped logger that prefixes log messages with the module name.
-pub const ScopedLogger = struct {
-    module_name: []const u8,
-
-    pub fn debug(self: ScopedLogger, comptime fmt: []const u8, args: anytype) void {
-        var buf: [512]u8 = undefined;
-        const msg = std.fmt.bufPrint(&buf, fmt, args) catch return;
-        getStream().print("debug({s}): {s}\n", .{ self.module_name, msg }) catch {};
-    }
-
-    pub fn info(self: ScopedLogger, comptime fmt: []const u8, args: anytype) void {
-        var buf: [512]u8 = undefined;
-        const msg = std.fmt.bufPrint(&buf, fmt, args) catch return;
-        getStream().print("info({s}): {s}\n", .{ self.module_name, msg }) catch {};
-    }
-
-    pub fn warn(self: ScopedLogger, comptime fmt: []const u8, args: anytype) void {
-        var buf: [512]u8 = undefined;
-        const msg = std.fmt.bufPrint(&buf, fmt, args) catch return;
-        getStream().print("warning({s}): {s}\n", .{ self.module_name, msg }) catch {};
-    }
-
-    pub fn err(self: ScopedLogger, comptime fmt: []const u8, args: anytype) void {
-        var buf: [512]u8 = undefined;
-        const msg = std.fmt.bufPrint(&buf, fmt, args) catch return;
-        getStream().print("error({s}): {s}\n", .{ self.module_name, msg }) catch {};
-    }
-};
+/// Default logger instance for general debug output.
+pub const logger = Logger.init();
