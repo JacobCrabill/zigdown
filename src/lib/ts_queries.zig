@@ -25,7 +25,7 @@ const TsParserPair = struct {
 const builtin_queries = @import("assets").queries.builtin_queries;
 pub var builtin_languages: std.StringHashMap(TsParserPair) = undefined;
 
-const log = std.log.scoped(.tree_sitter);
+const log = debug.scopedLogger("tree_sitter");
 
 var initialized: bool = false;
 var g_io: std.Io = undefined;

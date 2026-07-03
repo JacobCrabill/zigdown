@@ -5,6 +5,7 @@ const builtin = @import("builtin");
 const ts_queries = @import("ts_queries.zig");
 const theme = @import("theme.zig");
 const wasm = @import("wasm.zig");
+const debug = @import("debug.zig");
 
 const ArrayList = std.array_list.Managed;
 const Allocator = std.mem.Allocator;
@@ -15,7 +16,7 @@ pub const Range = struct {
     newline: bool = false,
 };
 
-const log = std.log.scoped(.syntax);
+const log = debug.scopedLogger("syntax");
 
 /// Capture group name -> Color
 /// List taken from neovim's runtime/doc/treesitter.txt

@@ -12,7 +12,7 @@ const cons = zd.cons;
 const Parser = zd.Parser;
 const ConsoleRenderer = zd.ConsoleRenderer;
 
-const log = std.log.scoped(.present);
+const log = zd.debug.scopedLogger("present");
 
 /// Where the files to render come from
 pub const Source = struct {

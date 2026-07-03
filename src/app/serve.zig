@@ -11,7 +11,7 @@ const Dir = std.Io.Dir;
 const MimeMap = std.StringHashMap([]const u8);
 const RouteMap = std.StringHashMap(*const fn (r: *std.http.Server.Request) void);
 
-const log = std.log.scoped(.server);
+const log = zd.debug.scopedLogger("server");
 
 /// Configuration options to be passed in from main()
 pub const ServeOpts = struct {

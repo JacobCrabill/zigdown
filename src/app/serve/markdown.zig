@@ -13,6 +13,8 @@ var alloc: Allocator = undefined;
 var root_dir: std.Io.Dir = undefined;
 var css: html.Css = .{};
 
+const log = zd.debug.scopedLogger("serve.markdown");
+
 pub fn init(
     io: std.Io,
     a: std.mem.Allocator,
@@ -42,7 +44,7 @@ pub fn renderMarkdown(r: *std.http.Server.Request, path: []const u8) void {
     if (!std.mem.endsWith(u8, path, ".md")) {
         return;
     }
-    std.log.debug("Rendering file: {s}", .{path});
+    log.debug("Rendering file: {s}", .{path});
 
     const md_html = renderMarkdownImpl(path) orelse {
         sendErrorPage(r, .internal_server_error);
@@ -70,7 +72,7 @@ fn renderMarkdownImpl(path: []const u8) ?[]const u8 {
 
     // Open file
     var file: std.Io.File = root_dir.openFile(g_io, sub_path, .{ .mode = .read_only }) catch |err| {
-        std.log.err("Error opening markdown file {s}: {any}", .{ sub_path, err });
+        log.err("Error opening markdown file {s}: {any}", .{ sub_path, err });
         return null;
     };
     defer file.close(g_io);
@@ -78,7 +80,7 @@ fn renderMarkdownImpl(path: []const u8) ?[]const u8 {
     var read_buf: [4096]u8 = undefined;
     var fr = file.reader(g_io, &read_buf);
     const md_text = fr.interface.allocRemaining(alloc, .limited(1_000_000)) catch |err| {
-        std.log.err("Error reading file: {any}", .{err});
+        log.err("Error reading file: {any}", .{err});
         return null;
     };
     defer alloc.free(md_text);
@@ -88,7 +90,7 @@ fn renderMarkdownImpl(path: []const u8) ?[]const u8 {
     defer parser.deinit();
 
     parser.parseMarkdown(md_text) catch |err| {
-        std.log.err("Error parsing markdown file: {any}", .{err});
+        log.err("Error parsing markdown file: {any}", .{err});
         return null;
     };
 
@@ -101,7 +103,7 @@ fn renderMarkdownImpl(path: []const u8) ?[]const u8 {
     h_renderer.css = css;
 
     h_renderer.renderBlock(parser.document) catch |err| {
-        std.log.err("Error rendering HTML from markdown: {any}", .{err});
+        log.err("Error rendering HTML from markdown: {any}", .{err});
         return null;
     };
 

@@ -14,7 +14,7 @@ const Allocator = std.mem.Allocator;
 
 const Block = blocks.Block;
 
-const log = std.log.scoped(.utils);
+const log = debug.scopedLogger("utils");
 
 pub const Vec2i = struct {
     x: usize,

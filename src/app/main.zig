@@ -211,7 +211,7 @@ fn handleRender(
         .format => |opts| {
             if (opts.inplace) {
                 if (realpath == null) {
-                    std.debug.print("ERROR: In-place formatting requested but no input file given\n", .{});
+                    zd.debug.print("ERROR: In-place formatting requested but no input file given\n", .{});
                     return error.InvalidArgument;
                 }
                 outfile = try std.Io.Dir.cwd().createFile(io, realpath.?, .{ .truncate = true });
@@ -297,7 +297,7 @@ pub fn handlePresent(
     const stdout: *std.Io.Writer = &stdout_writer.interface;
     present.present(io, alloc, stdout, source, recurse) catch |err| {
         _ = stdout.write(zd.cons.clear_screen) catch unreachable;
-        std.debug.print("\nError encountered during presentation: {any}\n", .{err});
+        zd.debug.print("\nError encountered during presentation: {any}\n", .{err});
         return;
     };
 

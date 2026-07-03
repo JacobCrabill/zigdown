@@ -3,6 +3,7 @@ const blocks = @import("ast/blocks.zig");
 const gfx = @import("image.zig");
 const cli = @import("cli.zig");
 const cons = @import("console.zig");
+const debug = @import("debug.zig");
 const RawTTY = @import("RawTTY.zig");
 
 const Allocator = std.mem.Allocator;
@@ -83,7 +84,7 @@ pub fn render(opts: RenderOptions) !void {
 
             if (cfg.pager) {
                 if (@import("builtin").os.tag == .windows) {
-                    std.debug.print("ERROR: Output paging is not supported on Windows", .{});
+                    debug.print("ERROR: Output paging is not supported on Windows", .{});
                     return error.UnsupportedOS;
                 }
 

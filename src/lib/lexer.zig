@@ -2,7 +2,6 @@
 /// Markdown lexer. Processes Markdown text into a list of tokens.
 const std = @import("std");
 
-const con = @import("console.zig");
 const debug = @import("debug.zig");
 const toks = @import("tokens.zig");
 const utils = @import("utils.zig");

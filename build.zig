@@ -212,66 +212,66 @@ pub fn build(b: *std.Build) !void {
     //       Use `-Dno-wasm` to skip.
     ////////////////////////////////////////////////////////////////////////////
     if (!no_wasm) {
-    const wasm_target = b.resolveTargetQuery(.{
-        .cpu_arch = .wasm32,
-        .os_tag = .freestanding,
-        .abi = .musl,
-    });
+        const wasm_target = b.resolveTargetQuery(.{
+            .cpu_arch = .wasm32,
+            .os_tag = .freestanding,
+            .abi = .musl,
+        });
 
-    var wasm_deps: std.ArrayList(Dependency) = try getDependencies(b, wasm_target, wasm_optimize, ts_language_list.items);
+        var wasm_deps: std.ArrayList(Dependency) = try getDependencies(b, wasm_target, wasm_optimize, ts_language_list.items);
 
-    const wasm_mod = b.addModule("zigdown_wasm", .{
-        .root_source_file = b.path("src/lib/zigdown.zig"),
-        .target = wasm_target,
-        .optimize = wasm_optimize,
-    });
-    const wasm_mod_dep = Dependency{ .name = "zigdown", .module = wasm_mod };
-
-    wasm_mod.addOptions("opts", options);
-
-    for (wasm_deps.items) |dep| {
-        wasm_mod.addImport(dep.name, dep.module);
-    }
-    try wasm_deps.append(b.allocator, wasm_mod_dep);
-
-    const wasm = b.addExecutable(.{
-        .name = "zigdown-wasm",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/app/wasm_main.zig"),
-            .optimize = .ReleaseSmall,
+        const wasm_mod = b.addModule("zigdown_wasm", .{
+            .root_source_file = b.path("src/lib/zigdown.zig"),
             .target = wasm_target,
-        }),
-    });
-    wasm.entry = .disabled;
-    wasm.rdynamic = true;
+            .optimize = wasm_optimize,
+        });
+        const wasm_mod_dep = Dependency{ .name = "zigdown", .module = wasm_mod };
 
-    // // [WIP] An attempt to bring in the minimal set of functions from libC
-    // // in order to build TreeSitter for WASM
-    // const wasm_libc = b.addLibrary(.{
-    //     .name = "wasm-libc",
-    //     .root_module = b.createModule(.{
-    //         .root_source_file = b.path("src/wasm/stdlib.zig"),
-    //         .target = wasm_target,
-    //         .optimize = wasm_optimize,
-    //     }),
-    //     .linkage = .static,
-    //     .link_libc = true,
-    // });
-    // wasm_libc.addCSourceFile(.{ .file = b.path("src/wasm/stdlib.c") });
-    // wasm.linkLibrary(wasm_libc);
+        wasm_mod.addOptions("opts", options);
 
-    wasm.root_module.addOptions("config", options);
-    for (wasm_deps.items) |dep| {
-        wasm.root_module.addImport(dep.name, dep.module);
-    }
+        for (wasm_deps.items) |dep| {
+            wasm_mod.addImport(dep.name, dep.module);
+        }
+        try wasm_deps.append(b.allocator, wasm_mod_dep);
 
-    const wasm_step = b.step("wasm", "Build Zigdown as a WASM library");
-    wasm_step.dependOn(&wasm.step);
+        const wasm = b.addExecutable(.{
+            .name = "zigdown-wasm",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/app/wasm_main.zig"),
+                .optimize = .ReleaseSmall,
+                .target = wasm_target,
+            }),
+        });
+        wasm.entry = .disabled;
+        wasm.rdynamic = true;
 
-    if (!no_bin) {
-        b.installArtifact(wasm);
-        b.getInstallStep().dependOn(wasm_step);
-    }
+        // // [WIP] An attempt to bring in the minimal set of functions from libC
+        // // in order to build TreeSitter for WASM
+        // const wasm_libc = b.addLibrary(.{
+        //     .name = "wasm-libc",
+        //     .root_module = b.createModule(.{
+        //         .root_source_file = b.path("src/wasm/stdlib.zig"),
+        //         .target = wasm_target,
+        //         .optimize = wasm_optimize,
+        //     }),
+        //     .linkage = .static,
+        //     .link_libc = true,
+        // });
+        // wasm_libc.addCSourceFile(.{ .file = b.path("src/wasm/stdlib.c") });
+        // wasm.linkLibrary(wasm_libc);
+
+        wasm.root_module.addOptions("config", options);
+        for (wasm_deps.items) |dep| {
+            wasm.root_module.addImport(dep.name, dep.module);
+        }
+
+        const wasm_step = b.step("wasm", "Build Zigdown as a WASM library");
+        wasm_step.dependOn(&wasm.step);
+
+        if (!no_bin) {
+            b.installArtifact(wasm);
+            b.getInstallStep().dependOn(wasm_step);
+        }
     } // end if (!no_wasm)
 
     ////////////////////////////////////////////////////////////////////////////
