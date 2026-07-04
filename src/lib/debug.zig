@@ -122,12 +122,16 @@ pub fn errorMsg(comptime src: std.builtin.SourceLocation, comptime fmt: []const 
     getStream().flush() catch {};
 }
 
-/// Helper struct to log debug messages (normal host-cpu logger)
+/// Structured logger with support for:
+/// - Module-specific prefixes (via `scoped()`)
+/// - Log level color coding (debug=blue, info=cyan, warn=yellow, err=red)
+/// - Indentation depth tracking
+/// - Global `--verbose` flag integration
 pub const Logger = struct {
     const Self = @This();
     prefix: ?[]const u8 = null,
     depth: usize = 0,
-    enabled: bool = false,
+    enabled: bool = true,
 
     pub fn init() Self {
         return .{};
@@ -137,49 +141,61 @@ pub const Logger = struct {
         return .{ .prefix = module_name };
     }
 
+    /// Create a logger with verbose output enabled.
+    /// Useful for parser debug logging when --verbose is passed.
+    pub fn scopedVerbose(comptime module_name: []const u8) Self {
+        return .{ .prefix = module_name, .enabled = true };
+    }
+
+    /// Create a logger with verbose output enabled and custom depth.
+    pub fn verboseWithDepth(comptime module_name: []const u8, depth: usize) Self {
+        return .{ .prefix = module_name, .enabled = true, .depth = depth };
+    }
+
     /// Log a debug message
     pub fn debug(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (!self.enabled and !verbose_enabled) return;
+        if (!self.enabled or !verbose_enabled) return;
         self.doIndent();
-        self._logLevelWithNewline("debug", fmt, args);
+        self._logLevelWithNewline(.debug, fmt, args);
     }
 
     /// Log an info message
     pub fn info(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (!self.enabled and !verbose_enabled) return;
+        if (!self.enabled or !verbose_enabled) return;
         self.doIndent();
-        self._logLevelWithNewline("info", fmt, args);
+        self._logLevelWithNewline(.info, fmt, args);
     }
 
     /// Log a warning message
     pub fn warn(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (!self.enabled and !verbose_enabled) return;
+        if (!self.enabled or !verbose_enabled) return;
         self.doIndent();
-        self._logLevelWithNewline("warn", fmt, args);
+        self._logLevelWithNewline(.warn, fmt, args);
     }
 
     /// Log an error message
     pub fn err(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (!self.enabled and !verbose_enabled) return;
+        if (!self.enabled) return;
         self.doIndent();
-        self._logLevelWithNewline("err", fmt, args);
+        self._logLevelWithNewline(.err, fmt, args);
     }
 
-    /// Log a debug message (alias for debug)
+    /// Log a debug message (alias for `debug()`)
+    /// Kept for backward compatibility with existing code.
     pub fn log(self: Self, comptime fmt: []const u8, args: anytype) void {
         self.debug(fmt, args);
     }
 
     /// Raw print without indentation or log level prefix
     pub fn raw(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (!self.enabled and !verbose_enabled) return;
+        if (!self.enabled or !verbose_enabled) return;
         const s = getStream();
         s.print(fmt, args) catch {};
     }
 
     /// Print types of tokens for debugging
     pub fn printTypes(self: Self, tokens: []const Token, indent: bool) void {
-        if (!self.enabled and !verbose_enabled) return;
+        if (!self.enabled or !verbose_enabled) return;
         if (indent) self.doIndent();
         for (tokens) |tok| {
             self.raw("{s}, ", .{@tagName(tok.kind)});
@@ -189,7 +205,7 @@ pub const Logger = struct {
 
     /// Print text of tokens for debugging
     pub fn printText(self: Self, tokens: []const Token, indent: bool) void {
-        if (!self.enabled and !verbose_enabled) return;
+        if (!self.enabled or !verbose_enabled) return;
         if (indent) self.doIndent();
         self.raw("\"", .{});
         for (tokens) |tok| {
@@ -210,12 +226,19 @@ pub const Logger = struct {
         }
     }
 
-    fn _logLevelWithNewline(self: Self, comptime level_str: []const u8, comptime fmt: []const u8, args: anytype) void {
+    fn _logLevelWithNewline(self: Self, comptime level: LogLevel, comptime fmt: []const u8, args: anytype) void {
         const s = getStream();
+        // Apply color coding based on log level
+        const level_prefix: []const u8 = switch (level) {
+            .debug => cons.fg_blue ++ "debug" ++ cons.ansi_end,
+            .info => cons.fg_cyan ++ "info" ++ cons.ansi_end,
+            .warn => cons.fg_yellow ++ "warn" ++ cons.ansi_end,
+            .err => cons.fg_red ++ "err" ++ cons.ansi_end,
+        };
         if (self.prefix != null) {
-            s.print("{s}({s}): ", .{ level_str, self.prefix.? }) catch {};
-        } else if (level_str.len != 0) {
-            s.print("{s}: ", .{level_str}) catch {};
+            s.print("{s}({s}): ", .{ level_prefix, self.prefix.? }) catch {};
+        } else {
+            s.print("{s}: ", .{level_prefix}) catch {};
         }
         s.print(fmt, args) catch {};
         s.writeAll("\n") catch {};
@@ -223,8 +246,8 @@ pub const Logger = struct {
     }
 };
 
-/// Scoped logger for module-specific logging.
-/// Provides debug, info, warn, err methods with a module name prefix.
+/// Create a logger with a module name prefix for module-specific logging.
+/// This is a convenience wrapper for `Logger.scoped(module_name)`.
 pub fn scopedLogger(comptime module_name: []const u8) Logger {
     return Logger.scoped(module_name);
 }
