@@ -23,6 +23,10 @@ var write_buf: [1024]u8 = undefined;
 /// Global IO instance.
 var g_io: std.Io = undefined;
 
+/// Global verbose enabled flag.
+/// Set via setVerbose() from main() based on the --verbose CLI arg.
+var verbose_enabled: bool = false;
+
 /// Discarding writer to silently drop all log messages.
 /// Useful in WASM environments or other bare-metal envs without libc, stderr, etc.
 var discarding_writer: std.Io.Writer.Discarding = .init(&.{});
@@ -33,6 +37,12 @@ var discarding_writer: std.Io.Writer.Discarding = .init(&.{});
 pub fn init(in_io: std.Io, out_stream: *std.Io.Writer) void {
     g_io = in_io;
     stream = out_stream;
+}
+
+/// Set the global verbose enabled flag.
+/// Called from main() after parsing CLI arguments.
+pub fn setVerbose(enabled: bool) void {
+    verbose_enabled = enabled;
 }
 
 /// Get the global debug output stream.
@@ -129,28 +139,28 @@ pub const Logger = struct {
 
     /// Log a debug message
     pub fn debug(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (!self.enabled) return;
+        if (!self.enabled and !verbose_enabled) return;
         self.doIndent();
         self._logLevelWithNewline("debug", fmt, args);
     }
 
     /// Log an info message
     pub fn info(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (!self.enabled) return;
+        if (!self.enabled and !verbose_enabled) return;
         self.doIndent();
         self._logLevelWithNewline("info", fmt, args);
     }
 
     /// Log a warning message
     pub fn warn(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (!self.enabled) return;
+        if (!self.enabled and !verbose_enabled) return;
         self.doIndent();
         self._logLevelWithNewline("warn", fmt, args);
     }
 
     /// Log an error message
     pub fn err(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (!self.enabled) return;
+        if (!self.enabled and !verbose_enabled) return;
         self.doIndent();
         self._logLevelWithNewline("err", fmt, args);
     }
@@ -162,13 +172,14 @@ pub const Logger = struct {
 
     /// Raw print without indentation or log level prefix
     pub fn raw(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (!self.enabled) return;
+        if (!self.enabled and !verbose_enabled) return;
         const s = getStream();
         s.print(fmt, args) catch {};
     }
 
+    /// Print types of tokens for debugging
     pub fn printTypes(self: Self, tokens: []const Token, indent: bool) void {
-        if (!self.enabled) return;
+        if (!self.enabled and !verbose_enabled) return;
         if (indent) self.doIndent();
         for (tokens) |tok| {
             self.raw("{s}, ", .{@tagName(tok.kind)});
@@ -176,8 +187,9 @@ pub const Logger = struct {
         self.raw("\n", .{});
     }
 
+    /// Print text of tokens for debugging
     pub fn printText(self: Self, tokens: []const Token, indent: bool) void {
-        if (!self.enabled) return;
+        if (!self.enabled and !verbose_enabled) return;
         if (indent) self.doIndent();
         self.raw("\"", .{});
         for (tokens) |tok| {

@@ -62,6 +62,13 @@ const Flags = struct {
             ,
         };
     },
+
+    pub fn verbose(self: *const Flags) bool {
+        return switch (self.command) {
+            .serve, .install_parsers => false,
+            inline else => |opts| opts.verbose,
+        };
+    }
 };
 
 pub fn main(init: std.process.Init) !void {
@@ -96,6 +103,9 @@ pub fn main(init: std.process.Init) !void {
     };
 
     const result: Flags = flags.parse(io, args, "zigdown", Flags, .{ .colors = &g_colorscheme });
+
+    // Enable verbose logging if the --verbose flag was passed
+    zd.debug.setVerbose(result.verbose());
 
     // Process the command-line arguments
     switch (result.command) {
