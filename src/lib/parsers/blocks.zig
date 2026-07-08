@@ -31,9 +31,6 @@ const Block = blocks.Block;
 const ParserOpts = utils.ParserOpts;
 const InlineParser = inline_parser.InlineParser;
 
-/// Global logger
-var g_logger = Logger{ .enabled = false };
-
 fn assert(ok: bool) void {
     switch (builtin.cpu.arch) {
         .wasm32, .wasm64 => if (!ok) @panic("Assertion failed"),
@@ -153,8 +150,6 @@ fn trimContinuationMarkersOrderedList(line: []const Token) []const Token {
             else => {
                 if (have_dot and i + 1 < line.len)
                     return utils.trimLeadingWhitespace(trimmed[i + 1 ..]);
-
-                g_logger.printText(line, false);
                 return trimmed;
             },
         }
@@ -652,8 +647,8 @@ pub const Parser = struct {
         self.logger.log("TABLE\n", .{});
         self.logger.printText(trimmed_line, false);
 
-        // A table row must contain *at least* '||'
-        if (utils.countKind(trimmed_line, .PIPE) < 2)
+        // A table row must contain *at least* '||' (but pipes inside inline code are literal)
+        if (utils.countTablePipes(trimmed_line) < 2)
             return false;
 
         var cblock = block.container();
@@ -661,7 +656,7 @@ pub const Parser = struct {
 
         // If any row has a different number of columns, cancel
         if (table.row > 0) {
-            const pipe_count = utils.countKind(trimmed_line, .PIPE);
+            const pipe_count = utils.countTablePipes(trimmed_line);
             if (pipe_count != table.ncol + 1) {
                 self.logger.log("Incorrect column count: Expected {d}, got {d}\n", .{ table.ncol, pipe_count -| 1 });
                 return false;
@@ -671,8 +666,8 @@ pub const Parser = struct {
         // Check the 2nd row - this should be the "header" / formatting row
         if (table.row == 1) {
             // Parse the alignment and relative widths of each column
-            var start: ?usize = utils.indexOfTokenPos(trimmed_line, 0, .PIPE);
-            var end: ?usize = utils.indexOfTokenPos(trimmed_line, start.? + 1, .PIPE);
+            var start: ?usize = utils.indexOfTablePipe(trimmed_line, 0);
+            var end: ?usize = utils.indexOfTablePipe(trimmed_line, start.? + 1);
             while (end != null) {
                 const start_idx: usize = start.?;
                 const end_idx: usize = end.?;
@@ -717,7 +712,7 @@ pub const Parser = struct {
                 // advance to the next column
                 start = end;
                 if (end_idx + 1 < trimmed_line.len) {
-                    end = utils.indexOfTokenPos(trimmed_line, end_idx + 1, .PIPE);
+                    end = utils.indexOfTablePipe(trimmed_line, end_idx + 1);
                 } else {
                     end = null;
                 }
@@ -738,10 +733,14 @@ pub const Parser = struct {
             } else if (tok.kind == .BREAK) {
                 // End of line
             } else if (i < trimmed_line.len) {
-                if (utils.findFirstOf(trimmed_line, i, &.{.PIPE})) |idx| {
+                if (utils.indexOfTablePipe(trimmed_line, i)) |idx| {
                     const child = self.parseNewBlock(trimmed_line[i..idx]) catch unreachable;
                     cblock.children.append(child) catch unreachable;
                     i = idx - 1;
+                } else {
+                    // No closing separator remains; any trailing '|' are literal (e.g. inside
+                    // inline code), so stop scanning rather than miscount them as columns.
+                    break;
                 }
             }
             i += 1;
@@ -1152,6 +1151,31 @@ test "Parser supports table nested in ordered list item" {
     try std.testing.expectEqual(@as(usize, 4), table.container().content.Table.relative_width.items.len);
     try std.testing.expectEqual(@as(usize, 4), table.container().content.Table.alignment.items.len);
     try std.testing.expectEqual(@as(usize, 8), table.container().children.items.len);
+}
+
+test "Parser: pipe inside inline code is not a table column separator" {
+    const alloc = std.testing.allocator;
+    // The '|' inside the `|` code span must be treated as literal text, leaving 2 columns.
+    const input =
+        \\| Col 1 | Col `|` 3 |
+        \\| --- | --- |
+        \\| a | b |
+    ;
+
+    var p = Parser.init(alloc, .{});
+    defer p.deinit();
+    try p.parseMarkdown(input);
+
+    const root = p.document.container();
+    try std.testing.expectEqual(@as(usize, 1), root.children.items.len);
+
+    const table = &root.children.items[0];
+    try std.testing.expect(table.isContainer());
+    try std.testing.expect(table.container().content == .Table);
+    try std.testing.expectEqual(@as(usize, 2), table.container().content.Table.ncol);
+    try std.testing.expectEqual(@as(usize, 3), table.container().content.Table.row);
+    // 2 header cells + 2 body cells (the code-span '|' does not add a column)
+    try std.testing.expectEqual(@as(usize, 4), table.container().children.items.len);
 }
 
 test "Parser supports table nested in task list item" {

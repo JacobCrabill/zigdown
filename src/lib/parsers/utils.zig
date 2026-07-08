@@ -301,7 +301,7 @@ pub fn isTableRow(line: []const Token) bool {
     const trimmed = trimLeadingWhitespace(line);
     if (trimmed.len == 0) return false;
     if (trimmed[0].kind != .PIPE) return false;
-    return countKind(trimmed, .PIPE) >= 2;
+    return countTablePipes(trimmed) >= 2;
 }
 
 /// Check for the pattern "[ ]*[>][ ]+"
@@ -613,6 +613,38 @@ pub fn countKind(line: []const Token, kind: TokenType) usize {
         if (tok.kind == kind) count += 1;
     }
     return count;
+}
+
+/// Count PIPE tokens that act as table column separators, i.e. those *not* inside an
+/// inline code span (delimited by CODE_INLINE '`' tokens). A '|' within `code` is literal.
+pub fn countTablePipes(line: []const Token) usize {
+    var count: usize = 0;
+    var in_code: bool = false;
+    for (line) |tok| {
+        switch (tok.kind) {
+            .CODE_INLINE => in_code = !in_code,
+            .PIPE => if (!in_code) {
+                count += 1;
+            },
+            else => {},
+        }
+    }
+    return count;
+}
+
+/// Find the index of the first PIPE token at or after 'start_index' that acts as a table
+/// column separator, i.e. is *not* inside an inline code span. Code-span state is tracked
+/// from the start of the line, so 'start_index' may fall anywhere.
+pub fn indexOfTablePipe(line: []const Token, start_index: usize) ?usize {
+    var in_code: bool = false;
+    for (line, 0..) |tok, i| {
+        switch (tok.kind) {
+            .CODE_INLINE => in_code = !in_code,
+            .PIPE => if (!in_code and i >= start_index) return i,
+            else => {},
+        }
+    }
+    return null;
 }
 
 /// Find the index of the first occurance of a 'kind' Token beginning from 'start_index' (inclusive).
