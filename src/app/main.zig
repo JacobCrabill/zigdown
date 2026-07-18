@@ -63,10 +63,10 @@ const Flags = struct {
         };
     },
 
-    pub fn verbose(self: *const Flags) bool {
+    pub fn logLevel(self: *const Flags) zd.debug.LogLevel {
         return switch (self.command) {
-            .serve, .install_parsers => false,
-            inline else => |opts| opts.verbose,
+            .serve, .install_parsers => .err,
+            inline else => |opts| opts.log_level,
         };
     }
 };
@@ -104,8 +104,8 @@ pub fn main(init: std.process.Init) !void {
 
     const result: Flags = flags.parse(io, args, "zigdown", Flags, .{ .colors = &g_colorscheme });
 
-    // Enable verbose logging if the --verbose flag was passed
-    zd.debug.setVerbose(result.verbose());
+    // Set the global log level based on the --log-level CLI argument
+    zd.debug.setMinLogLevel(result.logLevel());
 
     // Process the command-line arguments
     switch (result.command) {
@@ -207,7 +207,7 @@ fn handleRender(
     defer alloc.free(md_text);
 
     // Parse the document
-    var parsed = try zd.parser.timedParse(io, alloc, md_text, r_opts.verbose());
+    var parsed = try zd.parser.timedParse(io, alloc, md_text, r_opts.logLevel());
     defer parsed.parser.deinit();
 
     // Get the output stream

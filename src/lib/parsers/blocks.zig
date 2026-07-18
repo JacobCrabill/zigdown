@@ -213,7 +213,7 @@ pub const Parser = struct {
             .opts = opts,
             .lexer = Lexer{},
             .tokens = ArrayList(Token).init(alloc),
-            .logger = Logger{ .enabled = opts.verbose },
+            .logger = Logger{ .enabled = opts.log_level != .err },
             .text = null,
             .cursor = 0,
             .cur_token = undefined,

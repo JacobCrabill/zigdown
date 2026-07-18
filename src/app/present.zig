@@ -128,7 +128,7 @@ fn renderFile(io: std.Io, alloc: Allocator, writer: *std.Io.Writer, dir: []const
     const md_text = try fr.interface.allocRemaining(arena.allocator(), .unlimited);
 
     // Parse slide
-    var parser: Parser = Parser.init(arena.allocator(), .{ .copy_input = false, .verbose = false });
+    var parser: Parser = Parser.init(arena.allocator(), .{ .copy_input = false, .log_level = .err });
     defer parser.deinit();
 
     try parser.parseMarkdown(md_text);

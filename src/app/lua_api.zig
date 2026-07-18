@@ -58,7 +58,7 @@ export fn render_markdown(lua: ?*LuaState) callconv(.c) c_int {
     const columns: usize = if (raw_cols <= 0) 100 else @intCast(std.math.clamp(c.lua_tointeger(lua, 2), 10, 120));
 
     // Parse the input text
-    const opts = zd.parser.ParserOpts{ .copy_input = false, .verbose = false };
+    const opts = zd.parser.ParserOpts{ .copy_input = false, .log_level = .err };
     var parser = zd.Parser.init(alloc, opts);
     defer parser.deinit();
 
@@ -124,7 +124,7 @@ export fn format_markdown(lua: ?*LuaState) callconv(.c) c_int {
     const columns: usize = if (no_arg) 100 else @intCast(c.lua_tointeger(lua, 2));
 
     // Parse the input text
-    const opts = zd.parser.ParserOpts{ .copy_input = false, .verbose = false };
+    const opts = zd.parser.ParserOpts{ .copy_input = false, .log_level = .err };
     var parser = zd.Parser.init(alloc, opts);
     defer parser.deinit();
 

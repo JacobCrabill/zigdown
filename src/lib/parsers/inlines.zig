@@ -49,7 +49,7 @@ pub const InlineParser = struct {
         return Self{
             .alloc = alloc,
             .opts = opts,
-            .logger = Logger{ .enabled = opts.verbose },
+            .logger = Logger{ .enabled = opts.log_level != .err },
             .tokens = undefined,
             .cursor = 0,
             .cur_token = undefined,

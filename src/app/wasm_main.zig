@@ -135,7 +135,7 @@ export fn renderToHtml(md_ptr: [*:0]u8) void {
     // Parse the input text
     const opts = zd.parser.ParserOpts{
         .copy_input = false,
-        .verbose = false,
+        .log_level = .err,
     };
     wasm.log("Parsing: {s}\n", .{md_text});
     var parser = zd.Parser.init(alloc, opts);

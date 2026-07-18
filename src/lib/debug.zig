@@ -6,12 +6,27 @@ const wasm = @import("wasm.zig");
 
 const Token = @import("tokens.zig").Token;
 
-/// Log levels for diagnostic output.
-pub const LogLevel = enum {
+/// Log levels for diagnostic output, ordered from lowest to highest priority.
+pub const LogLevel = enum(u8) {
     debug,
     info,
     warn,
     err,
+
+    /// Returns the minimum log level for comparison.
+    pub fn min(self: LogLevel, other: LogLevel) LogLevel {
+        return if (@intFromEnum(self) < @intFromEnum(other)) self else other;
+    }
+
+    /// Checks if this level is at or below the given log limit level.
+    pub fn isBelow(self: LogLevel, limit: LogLevel) bool {
+        return @intFromEnum(self) <= @intFromEnum(limit);
+    }
+
+    /// Checks if this level is at or above the given minimum level.
+    pub fn atLeast(self: LogLevel, minimum: LogLevel) bool {
+        return @intFromEnum(self) >= @intFromEnum(minimum);
+    }
 };
 
 /// Global debug stream instance.
@@ -23,9 +38,9 @@ var write_buf: [1024]u8 = undefined;
 /// Global IO instance.
 var g_io: std.Io = undefined;
 
-/// Global verbose enabled flag.
-/// Set via setVerbose() from main() based on the --verbose CLI arg.
-var verbose_enabled: bool = false;
+/// Global minimum log level for filtering.
+/// Only messages at or above this level will be printed.
+var min_log_level: LogLevel = .err;
 
 /// Discarding writer to silently drop all log messages.
 /// Useful in WASM environments or other bare-metal envs without libc, stderr, etc.
@@ -39,10 +54,10 @@ pub fn init(in_io: std.Io, out_stream: *std.Io.Writer) void {
     stream = out_stream;
 }
 
-/// Set the global verbose enabled flag.
+/// Set the global minimum log level.
 /// Called from main() after parsing CLI arguments.
-pub fn setVerbose(enabled: bool) void {
-    verbose_enabled = enabled;
+pub fn setMinLogLevel(level: LogLevel) void {
+    min_log_level = level;
 }
 
 /// Get the global debug output stream.
@@ -126,7 +141,7 @@ pub fn errorMsg(comptime src: std.builtin.SourceLocation, comptime fmt: []const 
 /// - Module-specific prefixes (via `scoped()`)
 /// - Log level color coding (debug=blue, info=cyan, warn=yellow, err=red)
 /// - Indentation depth tracking
-/// - Global `--verbose` flag integration
+/// - Log level filtering (via global `min_log_level`)
 pub const Logger = struct {
     const Self = @This();
     prefix: ?[]const u8 = null,
@@ -141,39 +156,42 @@ pub const Logger = struct {
         return .{ .prefix = module_name };
     }
 
-    /// Create a logger with verbose output enabled.
-    /// Useful for parser debug logging when --verbose is passed.
-    pub fn scopedVerbose(comptime module_name: []const u8) Self {
-        return .{ .prefix = module_name, .enabled = true };
+    /// Indent by one level. Returns a new logger with incremented depth.
+    pub fn indent(self: Self) Self {
+        return .{ .prefix = self.prefix, .depth = self.depth + 1, .enabled = self.enabled };
     }
 
-    /// Create a logger with verbose output enabled and custom depth.
-    pub fn verboseWithDepth(comptime module_name: []const u8, depth: usize) Self {
-        return .{ .prefix = module_name, .enabled = true, .depth = depth };
+    /// Dedent by one level. Returns a new logger with decremented depth (minimum 0).
+    pub fn dedent(self: Self) Self {
+        return .{ .prefix = self.prefix, .depth = if (self.depth > 0) self.depth - 1 else 0, .enabled = self.enabled };
     }
 
-    /// Log a debug message
+    /// Log a debug message.
+    /// Only prints if the message's level is >= the global minimum log level.
     pub fn debug(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (!self.enabled or !verbose_enabled) return;
+        if (!self.enabled or @intFromEnum(LogLevel.debug) < @intFromEnum(min_log_level)) return;
         self.doIndent();
         self._logLevelWithNewline(.debug, fmt, args);
     }
 
-    /// Log an info message
+    /// Log an info message.
+    /// Only prints if the message's level is >= the global minimum log level.
     pub fn info(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (!self.enabled or !verbose_enabled) return;
+        if (!self.enabled or @intFromEnum(LogLevel.info) < @intFromEnum(min_log_level)) return;
         self.doIndent();
         self._logLevelWithNewline(.info, fmt, args);
     }
 
-    /// Log a warning message
+    /// Log a warning message.
+    /// Only prints if the message's level is >= the global minimum log level.
     pub fn warn(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (!self.enabled or !verbose_enabled) return;
+        if (!self.enabled or @intFromEnum(LogLevel.warn) < @intFromEnum(min_log_level)) return;
         self.doIndent();
         self._logLevelWithNewline(.warn, fmt, args);
     }
 
-    /// Log an error message
+    /// Log an error message.
+    /// Always prints (errors are never filtered).
     pub fn err(self: Self, comptime fmt: []const u8, args: anytype) void {
         if (!self.enabled) return;
         self.doIndent();
@@ -186,27 +204,30 @@ pub const Logger = struct {
         self.debug(fmt, args);
     }
 
-    /// Raw print without indentation or log level prefix
+    /// Raw print without indentation or log level prefix.
+    /// Only prints if debug level is >= the global minimum log level.
     pub fn raw(self: Self, comptime fmt: []const u8, args: anytype) void {
-        if (!self.enabled or !verbose_enabled) return;
+        if (!self.enabled or @intFromEnum(LogLevel.debug) < @intFromEnum(min_log_level)) return;
         const s = getStream();
         s.print(fmt, args) catch {};
     }
 
-    /// Print types of tokens for debugging
-    pub fn printTypes(self: Self, tokens: []const Token, indent: bool) void {
-        if (!self.enabled or !verbose_enabled) return;
-        if (indent) self.doIndent();
+    /// Print types of tokens for debugging.
+    /// Only prints if debug level is >= the global minimum log level.
+    pub fn printTypes(self: Self, tokens: []const Token, do_indent: bool) void {
+        if (!self.enabled or @intFromEnum(LogLevel.debug) < @intFromEnum(min_log_level)) return;
+        if (do_indent) self.doIndent();
         for (tokens) |tok| {
             self.raw("{s}, ", .{@tagName(tok.kind)});
         }
         self.raw("\n", .{});
     }
 
-    /// Print text of tokens for debugging
-    pub fn printText(self: Self, tokens: []const Token, indent: bool) void {
-        if (!self.enabled or !verbose_enabled) return;
-        if (indent) self.doIndent();
+    /// Print text of tokens for debugging.
+    /// Only prints if debug level is >= the global minimum log level.
+    pub fn printText(self: Self, tokens: []const Token, do_indent: bool) void {
+        if (!self.enabled or @intFromEnum(LogLevel.debug) < @intFromEnum(min_log_level)) return;
+        if (do_indent) self.doIndent();
         self.raw("\"", .{});
         for (tokens) |tok| {
             if (tok.kind == .BREAK) {

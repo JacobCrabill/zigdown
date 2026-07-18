@@ -28,8 +28,8 @@ const errorMsg = debug.errorMsg;
 pub const ParserOpts = struct {
     /// Allocate a copy of the input text (Caller may free input after creating Parser)
     copy_input: bool = false,
-    /// Fully log the output of parser to the console
-    verbose: bool = false,
+    /// Minimum log level for parser logging
+    log_level: debug.LogLevel = .err,
 };
 
 ///////////////////////////////////////////////////////////////////////////////

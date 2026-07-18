@@ -4,6 +4,7 @@
 //! custom frontend to Zigdown, if you have the need to do that).
 const Css = @import("assets").html.Css;
 const RenderMethod = @import("render.zig").RenderMethod;
+const debug = @import("debug.zig");
 
 /// This is a bit ugly, but allows us to unify all of the render options
 /// into one struct while keeping the Flags CLI parsing clean and simple.
@@ -26,9 +27,9 @@ pub const RenderConfig = union(RenderMethod) {
         };
     }
 
-    pub fn verbose(self: *const Self) bool {
+    pub fn logLevel(self: *const Self) debug.LogLevel {
         return switch (self.*) {
-            inline else => |opts| opts.verbose,
+            inline else => |opts| opts.log_level,
         };
     }
 
@@ -56,7 +57,7 @@ pub const RenderConfig = union(RenderMethod) {
 pub const HtmlRenderCmdOpts = struct {
     stdin: bool = false,
     output: ?[]const u8 = null,
-    verbose: bool = false,
+    log_level: debug.LogLevel = .err,
     timeit: bool = false,
     body_only: bool = false,
 
@@ -78,13 +79,13 @@ pub const HtmlRenderCmdOpts = struct {
         .stdin = "Read document from stdin (instead of from a file)",
         .output = "Output to a file, instead of to stdout",
         .timeit = "Time the parsing & rendering and display the results",
-        .verbose = "Enable verbose output from the parser",
+        .log_level = "Minimum log level: err, warn, info, or debug",
         .body_only = "Output only the body of the HTML document (Useful for templating)",
     };
     pub const switches = .{
         .stdin = 'i',
         .output = 'o',
-        .verbose = 'v',
+        .log_level = 'v',
         .timeit = 't',
         .body_only = 'b',
     };
@@ -95,7 +96,7 @@ pub const ConsoleRenderCmdOpts = struct {
     stdin: bool = false,
     width: ?usize = null,
     output: ?[]const u8 = null,
-    verbose: bool = false,
+    log_level: debug.LogLevel = .err,
     timeit: bool = false,
     nofetch: bool = false,
     pager: bool = false,
@@ -110,7 +111,7 @@ pub const ConsoleRenderCmdOpts = struct {
         .width = "Console width to render within (default: 90 chars)",
         .output = "Output to a file, instead of to stdout",
         .timeit = "Time the parsing & rendering and display the results",
-        .verbose = "Enable verbose output from the parser",
+        .log_level = "Minimum log level: err, warn, info, or debug",
         .nofetch = "Don't fetch images from the internet (just display the image link)",
         .pager = "Page the output in the terminal (e.g. like 'less')",
     };
@@ -118,7 +119,7 @@ pub const ConsoleRenderCmdOpts = struct {
         .stdin = 'i',
         .width = 'w',
         .output = 'o',
-        .verbose = 'v',
+        .log_level = 'v',
         .timeit = 't',
         .nofetch = 'n',
         .pager = 'p',
@@ -131,7 +132,7 @@ pub const FormatRenderCmdOpts = struct {
     width: ?usize = null,
     output: ?[]const u8 = null,
     inplace: bool = false,
-    verbose: bool = false,
+    log_level: debug.LogLevel = .err,
     timeit: bool = false,
     positional: struct {
         file: ?[]const u8,
@@ -145,14 +146,14 @@ pub const FormatRenderCmdOpts = struct {
         .output = "Output to a file, instead of to stdout",
         .inplace = "Overwrite the input file, instead of writing to stdout (Formatter only)",
         .timeit = "Time the parsing & rendering and display the results",
-        .verbose = "Enable verbose output from the parser",
+        .log_level = "Minimum log level: err, warn, info, or debug",
     };
     pub const switches = .{
         .stdin = 'i',
         .width = 'w',
         .output = 'o',
         .inplace = 'I',
-        .verbose = 'v',
+        .log_level = 'v',
         .timeit = 't',
     };
 };
@@ -163,7 +164,7 @@ pub const RenderCmdOpts = struct {
     width: ?usize = null,
     output: ?[]const u8 = null,
     inplace: bool = false,
-    verbose: bool = false,
+    log_level: debug.LogLevel = .err,
     timeit: bool = false,
     positional: struct {
         file: ?[]const u8,
@@ -177,14 +178,14 @@ pub const RenderCmdOpts = struct {
         .output = "Output to a file, instead of to stdout",
         .inplace = "Overwrite the input file, instead of writing to stdout (Formatter only)",
         .timeit = "Time the parsing & rendering and display the results",
-        .verbose = "Enable verbose output from the parser",
+        .log_level = "Minimum log level: err, warn, info, or debug",
     };
     pub const switches = .{
         .stdin = 'i',
         .width = 'w',
         .output = 'o',
         .inplace = 'I',
-        .verbose = 'v',
+        .log_level = 'v',
         .timeit = 't',
     };
 };
@@ -229,7 +230,7 @@ pub const PresentCmdOpts = struct {
     slides: ?[]const u8 = null,
     directory: ?[]const u8 = null,
     recurse: bool = false,
-    verbose: bool = false,
+    log_level: debug.LogLevel = .err,
 
     pub const descriptions = .{
         .directory =
@@ -242,13 +243,13 @@ pub const PresentCmdOpts = struct {
         \\all files in the directory in alphabetical order).
         ,
         .recurse = "Recursively iterate the directory to find .md files.",
-        .verbose = "Enable verbose output from the Markdown parser.",
+        .log_level = "Minimum log level: err, warn, info, or debug",
     };
 
     pub const switches = .{
         .directory = 'd',
         .slides = 's',
         .recurse = 'r',
-        .verbose = 'v',
+        .log_level = 'v',
     };
 };
