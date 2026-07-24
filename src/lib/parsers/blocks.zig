@@ -50,11 +50,10 @@ fn isContinuationLineQuote(line: []const Token) bool {
     //
     // Otherwise, if it is Paragraph lazy continuation line,
     // it can also be a part of the Quote block
-    var leading_ws: u8 = 0;
     for (line) |tok| {
         switch (tok.kind) {
-            .SPACE => leading_ws += 1,
-            .INDENT => leading_ws += 2,
+            .SPACE => {},
+            .INDENT => {},
             .GT => return true,
             else => return false,
         }
@@ -454,12 +453,12 @@ pub const Parser = struct {
         const is_list_item: bool = utils.isListItem(line);
         if (is_break) {
             // We allow spacing between each list item, so keep track of how many blank lines are between each item.
-            cblock.content.List._current_break_count += 1;
+            cblock.content.List._current_break_count +|= 1;
 
             // NOTE: Only the gap between the 1st and 2nd items is used to set the spacing;
             // the inter-item gaps after the 2nd item MUST be less than the gap between the 1st and 2nd items.
             if (cblock.children.items.len == 1) {
-                cblock.content.List.spacing += 1;
+                cblock.content.List.spacing +|= 1;
                 return true;
             } else if (cblock.children.items.len > 1) {
                 const expected_spacing: u8 = cblock.content.List.spacing;
@@ -690,7 +689,7 @@ pub const Parser = struct {
                             }
                         },
                         .MINUS => {
-                            dash_count += 1;
+                            dash_count +|= 1;
                         },
                         else => {},
                     }
@@ -876,7 +875,7 @@ pub const Parser = struct {
         var level: u8 = 0;
         for (line) |tok| {
             if (tok.kind != .HASH) break;
-            level += 1;
+            level +|= 1;
         }
         if (level <= 0) return false;
         const trimmed_line = utils.trimLeadingWhitespace(line[level..]);
@@ -1058,6 +1057,10 @@ pub const Parser = struct {
 
                 switch (c.content) {
                     .List => {
+                        if (c.children.items.len == 1) {
+                            // Subtract trailing blank lines that occurred after the last block of the list item
+                            c.content.List.spacing -|= c.content.List._current_break_count;
+                        }
                         // Spacing only counts if there are >1 ListItems,
                         // OR if a single item has multiple block children (loose single-item list)
                         const has_multi_item_children: bool = for (c.children.items) |*child| {
@@ -1367,4 +1370,28 @@ test "Parser: escaped pipe in table cell is not a column separator" {
         }
     }
     try std.testing.expect(found_escaped);
+}
+
+test "sub-list blank line does not corrupt outer list spacing" {
+    const alloc = std.testing.allocator;
+    const input =
+        \\- This line is fine
+        \\  - This sub-list has a blank line following it
+        \\  - The bug caused this sub-list to be pushed down by one line on every parse/reformat
+        \\
+        \\The culprit is the empty line above this one.
+    ;
+
+    var p = Parser.init(alloc, .{});
+    defer p.deinit();
+    try p.parseMarkdown(input);
+
+    const root = p.document.container();
+
+    // Check first element: outer List
+    const outer_list = &root.children.items[0];
+    try std.testing.expect(outer_list.container().content == .List);
+
+    // The spacing of the outer list should be 0 because the empty line was trailing
+    try std.testing.expectEqual(@as(u8, 0), outer_list.container().content.List.spacing);
 }
