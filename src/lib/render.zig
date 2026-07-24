@@ -135,6 +135,7 @@ pub fn render(opts: RenderOptions) !void {
 
 /// Page the output to the terminal given by 'writer'.
 ///
+/// io:     The IO instance.
 /// alloc:  The allocator to use for all file reading, parsing, and rendering.
 /// writer: The writer for the tty to page the output to.
 /// output: The rendered output to page.
@@ -148,24 +149,34 @@ pub fn pageOutput(io: std.Io, alloc: Allocator, writer: *std.Io.Writer, output: 
     const n_rows = lines.items.len;
     const tsize = gfx.getTerminalSize() catch gfx.TermSize{};
 
-    // Begin the presentation, using stdin to go forward/backward
+    const max_scroll = n_rows - tsize.rows;
+    // TODO: pre-allocate buffer to output for entire screen; dump buffer all at once on change
+
+    // Begin paging, using stdin to handle navigation
     var quit: bool = false;
     var row: usize = 0;
+    var changed: bool = true;
     while (!quit) {
-        _ = try writer.write(cons.clear_graphics); // Clear all graphics/images
-        _ = try writer.write(cons.clear_screen);
-        try raw_tty.moveCursor(0, 0);
-        for (lines.items[row..@min(row + tsize.rows - 1, n_rows)]) |line| {
-            try writer.writeAll(line);
-            try writer.writeAll("\n");
-        }
-        // TODO: Consider putting in lower-right corner like slide # in present mode
-        // try writer.print("[row {d} / {d}]\n", .{ row, n_rows });
-        try writer.flush();
+        if (changed) {
+            _ = try writer.write(cons.clear_graphics); // Clear all graphics/images
+            _ = try writer.write(cons.clear_screen);
+            try raw_tty.moveCursor(0, 0);
+            for (lines.items[row..@min(row + tsize.rows - 1, n_rows)]) |line| {
+                try writer.writeAll(line);
+                try writer.writeAll("\n");
+            }
 
+            try raw_tty.moveCursor(tsize.rows - 1, tsize.cols - 18);
+            try writer.print("[line {d:4} / {d:4}]\n", .{ row, n_rows });
+            try writer.flush();
+
+            changed = false;
+        }
+
+        const prev_row = row;
         switch (raw_tty.read()) {
             'n', 'j', 'l' => { // Next Slide
-                if (row < n_rows)
+                if (row < max_scroll)
                     row += 1;
             },
             'p', 'h', 'k' => { // Previous Slide
@@ -176,25 +187,31 @@ pub fn pageOutput(io: std.Io, alloc: Allocator, writer: *std.Io.Writer, output: 
             'q' => { // Quit
                 quit = true;
             },
+            // half-page down/up
+            'd' => {
+                row += @min(@divFloor(tsize.rows, 2), max_scroll - row);
+            },
+            'u' => {
+                row -|= @divFloor(tsize.rows, 2);
+            },
             27 => { // Escape (0x1b)
-                if (raw_tty.read() == 91) { // 0x5b (??)
-                    switch (raw_tty.read()) {
-                        66, 67 => { // Down, Right -- Next Slide
-                            if (row < n_rows) {
-                                row += 1;
-                            }
-                        },
-                        65, 68 => { // Up, Left -- Previous Slide
-                            if (row > 0) {
-                                row -= 1;
-                            }
-                        },
-                        else => {},
-                    }
+                switch (raw_tty.read()) {
+                    66, 67 => { // Down, Right -- Next Slide
+                        if (row < max_scroll) {
+                            row += 1;
+                        }
+                    },
+                    65, 68 => { // Up, Left -- Previous Slide
+                        if (row > 0) {
+                            row -= 1;
+                        }
+                    },
+                    else => {},
                 }
             },
             else => {},
         }
+        if (prev_row != row) changed = true;
     }
 }
 
