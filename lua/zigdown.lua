@@ -9,7 +9,7 @@ M.opts = {
 }
 
 -- Required version of the Zig compiler
-local zig_ver = "0.15.1"
+local zig_ver = "0.16.0"
 
 --- Setup the plugin with user-provided options
 function M.setup(opts)
