@@ -1346,6 +1346,15 @@ test "FormatRenderer" {
             \\
             ,
         },
+        .{
+            .input =
+            \\We have _italic text_: And the ':' has no effect.
+            ,
+            .output =
+            \\We have _italic text_: And the ':' has no effect.
+            \\
+            ,
+        },
     };
 
     const alloc = std.testing.allocator;
