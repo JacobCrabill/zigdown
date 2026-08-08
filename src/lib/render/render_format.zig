@@ -634,7 +634,7 @@ pub const FormatRenderer = struct {
             for (0..nrow) |i| {
                 const cell_idx: usize = i * ncol + j;
                 const cell = cells.items[cell_idx];
-                max_cols.items[j] = @max(max_cols.items[j], cell.text.len);
+                max_cols.items[j] = @max(max_cols.items[j], displayWidth(cell.text));
             }
         }
 
@@ -653,7 +653,7 @@ pub const FormatRenderer = struct {
                         text = text[0..end_idx];
                     }
                     self.write(text);
-                    self.writeNTimes(" ", max_cols.items[j] - text.len + 1);
+                    self.writeNTimes(" ", max_cols.items[j] - displayWidth(text) + 1);
                 } else {
                     self.writeNTimes(" ", max_cols.items[j] + 1);
                 }
@@ -935,6 +935,12 @@ pub const FormatRenderer = struct {
         self.mode = .scratch;
     }
 };
+
+/// The on-screen width of some text, in columns.
+/// Multi-byte UTF-8 codepoints occupy a single column, so we can't use the byte length.
+fn displayWidth(text: []const u8) usize {
+    return std.unicode.utf8CountCodepoints(text) catch text.len;
+}
 
 //////////////////////////////////////////////////////////
 // Tests
@@ -1352,6 +1358,25 @@ test "FormatRenderer" {
             ,
             .output =
             \\We have _italic text_: And the ':' has no effect.
+            \\
+            ,
+        },
+        .{
+            .input =
+            \\| mesh | cells  | CPU | GPU |
+            \\| ----- | ----- | ----- | --- |
+            \\| 32×32     | 1,024  | 0.69 s  | **0.35 s**  |
+            \\| 128×128   | 16,384 | 13.37 s | **1.66 s**  |
+            \\| 8×8×8    | 512 | 2.71 s | **0.59 s**  |
+            \\| 24×24×24  | 13,824 | 83.96 s | **15.18 s** |
+            ,
+            .output =
+            \\| mesh     | cells  | CPU     | GPU         |
+            \\| -------- | ------ | ------- | ----------- |
+            \\| 32×32    | 1,024  | 0.69 s  | **0.35 s**  |
+            \\| 128×128  | 16,384 | 13.37 s | **1.66 s**  |
+            \\| 8×8×8    | 512    | 2.71 s  | **0.59 s**  |
+            \\| 24×24×24 | 13,824 | 83.96 s | **15.18 s** |
             \\
             ,
         },
