@@ -664,6 +664,7 @@ pub const RangeRenderer = struct {
         const Cell = struct {
             text: []const u8 = undefined,
             idx: usize = 0, // The current index into 'text'
+            line_idx: usize = 0, // Which of the cell's own lines is written next
             style_ranges: ArrayList(StyleRange) = undefined,
         };
         var cells = ArrayList(Cell).init(alloc);
@@ -688,13 +689,9 @@ pub const RangeRenderer = struct {
             try sub_renderer.renderBlock(item);
             sub_renderer.renderEnd();
 
-            // Shift the style ranges over by the amount of indent
-            // to map from sub-renderer to parent renderer
-            for (sub_renderer.style_ranges.items) |*range| {
-                range.start += (cell_col_idx + 1) * self.opts.indent;
-                range.end += (cell_col_idx + 1) * self.opts.indent;
-            }
-
+            // Leave the style ranges in the sub-renderer's own (line, byte) coordinates.
+            // They get mapped into parent coordinates as each line is written out below,
+            // where the true byte column of the cell's text is known.
             try cells.append(.{
                 .text = alloc_writer.writer.buffered(),
                 .style_ranges = sub_renderer.style_ranges,
@@ -722,34 +719,6 @@ pub const RangeRenderer = struct {
                 max_rows = @max(max_rows, n_lines);
             }
 
-            // Append all style ranges from each cell in this row of the table to the parent ranges
-            const current_line = self.line;
-            for (0..ncol) |j| {
-                const cell_idx: usize = i * ncol + j;
-                const cell: *Cell = &cells.items[cell_idx];
-
-                // Calculate column offset using precomputed widths
-                var col_offset: usize = self.opts.indent + 2; // Start after indent and first "┃ "
-                for (0..j) |k| {
-                    col_offset += col_widths.items[k] + 1; // width + separator
-                }
-                for (cell.style_ranges.items) |range| {
-                    // The sub-renderer starts line 0 at col_byte=0 (no indent),
-                    // but wrapped lines (line > 0) start at col_byte=sub_indent
-                    // because renderBreak writes the sub-renderer's indent.
-                    // We must subtract that indent on wrapped lines so that
-                    // the col_offset mapping is consistent across all lines.
-                    const sub_indent_adjust: usize = if (range.line > 0) 1 else 0;
-                    const new_range: StyleRange = .{
-                        .line = current_line + range.line,
-                        .start = col_offset + range.start - sub_indent_adjust,
-                        .end = col_offset + range.end - sub_indent_adjust,
-                        .style = range.style,
-                    };
-                    self.style_ranges.append(new_range) catch @panic("OOM");
-                }
-            }
-
             // Loop over the # of rows of text in this single row of the table
             for (0..max_rows) |_| {
                 self.writeLeaders();
@@ -770,10 +739,30 @@ pub const RangeRenderer = struct {
                         // Skip any spaces if they occur at the start of a new line.
                         const orig_text = cell.text[cell.idx..];
                         var text = utils.trimLeadingWhitespace(orig_text);
-                        cell.idx += orig_text.len - text.len;
+                        const n_trimmed: usize = orig_text.len - text.len;
+                        cell.idx += n_trimmed;
                         if (std.mem.indexOfScalar(u8, text, '\n')) |end_idx| {
                             text = text[0..end_idx];
                         }
+
+                        // Map this line's style ranges from the cell's coordinates into the
+                        // parent's. The text lands at the current byte column, so that is the
+                        // only offset needed - it already accounts for the multi-byte box
+                        // characters and any multi-byte content in the preceding columns.
+                        // Ranges shift back by the whitespace just trimmed off the front.
+                        const text_start: usize = self.col_byte;
+                        const text_end: usize = text_start + text.len;
+                        for (cell.style_ranges.items) |range| {
+                            if (range.line != cell.line_idx) continue;
+                            self.style_ranges.append(.{
+                                .line = self.line,
+                                .start = @min(text_start + (range.start -| n_trimmed), text_end),
+                                .end = @min(text_start + (range.end -| n_trimmed), text_end),
+                                .style = range.style,
+                            }) catch @panic("OOM");
+                        }
+                        cell.line_idx += 1;
+
                         self.write(text);
                         cell.idx += text.len + 1;
 
@@ -1432,15 +1421,105 @@ test "RangeRenderer" {
             // TODO: Fix trailing whitespace - can't use multiline string here!
             .output = "\n  ‣ ZEFR: The Aerospace Computing Lab (ACL)'s collaborative high-order, GPU-enabled CFD \n    solver. Uses the Direct Flux Reconstruction (DFR) method on both CPUs and GPUs (\n    using CUDA), and can run on arbitrary 3D unstructured grids.\n  \n  ",
         },
+        .{
+            // Multi-byte cell contents must not shift the table's column alignment
+            .input =
+            \\| a | b |
+            \\| - | - |
+            \\| ×× | **BOLD** |
+            ,
+            .output = "\n  ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┓\n  ┃ a           ┃ b            ┃\n  ┣━━━━━━━━━━━━━╋━━━━━━━━━━━━━━┫\n  ┃ ××          ┃ BOLD         ┃\n  ┗━━━━━━━━━━━━━┻━━━━━━━━━━━━━━┛\n  \n  ",
+            .width = 34,
+        },
     };
 
     const alloc = std.testing.allocator;
-    for (test_data) |data| {
+    for (test_data, 0..) |data, case_idx| {
         var arena = std.heap.ArenaAllocator.init(alloc);
         defer arena.deinit();
         var alloc_writer = std.Io.Writer.Allocating.init(arena.allocator());
 
+        errdefer std.debug.print("[case {d}] input: {s}\n", .{ case_idx, data.input });
+
         try testRender(std.testing.io, arena.allocator(), data.input, &alloc_writer.writer, data.width);
         try std.testing.expectEqualSlices(u8, data.output, alloc_writer.writer.buffered());
+    }
+}
+
+test "RangeRenderer table style ranges" {
+    // The style ranges are byte offsets into the rendered text. Multi-byte characters
+    // anywhere in a table - the box drawing characters themselves, or the cell contents
+    // of an earlier column - shift those offsets, so a styled run must still be located
+    // by slicing the output rather than by counting display columns.
+    const TestData = struct {
+        input: []const u8,
+        /// The exact text each bold range is expected to cover, in order
+        bold: []const []const u8,
+        width: usize = 40,
+    };
+
+    const test_data: []const TestData = &.{
+        // Baseline: all-ASCII table
+        .{
+            .input = "| a | b |\n| - | - |\n| x | **BOLD** |\n",
+            .bold = &.{"BOLD"},
+        },
+        // Multi-byte content in an earlier column shifts the styled column's byte offset
+        .{
+            .input = "| a | b |\n| - | - |\n| ××× | **BOLD** |\n",
+            .bold = &.{"BOLD"},
+        },
+        // Multi-byte characters inside the styled run itself
+        .{
+            .input = "| a | b |\n| - | - |\n| × | **A×B** |\n",
+            .bold = &.{"A×B"},
+        },
+        // Styled runs in several columns, with multi-byte content before each
+        .{
+            .input = "| a | b | c |\n| - | - | - |\n| ×× | **B1** | **B2** |\n",
+            .bold = &.{ "B1", "B2" },
+            .width = 60,
+        },
+        // A styled run that wraps onto a second line within its cell
+        .{
+            .input = "| a | b |\n| - | - |\n| ×× | **alpha beta gamma delta** |\n",
+            .bold = &.{ "alpha beta ", "gamma delta" },
+            .width = 34,
+        },
+    };
+
+    const alloc = std.testing.allocator;
+    for (test_data, 0..) |data, case_idx| {
+        errdefer std.debug.print("[case {d}] input: {s}\n", .{ case_idx, data.input });
+
+        var arena = std.heap.ArenaAllocator.init(alloc);
+        defer arena.deinit();
+        var alloc_writer = std.Io.Writer.Allocating.init(arena.allocator());
+
+        var p = @import("../parser.zig").Parser.init(arena.allocator(), .{});
+        try p.parseMarkdown(data.input);
+        var r = RangeRenderer.init(std.testing.io, arena.allocator(), &alloc_writer.writer, .{ .width = data.width });
+        try r.renderBlock(p.document);
+
+        const text = alloc_writer.writer.buffered();
+        var lines = ArrayList([]const u8).init(arena.allocator());
+        var line_iter = std.mem.splitScalar(u8, text, '\n');
+        while (line_iter.next()) |line| try lines.append(line);
+
+        // Slice each bold range out of the rendered text and compare against the expectation
+        var n_bold: usize = 0;
+        for (r.style_ranges.items) |range| {
+            if (!range.style.bold) continue;
+
+            try std.testing.expect(range.line < lines.items.len);
+            const line = lines.items[range.line];
+            try std.testing.expect(range.start <= range.end);
+            try std.testing.expect(range.end <= line.len);
+
+            try std.testing.expect(n_bold < data.bold.len);
+            try std.testing.expectEqualSlices(u8, data.bold[n_bold], line[range.start..range.end]);
+            n_bold += 1;
+        }
+        try std.testing.expectEqual(data.bold.len, n_bold);
     }
 }
