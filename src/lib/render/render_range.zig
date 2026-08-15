@@ -213,7 +213,7 @@ pub const RangeRenderer = struct {
     /// Write an array of bytes to the underlying writer, and update the current column
     fn write(self: *Self, bytes: []const u8) void {
         self.prerender.writer.writeAll(bytes) catch |err| {
-            errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
+            errorMsg(@src(), "Unable to write! {s}", .{@errorName(err)});
         };
         self.column += std.unicode.utf8CountCodepoints(bytes) catch bytes.len;
         self.col_byte += bytes.len;
@@ -222,14 +222,14 @@ pub const RangeRenderer = struct {
     /// Write an array of bytes to the underlying writer, without updating the current column
     fn writeno(self: *Self, bytes: []const u8) void {
         self.prerender.writer.writeAll(bytes) catch |err| {
-            errorMsg(@src(), "Unable to write! {s}\n", .{@errorName(err)});
+            errorMsg(@src(), "Unable to write! {s}", .{@errorName(err)});
         };
     }
 
     /// Print the format and args to the output stream, updating the current column
     fn print(self: *Self, comptime fmt: []const u8, args: anytype) void {
         const text: []const u8 = std.fmt.allocPrint(self.alloc, fmt, args) catch |err| blk: {
-            errorMsg(@src(), "Unable to print! {s}\n", .{@errorName(err)});
+            errorMsg(@src(), "Unable to print! {s}", .{@errorName(err)});
             break :blk "";
         };
         defer self.alloc.free(text);
@@ -239,7 +239,7 @@ pub const RangeRenderer = struct {
     /// Print the format and args to the output stream, without updating the current column
     fn printno(self: *Self, comptime fmt: []const u8, args: anytype) void {
         self.prerender.writer.print(fmt, args) catch |err| {
-            errorMsg(@src(), "Unable to print! {s}\n", .{@errorName(err)});
+            errorMsg(@src(), "Unable to print! {s}", .{@errorName(err)});
         };
     }
 

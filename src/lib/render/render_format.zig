@@ -207,7 +207,7 @@ pub const FormatRenderer = struct {
             .final => self.stream,
         };
         stream.writeAll(bytes) catch |err| {
-            errorMsg(@src(), "Unable to write to {t} writer! {s}\n", .{ self.mode, @errorName(err) });
+            errorMsg(@src(), "Unable to write to {t} writer! {s}", .{ self.mode, @errorName(err) });
         };
 
         if (self.mode != .scratch)
@@ -222,7 +222,7 @@ pub const FormatRenderer = struct {
             .final => self.stream,
         };
         stream.writeAll(bytes) catch |err| {
-            errorMsg(@src(), "Unable to write to {t} writer! {s}\n", .{ self.mode, @errorName(err) });
+            errorMsg(@src(), "Unable to write to {t} writer! {s}", .{ self.mode, @errorName(err) });
         };
     }
 
@@ -237,7 +237,7 @@ pub const FormatRenderer = struct {
         // Keep track of the bytes written after formatting in order to increment the column
         const end0 = stream.end;
         stream.print(fmt, args) catch |err| {
-            errorMsg(@src(), "Unable to print to {t} buffer! {s}\n", .{ self.mode, @errorName(err) });
+            errorMsg(@src(), "Unable to print to {t} buffer! {s}", .{ self.mode, @errorName(err) });
         };
         const end1 = stream.end;
         if (self.mode != .scratch and end1 > end0) {
@@ -254,7 +254,7 @@ pub const FormatRenderer = struct {
             .final => self.stream,
         };
         stream.print(fmt, args) catch |err| {
-            errorMsg(@src(), "Unable to print to {t} buffer! {s}\n", .{ self.mode, @errorName(err) });
+            errorMsg(@src(), "Unable to print to {t} buffer! {s}", .{ self.mode, @errorName(err) });
         };
     }
 

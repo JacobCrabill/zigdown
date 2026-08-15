@@ -937,37 +937,55 @@ test generateTableOfContents {
     toc.print(1);
 
     const expected =
-        \\│ Container: open: false, type: List with 2 children
-        \\│ │ List Spacing: 0
-        \\│ │ Container: open: false, type: ListItem with 2 children
-        \\│ │ │ Leaf: open: false, type: Paragraph
-        \\│ │ │ │ Inline content:
-        \\│ │ │ │ │ Link:
-        \\│ │ │ │ │ │ Text: 'Heading 1' [line: 0, col: 0]
-        \\│ │ │ Container: open: false, type: List with 2 children
-        \\│ │ │ │ List Spacing: 0
-        \\│ │ │ │ Container: open: false, type: ListItem with 2 children
-        \\│ │ │ │ │ Leaf: open: false, type: Paragraph
-        \\│ │ │ │ │ │ Inline content:
-        \\│ │ │ │ │ │ │ Link:
-        \\│ │ │ │ │ │ │ │ Text: 'Heading 2' [line: 0, col: 0]
-        \\│ │ │ │ │ Container: open: false, type: List with 1 children
-        \\│ │ │ │ │ │ List Spacing: 0
-        \\│ │ │ │ │ │ Container: open: false, type: ListItem with 1 children
-        \\│ │ │ │ │ │ │ Leaf: open: false, type: Paragraph
-        \\│ │ │ │ │ │ │ │ Inline content:
-        \\│ │ │ │ │ │ │ │ │ Link:
-        \\│ │ │ │ │ │ │ │ │ │ Text: 'Heading 3' [line: 0, col: 0]
-        \\│ │ │ │ Container: open: false, type: ListItem with 1 children
-        \\│ │ │ │ │ Leaf: open: false, type: Paragraph
-        \\│ │ │ │ │ │ Inline content:
-        \\│ │ │ │ │ │ │ Link:
-        \\│ │ │ │ │ │ │ │ Text: 'Heading 2-2' [line: 0, col: 0]
-        \\│ │ Container: open: false, type: ListItem with 1 children
-        \\│ │ │ Leaf: open: false, type: Paragraph
-        \\│ │ │ │ Inline content:
-        \\│ │ │ │ │ Link:
-        \\│ │ │ │ │ │ Text: 'Heading 1-2' [line: 0, col: 0]
+        \\│ ┌─ Container: List (2 children)
+        \\│ │ ├─ kind: unordered, spacing: 0
+        \\│ │ ┌─ Container: ListItem (2 children)
+        \\│ │ │ ┌─ Leaf: Paragraph
+        \\│ │ │ │ ├─ inlines (1)
+        \\│ │ │ │ │ ├─ link
+        \\│ │ │ │ │ │ ├─ text: 'Heading 1' @(0,0)
+        \\│ │ │ │ │ │ │ │─ style: bold 
+        \\│ │ │ └─
+        \\│ │ │ ┌─ Container: List (2 children)
+        \\│ │ │ │ ├─ kind: unordered, spacing: 0
+        \\│ │ │ │ ┌─ Container: ListItem (2 children)
+        \\│ │ │ │ │ ┌─ Leaf: Paragraph
+        \\│ │ │ │ │ │ ├─ inlines (1)
+        \\│ │ │ │ │ │ │ ├─ link
+        \\│ │ │ │ │ │ │ │ ├─ text: 'Heading 2' @(0,0)
+        \\│ │ │ │ │ │ │ │ │ │─ style: bold 
+        \\│ │ │ │ │ └─
+        \\│ │ │ │ │ ┌─ Container: List (1 children)
+        \\│ │ │ │ │ │ ├─ kind: unordered, spacing: 0
+        \\│ │ │ │ │ │ ┌─ Container: ListItem (1 children)
+        \\│ │ │ │ │ │ │ ┌─ Leaf: Paragraph
+        \\│ │ │ │ │ │ │ │ ├─ inlines (1)
+        \\│ │ │ │ │ │ │ │ │ ├─ link
+        \\│ │ │ │ │ │ │ │ │ │ ├─ text: 'Heading 3' @(0,0)
+        \\│ │ │ │ │ │ │ │ │ │ │ │─ style: bold 
+        \\│ │ │ │ │ │ │ └─
+        \\│ │ │ │ │ │ └─
+        \\│ │ │ │ │ └─
+        \\│ │ │ │ └─
+        \\│ │ │ │ ┌─ Container: ListItem (1 children)
+        \\│ │ │ │ │ ┌─ Leaf: Paragraph
+        \\│ │ │ │ │ │ ├─ inlines (1)
+        \\│ │ │ │ │ │ │ ├─ link
+        \\│ │ │ │ │ │ │ │ ├─ text: 'Heading 2-2' @(0,0)
+        \\│ │ │ │ │ │ │ │ │ │─ style: bold 
+        \\│ │ │ │ │ └─
+        \\│ │ │ │ └─
+        \\│ │ │ └─
+        \\│ │ └─
+        \\│ │ ┌─ Container: ListItem (1 children)
+        \\│ │ │ ┌─ Leaf: Paragraph
+        \\│ │ │ │ ├─ inlines (1)
+        \\│ │ │ │ │ ├─ link
+        \\│ │ │ │ │ │ ├─ text: 'Heading 1-2' @(0,0)
+        \\│ │ │ │ │ │ │ │─ style: bold 
+        \\│ │ │ └─
+        \\│ │ └─
+        \\│ └─
         \\
     ;
     try std.testing.expectEqualStrings(expected, writer.written());

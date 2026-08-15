@@ -329,14 +329,14 @@ pub fn fetchParserRepo(language: []const u8, github_user: []const u8, git_ref: [
     out_dir.copyFile(source_path, configd, query_sub, g_io, .{}) catch |err| {
         switch (err) {
             error.FileNotFound => {
-                log.warn("File {s} not found in downloaded repo; trying queries/{s}/highlights.scm instead\n", .{ source_path, lang_alias });
+                log.warn("File {s} not found in downloaded repo; trying queries/{s}/highlights.scm instead", .{ source_path, lang_alias });
                 const source_path2: []const u8 = try std.fs.path.join(allocator, &.{ "queries", lang_alias, "highlights.scm" });
                 defer Self.free(source_path2);
                 out_dir.copyFile(source_path2, configd, query_sub, g_io, .{}) catch |err2| {
-                    log.warn("File {s} not found in downloaded repo\n", .{source_path2});
+                    log.warn("File {s} not found in downloaded repo", .{source_path2});
                     return err2;
                 };
-                log.info("Found file {s}\n", .{source_path2});
+                log.info("Found file {s}", .{source_path2});
             },
             else => return err,
         }

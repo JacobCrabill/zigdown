@@ -42,25 +42,25 @@ pub const InlineData = union(InlineType) {
     }
 
     pub fn print(self: InlineData, depth: u8) void {
+        const indent = "│ ";
+
         switch (self) {
-            .codespan, .linebreak => {
-                debug.printIndent(depth);
-                debug.print("Inline {s}\n", .{@tagName(self)});
+            .codespan => |cs| {
+                debug.printIndent(depth, indent);
+                debug.print("├─ codespan: '{s}'\n", .{cs.text});
+            },
+            .linebreak => {
+                debug.printIndent(depth, indent);
+                debug.print("├─ linebreak\n", .{});
             },
             .escaped => |ch| {
-                debug.printIndent(depth);
-                debug.print("Escaped: '\\{c}'\n", .{ch});
+                debug.printIndent(depth, indent);
+                debug.print("├─ escaped: '\\{c}'\n", .{ch});
             },
-            .link => |link| {
-                debug.printIndent(depth);
-                debug.print("Link:\n", .{});
-                for (link.text.items) |text| {
-                    text.print(depth + 1);
-                }
-            },
-            inline else => |item| {
-                item.print(depth);
-            },
+            .link => |l| l.print(depth),
+            .image => |i| i.print(depth),
+            .autolink => |a| a.print(depth),
+            .text => |t| t.print(depth),
         }
     }
 };
@@ -97,25 +97,31 @@ pub const Text = struct {
     col: usize = 0, // Column number where this text starts
 
     pub fn print(self: Text, depth: u8) void {
-        debug.printIndent(depth);
-        debug.print("Text: '{s}' [line: {d}, col: {d}]\n", .{ self.text, self.line, self.col });
-        // debug.printIndent(depth);
-        // debug.print("Style: ", .{});
-        // if (self.style.fg_color) |fg| {
-        //     debug.print("fg: {s}", .{@tagName(fg)});
-        // }
-        // if (self.style.bg_color) |bg| {
-        //     debug.print("bg: {s},", .{@tagName(bg)});
-        // }
-        // inline for (@typeInfo(TextStyle).@"struct".fields) |field| {
-        //     const T: type = @TypeOf(@field(self.style, field.name));
-        //     if (T == bool) {
-        //         if (@field(self.style, field.name)) {
-        //             debug.print("{s}", .{field.name});
-        //         }
-        //     }
-        // }
-        // debug.print("\n", .{});
+        const indent = "│ ";
+        debug.printIndent(depth, indent);
+        debug.print("├─ text: '{s}' @({d},{d})\n", .{ self.text, self.line, self.col });
+
+        // Print style info if any non-default
+        var has_style = false;
+        if (self.style.fg_color != null) has_style = true;
+        if (self.style.bg_color != null) has_style = true;
+        inline for (@typeInfo(TextStyle).@"struct".fields) |field| {
+            const T: type = @TypeOf(@field(self.style, field.name));
+            if (T == bool and @field(self.style, field.name)) has_style = true;
+        }
+        if (has_style) {
+            debug.printIndent(depth + 1, indent);
+            debug.print("│─ style: ", .{});
+            if (self.style.fg_color) |fg| debug.print("fg={s} ", .{@tagName(fg)});
+            if (self.style.bg_color) |bg| debug.print("bg={s} ", .{@tagName(bg)});
+            inline for (@typeInfo(TextStyle).@"struct".fields) |field| {
+                const T: type = @TypeOf(@field(self.style, field.name));
+                if (T == bool and @field(self.style, field.name)) {
+                    debug.print("{s} ", .{field.name});
+                }
+            }
+            debug.print("\n", .{});
+        }
     }
 
     pub fn deinit(self: *Text) void {
@@ -151,9 +157,10 @@ pub const Link = struct {
     }
 
     pub fn print(self: Link, depth: u8) void {
-        debug.printIndent(depth);
+        const indent = "│ ";
+        debug.printIndent(depth, indent);
         //debug.print("Link to {s}\n", .{self.url});
-        debug.print("Link:\n", .{});
+        debug.print("├─ link\n", .{});
         for (self.text.items) |text| {
             text.print(depth + 1);
         }
@@ -218,8 +225,9 @@ pub const Image = struct {
     }
 
     pub fn print(self: Image, depth: u8) void {
-        debug.printIndent(depth);
-        debug.print("Image: {s}\n", .{self.src});
+        const indent = "│ ";
+        debug.printIndent(depth, indent);
+        debug.print("├─ image: '{s}'\n", .{self.src});
         for (self.alt.items) |text| {
             text.print(depth + 1);
         }
@@ -233,8 +241,9 @@ pub const Autolink = struct {
     heap_url: bool = false, // Whether the url string has been heap-allocated
 
     pub fn print(self: Autolink, depth: u8) void {
-        debug.printIndent(depth);
-        debug.print("Autolink: {s}\n", .{self.url});
+        const indent = "│ ";
+        debug.printIndent(depth, indent);
+        debug.print("├─ autolink: '{s}'\n", .{self.url});
     }
 
     pub fn deinit(self: *Autolink) void {

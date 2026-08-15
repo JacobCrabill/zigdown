@@ -103,15 +103,12 @@ pub fn println() void {
     getStream().flush() catch {};
 }
 
-pub fn printIndent(depth: u8) void {
+pub fn printIndent(depth: u8, indent_char: ?[]const u8) void {
+    const ch = indent_char orelse "│ ";
     var i: u8 = 0;
     while (i < depth) : (i += 1) {
-        printIndentChar();
+        getStream().writeAll(ch) catch {};
     }
-}
-
-fn printIndentChar() void {
-    getStream().writeAll("│ ") catch {};
 }
 
 pub fn errorReturn(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) !void {

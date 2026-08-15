@@ -114,7 +114,7 @@ fn trimContinuationMarkersList(line: []const Token) []const Token {
     if (utils.isOrderedListItem(line)) return trimContinuationMarkersOrderedList(line);
     if (utils.isUnorderedListItem(line)) return trimContinuationMarkersUnorderedList(line);
 
-    errorMsg(@src(), "Shouldn't be here!\n", .{});
+    errorMsg(@src(), "Shouldn't be here!", .{});
     return trimmed;
 }
 
@@ -127,7 +127,7 @@ fn trimContinuationMarkersUnorderedList(line: []const Token) []const Token {
             return utils.trimLeadingWhitespace(trimmed[1..]);
         },
         else => {
-            errorMsg(@src(), "Shouldn't be here! List line: '{any}'\n", .{line});
+            errorMsg(@src(), "Shouldn't be here! List line: '{any}'", .{line});
             return trimmed;
         },
     }
@@ -377,7 +377,7 @@ pub const Parser = struct {
     }
 
     pub fn handleLineDocument(self: *Self, block: *Block, line: []const Token) bool {
-        self.logger.debug("Document Scope\n", .{});
+        self.logger.debug("Document Scope", .{});
         assert(block.isOpen());
         assert(block.isContainer());
 
@@ -424,10 +424,10 @@ pub const Parser = struct {
         if (cblock.children.items.len > 0) {
             const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
             if (self.handleLine(child, trimmed_line)) {
-                self.logger.debug("Quote child handled line\n", .{});
+                self.logger.debug("Quote child handled line", .{});
                 return true;
             } else {
-                self.logger.debug("Quote child cannot handle line\n", .{});
+                self.logger.debug("Quote child cannot handle line", .{});
                 self.closeBlock(child);
             }
         }
@@ -476,7 +476,7 @@ pub const Parser = struct {
             const start_col = utils.findStartColumn(line);
             const is_indented_child = start_col > block.start_col();
             if (!is_indented_child) {
-                self.logger.debug("Closing List block due to non-ListItem line after a blank\n", .{});
+                self.logger.debug("Closing List block due to non-ListItem line after a blank", .{});
                 self.closeBlock(block);
                 return false;
             }
@@ -527,7 +527,7 @@ pub const Parser = struct {
             const is_indented: bool = tline.len > 0 and tline[0].src.col > child.start_col() + 1;
             const wrong_type: bool = if (kind) |k| block.Container.content.List.kind != k else false;
             if (is_break or (wrong_type and !is_indented)) {
-                self.logger.debug("Mismatched list type; ending List.\n", .{});
+                self.logger.debug("Mismatched list type; ending List.", .{});
                 self.closeBlock(child);
                 return false;
             }
@@ -536,9 +536,9 @@ pub const Parser = struct {
             // If so, close the current ListItem (if any) and start a new one
             if (kind != null or !child.isOpen()) {
                 if (is_indented and child.isOpen()) {
-                    self.logger.debug("We have a new ListItem, but it belongs to a child list\n", .{});
+                    self.logger.debug("We have a new ListItem, but it belongs to a child list", .{});
                 } else {
-                    self.logger.debug("Adding new ListItem child\n", .{});
+                    self.logger.debug("Adding new ListItem child", .{});
                     self.closeBlock(child);
                     block.addChild(Block.initContainer(block.allocator(), .ListItem, block.start_col())) catch unreachable;
                 }
@@ -577,12 +577,12 @@ pub const Parser = struct {
             const child: *Block = &cblock.children.items[nchildren - 1];
             if (!child.isOpen()) break :blk false;
             if (!(child.isLeaf() and child.leaf().content == .Code)) break :blk false;
-            self.logger.debug("ListItem contains open code block\n", .{});
+            self.logger.debug("ListItem contains open code block", .{});
             break :blk true;
         };
 
         if (!open_child_is_code and isContinuationLineList(line) and trimmed_line.len > 0 and trimmed_line[0].src.col < block.start_col() + 2) {
-            self.logger.debug("Line continues current list at start_col {d}\n", .{block.start_col()});
+            self.logger.debug("Line continues current list at start_col {d}", .{block.start_col()});
             // TODO: This is all highly unoptimized...
             trimmed_line = trimContinuationMarkersList(line);
 
@@ -591,12 +591,12 @@ pub const Parser = struct {
                 block.Container.content.ListItem.checked = utils.isCheckedTaskListItem(line[0..idx]);
             }
         } else {
-            self.logger.debug("Removing indent with start_col: {d}\n", .{block.start_col()});
+            self.logger.debug("Removing indent with start_col: {d}", .{block.start_col()});
             trimmed_line = utils.removeIndent(line, block.start_col());
 
             if (trimmed_line.len > 0 and trimmed_line[0].src.col > block.start_col() + 1) {
                 // Child / nested content - handled below
-                self.logger.debug("useless if statement - ListItem child will handle line\n", .{});
+                self.logger.debug("useless if statement - ListItem child will handle line", .{});
             } else if (trimmed_line.len == 0) {
                 // Empty list item - just create an empty paragraph child
                 var child = Block.initLeaf(self.alloc, .Paragraph, block.start_col());
@@ -609,7 +609,7 @@ pub const Parser = struct {
 
             // Otherwise, check if the trimmed line can be appended to the current block or not
             if (!(isLazyContinuationLineList(trimmed_line) or utils.findStartColumn(trimmed_line) > block.start_col())) {
-                self.logger.debug("ListItem cannot handle line\n", .{});
+                self.logger.debug("ListItem cannot handle line", .{});
                 return false;
             }
         }
@@ -620,10 +620,10 @@ pub const Parser = struct {
         if (cblock.children.items.len > 0) {
             const child: *Block = &cblock.children.items[cblock.children.items.len - 1];
             if (child.isOpen() and self.handleLine(child, content_line)) {
-                self.logger.debug("ListItem's child handled line\n", .{});
+                self.logger.debug("ListItem's child handled line", .{});
                 return true;
             } else if (child.isOpen()) {
-                self.logger.debug("ListItem's child did *not* handle line\n", .{});
+                self.logger.debug("ListItem's child did *not* handle line", .{});
                 self.closeBlock(child);
             }
         }
@@ -643,7 +643,7 @@ pub const Parser = struct {
         const trimmed_line = utils.trimLeadingWhitespace(line);
         if (trimmed_line.len == 0 or trimmed_line[0].kind != .PIPE) return false;
 
-        self.logger.debug("TABLE\n", .{});
+        self.logger.debug("TABLE", .{});
         self.logger.printText(trimmed_line, false);
 
         // A table row must contain *at least* '||' (but pipes inside inline code are literal)
@@ -657,7 +657,7 @@ pub const Parser = struct {
         if (table.row > 0) {
             const pipe_count = utils.countTablePipes(trimmed_line);
             if (pipe_count != table.ncol + 1) {
-                self.logger.debug("Incorrect column count: Expected {d}, got {d}\n", .{ table.ncol, pipe_count -| 1 });
+                self.logger.debug("Incorrect column count: Expected {d}, got {d}", .{ table.ncol, pipe_count -| 1 });
                 return false;
             }
         }
@@ -728,7 +728,7 @@ pub const Parser = struct {
             if (tok.kind == .PIPE) {
                 // End of this cell
                 column_count += 1;
-                self.logger.debug("Incrementing table column_count\n", .{});
+                self.logger.debug("Incrementing table column_count", .{});
             } else if (tok.kind == .BREAK) {
                 // End of line
             } else if (i < trimmed_line.len) {
@@ -749,7 +749,7 @@ pub const Parser = struct {
         if (cur_ncol == 0) {
             table.ncol = column_count;
         } else if (cur_ncol != column_count) {
-            self.logger.debug("Error: Mismatched column counts in Table: old: {d}, new: {d}\n", .{
+            self.logger.debug("Error: Mismatched column counts in Table: old: {d}, new: {d}", .{
                 cur_ncol,
                 column_count,
             });
@@ -766,7 +766,7 @@ pub const Parser = struct {
     pub fn handleLineAlert(self: *Self, block: *Block, line: []const Token) bool {
         self.logger.depth += 1;
         defer self.logger.depth -= 1;
-        self.logger.debug("Handling Alert\n", .{});
+        self.logger.debug("Handling Alert", .{});
 
         if (!block.isOpen())
             return false;
@@ -779,7 +779,7 @@ pub const Parser = struct {
             if (tline.len < 6) return false;
             std.debug.assert(tline[4].kind == .WORD);
             alert.alert = block.allocator().dupe(u8, tline[4].text) catch @panic("OOM");
-            self.logger.debug("  Alert type: {s}\n", .{alert.alert.?});
+            self.logger.debug("  Alert type: {s}", .{alert.alert.?});
 
             return true;
         }
@@ -792,7 +792,7 @@ pub const Parser = struct {
         } else {
             return false;
         }
-        self.logger.debug("  Line continues Alert\n", .{});
+        self.logger.debug("  Line continues Alert", .{});
 
         block.Leaf.raw_contents.appendSlice(tline) catch unreachable;
 
@@ -848,13 +848,13 @@ pub const Parser = struct {
         for (self.cur_line) |tok| {
             if (tok.kind == .DIRECTIVE and std.mem.eql(u8, tok.text, code.opener.?)) {
                 have_closer = true;
-                self.logger.debug("Closing current code block\n", .{});
+                self.logger.debug("Closing current code block", .{});
                 break;
             }
 
             // Don't append any leading whitespace prior to the start column of the block
             if (utils.isWhitespace(tok.kind) and tok.src.col < block.start_col()) {
-                self.logger.debug("Skipping token '{s}' in code block\n", .{tok.text});
+                self.logger.debug("Skipping token '{s}' in code block", .{tok.text});
                 continue;
             }
             block.Leaf.raw_contents.append(tok) catch unreachable;
@@ -911,15 +911,15 @@ pub const Parser = struct {
         // > Normal paragraph text on this line
         // >  - This starts a list, and should not be a paragraph
         if (!isContinuationLineParagraph(utils.removeIndent(line, 2))) {
-            self.logger.debug("  Line does not continue paragraph\n", .{});
+            self.logger.debug("  Line does not continue paragraph", .{});
             return false;
         }
         if (utils.isEmptyLine(line)) {
-            self.logger.debug("  Closing paragraph due to line break\n", .{});
+            self.logger.debug("  Closing paragraph due to line break", .{});
             self.closeBlock(block);
             return true;
         }
-        self.logger.debug("  Line continues paragraph\n", .{});
+        self.logger.debug("  Line continues paragraph", .{});
 
         block.Leaf.raw_contents.appendSlice(line) catch unreachable;
 
@@ -964,7 +964,7 @@ pub const Parser = struct {
                     } else if (utils.isOrderedListItem(line)) {
                         b.Container.content.List.kind = .ordered;
                     }
-                    self.logger.debug("Parsing {s} list with start_col {d}\n", .{ @tagName(b.Container.content.List.kind), col });
+                    self.logger.debug("Parsing {s} list with start_col {d}", .{ @tagName(b.Container.content.List.kind), col });
                     if (!self.handleLineList(&b, line))
                         return error.ParseError;
                 } else {
@@ -1035,9 +1035,9 @@ pub const Parser = struct {
         }
 
         if (b.isContainer()) {
-            self.logger.debug("Parsed new Container: {s}\n", .{@tagName(b.Container.content)});
+            self.logger.debug("Parsed new Container: {s}", .{@tagName(b.Container.content)});
         } else {
-            self.logger.debug("Parsed new Leaf: {s}\n", .{@tagName(b.Leaf.content)});
+            self.logger.debug("Parsed new Leaf: {s}", .{@tagName(b.Leaf.content)});
         }
         return b;
     }
@@ -1078,7 +1078,7 @@ pub const Parser = struct {
                         if (c.directive != null) {
                             var p = InlineParser.init(self.alloc, self.opts);
                             defer p.deinit();
-                            self.logger.debug("Parsing inlines for Leaf of type {s}\n", .{@tagName(block.Leaf.content)});
+                            self.logger.debug("Parsing inlines for Leaf of type {s}", .{@tagName(block.Leaf.content)});
                             l.inlines = p.parseInlines(l.raw_contents.items) catch unreachable;
                         } else {
                             self.closeBlockCode(block);
@@ -1087,7 +1087,7 @@ pub const Parser = struct {
                     else => {
                         var p = InlineParser.init(self.alloc, self.opts);
                         defer p.deinit();
-                        self.logger.debug("Parsing inlines for Leaf of type {s}\n", .{@tagName(block.Leaf.content)});
+                        self.logger.debug("Parsing inlines for Leaf of type {s}", .{@tagName(block.Leaf.content)});
                         l.inlines = p.parseInlines(l.raw_contents.items) catch unreachable;
                     },
                 }

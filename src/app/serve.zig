@@ -70,7 +70,7 @@ pub fn serve(io: std.Io, alloc: Allocator, config: ServeOpts) !void {
     if (context.file) |file| {
         const url = try std.fmt.allocPrint(alloc, "http://localhost:{d}/{s}", .{ config.port, file });
         defer alloc.free(url);
-        log.info("Serving at {s}\n", .{url});
+        log.info("Serving at {s}", .{url});
         const cmd = if (builtin.os.tag == .windows) "start"
             else if (builtin.os.tag.isDarwin()) "open"
             else "xdg-open";

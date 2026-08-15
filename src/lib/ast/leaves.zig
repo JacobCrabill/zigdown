@@ -73,8 +73,9 @@ pub const Heading = struct {
     }
 
     pub fn print(h: Heading, depth: u8) void {
-        debug.printIndent(depth);
-        debug.print("[H{d}] '{s}'\n", .{ h.level, h.text });
+        const indent = "│ ";
+        debug.printIndent(depth, indent);
+        debug.print("├─ heading level {d}: '{s}'\n", .{ h.level, h.text });
     }
 };
 
@@ -98,12 +99,25 @@ pub const Code = struct {
     }
 
     pub fn print(c: Code, depth: u8) void {
-        debug.printIndent(depth);
+        const indent = "│ ";
+        debug.printIndent(depth, indent);
         var tag: []const u8 = "";
-        var text: []const u8 = "";
         if (c.tag) |ctag| tag = ctag;
-        if (c.text) |ctext| text = ctext;
-        debug.print("tag: '{s}'; body:\n{s}\n", .{ tag, text });
+        debug.print("├─ code block\n", .{});
+
+        debug.printIndent(depth + 1, indent);
+        debug.print("│─ tag: '{s}'\n", .{tag});
+
+        if (c.text) |ctext| {
+            debug.printIndent(depth + 1, indent);
+            debug.print("│─ body:\n", .{});
+            // Print each line of the code block with its own indentation
+            var lines = std.mem.splitScalar(u8, ctext, '\n');
+            while (lines.next()) |line| {
+                debug.printIndent(depth + 2, indent);
+                debug.print("│─ │─ {s}\n", .{line});
+            }
+        }
     }
 };
 
@@ -125,10 +139,11 @@ pub const Directive = struct {
     }
 
     pub fn print(c: Directive, depth: u8) void {
-        debug.printIndent(depth);
+        const indent = "│ ";
+        debug.printIndent(depth, indent);
         var directive: []const u8 = "";
         if (c.directive) |d| directive = d;
-        debug.print("directive: '{s}'\n", .{directive});
+        debug.print("├─ directive: '{s}'\n", .{directive});
     }
 };
 
@@ -146,9 +161,10 @@ pub const Alert = struct {
     }
 
     pub fn print(a: Alert, depth: u8) void {
-        debug.printIndent(depth);
+        const indent = "│ ";
+        debug.printIndent(depth, indent);
         var alert: []const u8 = "";
         if (a.alert) |calert| alert = calert;
-        debug.print("alert: '{s}'\n", .{alert});
+        debug.print("├─ alert: '{s}'\n", .{alert});
     }
 };

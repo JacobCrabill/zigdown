@@ -191,33 +191,33 @@ pub const Container = struct {
     }
 
     pub fn print(self: Container, depth: u8) void {
-        debug.printIndent(depth);
-
-        debug.print("Container: open: {any}, type: {s} with {d} children\n", .{
-            self.open,
-            @tagName(self.content),
-            self.children.items.len,
-        });
+        const indent = "│ ";
+        debug.printIndent(depth, indent);
+        debug.print("┌─ Container: {s} ({d} children)\n", .{ @tagName(self.content), self.children.items.len });
 
         switch (self.content) {
             .List => |l| {
-                debug.printIndent(depth + 1);
-                debug.print("List Spacing: {d}\n", .{l.spacing});
+                debug.printIndent(depth + 1, indent);
+                debug.print("├─ kind: {s}, spacing: {d}\n", .{ @tagName(l.kind), l.spacing });
             },
             .Table => |t| {
-                debug.printIndent(depth + 1);
-                debug.print("Table: Column alignment:", .{});
-                for (t.alignment.items) |a| {
-                    debug.print(" {t}", .{a});
+                if (t.alignment.items.len > 0) {
+                    debug.printIndent(depth + 1, indent);
+                    debug.print("├─ alignment:", .{});
+                    for (t.alignment.items) |a| {
+                        debug.print(" {s}", .{@tagName(a)});
+                    }
+                    debug.print("\n", .{});
                 }
-                debug.print("\n", .{});
 
-                debug.printIndent(depth + 1);
-                debug.print("Table: Relative column widths:", .{});
-                for (t.relative_width.items) |w| {
-                    debug.print(" {d}", .{w});
+                if (t.relative_width.items.len > 0) {
+                    debug.printIndent(depth + 1, indent);
+                    debug.print("├─ widths:", .{});
+                    for (t.relative_width.items) |w| {
+                        debug.print(" {d}", .{w});
+                    }
+                    debug.print("\n", .{});
                 }
-                debug.print("\n", .{});
             },
             else => {},
         }
@@ -225,6 +225,9 @@ pub const Container = struct {
         for (self.children.items) |child| {
             child.print(depth + 1);
         }
+
+        debug.printIndent(depth, indent);
+        debug.print("└─\n", .{});
 
         debug.flush();
     }
@@ -286,27 +289,28 @@ pub const Leaf = struct {
     }
 
     pub fn print(self: Leaf, depth: u8) void {
-        debug.printIndent(depth);
-
-        debug.print("Leaf: open: {any}, type: {s}\n", .{
-            self.open,
-            @tagName(self.content),
-        });
+        const indent = "│ ";
+        debug.printIndent(depth, indent);
+        debug.print("┌─ Leaf: {s}\n", .{@tagName(self.content)});
 
         self.content.print(depth + 1);
 
         // For links and other structured inline elements, we want to show their structure
         if (self.inlines.items.len > 0) {
-            debug.printIndent(depth + 1);
-            debug.print("Inline content:\n", .{});
+            debug.printIndent(depth + 1, indent);
+            debug.print("├─ inlines ({d})\n", .{self.inlines.items.len});
+
             for (self.inlines.items) |inline_item| {
                 inline_item.print(depth + 2);
             }
         } else {
             // Print each token with its line and column numbers
+            debug.printIndent(depth + 1, indent);
+            debug.print("├─ raw tokens ({d})\n", .{self.raw_contents.items.len});
+
             for (self.raw_contents.items) |token| {
-                debug.printIndent(depth + 1);
-                debug.print("Token: {t}, text: \"{s}\", line: {d}, col: {d}\n", .{
+                debug.printIndent(depth + 2, indent);
+                debug.print("├─ {t} \"{s}\" @({d},{d})\n", .{
                     token.kind,
                     token.text,
                     token.src.row,
@@ -314,6 +318,9 @@ pub const Leaf = struct {
                 });
             }
         }
+
+        debug.printIndent(depth, indent);
+        debug.print("└─\n", .{});
 
         debug.flush();
     }
@@ -466,26 +473,34 @@ test "Print basic AST" {
 
     const expected =
         \\Print basic AST result:
-        \\│ Container: open: true, type: Document with 2 children
-        \\│ │ Container: open: true, type: List with 1 children
-        \\│ │ │ List Spacing: 0
-        \\│ │ │ Container: open: true, type: ListItem with 1 children
-        \\│ │ │ │ Leaf: open: true, type: Paragraph
-        \\│ │ │ │ │ Inline content:
-        \\│ │ │ │ │ │ Text: 'Hello, ' [line: 0, col: 0]
-        \\│ │ │ │ │ │ Text: 'World' [line: 0, col: 0]
-        \\│ │ │ │ │ │ Text: '!' [line: 0, col: 0]
-        \\│ │ │ │ │ │ Link:
-        \\│ │ │ │ │ │ │ Text: 'Google' [line: 0, col: 0]
-        \\│ │ Container: open: true, type: Table with 2 children
-        \\│ │ │ Table: Column alignment:
-        \\│ │ │ Table: Relative column widths:
-        \\│ │ │ Leaf: open: true, type: Paragraph
-        \\│ │ │ │ Inline content:
-        \\│ │ │ │ │ Text: 'Hello, ' [line: 0, col: 0]
-        \\│ │ │ Leaf: open: true, type: Paragraph
-        \\│ │ │ │ Inline content:
-        \\│ │ │ │ │ Text: 'World' [line: 0, col: 0]
+        \\│ ┌─ Container: Document (2 children)
+        \\│ │ ┌─ Container: List (1 children)
+        \\│ │ │ ├─ kind: unordered, spacing: 0
+        \\│ │ │ ┌─ Container: ListItem (1 children)
+        \\│ │ │ │ ┌─ Leaf: Paragraph
+        \\│ │ │ │ │ ├─ inlines (4)
+        \\│ │ │ │ │ │ ├─ text: 'Hello, ' @(0,0)
+        \\│ │ │ │ │ │ ├─ text: 'World' @(0,0)
+        \\│ │ │ │ │ │ │ │─ style: bold 
+        \\│ │ │ │ │ │ ├─ text: '!' @(0,0)
+        \\│ │ │ │ │ │ │ │─ style: bold italic 
+        \\│ │ │ │ │ │ ├─ link
+        \\│ │ │ │ │ │ │ ├─ text: 'Google' @(0,0)
+        \\│ │ │ │ │ │ │ │ │─ style: underline 
+        \\│ │ │ │ └─
+        \\│ │ │ └─
+        \\│ │ └─
+        \\│ │ ┌─ Container: Table (2 children)
+        \\│ │ │ ┌─ Leaf: Paragraph
+        \\│ │ │ │ ├─ inlines (1)
+        \\│ │ │ │ │ ├─ text: 'Hello, ' @(0,0)
+        \\│ │ │ └─
+        \\│ │ │ ┌─ Leaf: Paragraph
+        \\│ │ │ │ ├─ inlines (1)
+        \\│ │ │ │ │ ├─ text: 'World' @(0,0)
+        \\│ │ │ └─
+        \\│ │ └─
+        \\│ └─
         \\
     ;
     try std.testing.expectEqualStrings(expected, alloc_writer.writer.buffered());
