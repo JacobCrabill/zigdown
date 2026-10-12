@@ -3,6 +3,8 @@ const builtin = @import("builtin");
 const Build = std.Build;
 const Allocator = std.mem.Allocator;
 
+const Translator = @import("translate_c").Translator;
+
 const Target = std.Build.ResolvedTarget;
 const OptimizeMode = std.builtin.OptimizeMode;
 const Options = std.Build.Step.Options;
@@ -35,10 +37,10 @@ pub fn build(b: *std.Build) !void {
     const target: Target = b.standardTargetOptions(.{});
     const optimize: OptimizeMode = b.standardOptimizeOption(.{});
 
-    const wasm_optimize = b.option(OptimizeMode, "wasm-optimize", "Optimization mode for WASM targets") orelse .ReleaseSmall;
+    const wasm_optimize = b.option(OptimizeMode, "wasm-optimize", "Optimization mode for WASM targets") orelse .small;
     const no_wasm = b.option(bool, "no-wasm", "Skip building the WASM target") orelse true;
 
-    const build_lua = b.option(bool, "lua", "[WIP] Build Zigdown as a Lua module") orelse false;
+    const build_lua = b.option(bool, "lua", "Build Zigdown as a Lua module") orelse false;
     const build_test_exes = b.option(bool, "build-test-exes", "Build the custom test executables") orelse false;
     const do_extra_tests = b.option(bool, "extra-tests", "Run extra (non-standard) tests") orelse false;
     const no_bin = b.option(bool, "no-bin", "Just check compilation (don't emit binaries)") orelse false;
@@ -48,7 +50,7 @@ pub fn build(b: *std.Build) !void {
         const target_cpu: std.Target.Cpu.Arch = target.query.cpu_arch orelse host_target.cpu.arch;
         const target_os: std.Target.Os.Tag = target.query.os_tag orelse host_target.os.tag;
         // TODO: Figure out which ABIs are supported by the Zig backend (MUSL isn't supported?)
-        break :blk if (optimize == .Debug and target_cpu == .x86_64 and target_os != .windows) false else true;
+        break :blk if (optimize == .small and target_cpu == .x86_64 and target_os != .windows) false else true;
     };
 
     // Add an option to list the set of TreeSitter parsers to statically link into the build
@@ -80,9 +82,10 @@ pub fn build(b: *std.Build) !void {
     mod.addOptions("config", options);
 
     // Get all of our dependencies, both from build.zig.zon and our TreeSitter module
-    var deps: std.ArrayList(Dependency) = try getDependencies(b, target, optimize, ts_language_list.items);
+    var lib_deps: std.ArrayList(Dependency) = try getDependencies(b, target, optimize, ts_language_list.items);
 
     // Add all dependencies to our "root" Zigdown module, then add that to the dependencies list
+    var deps: std.ArrayList(Dependency) = try lib_deps.clone(b.allocator);
     for (deps.items) |dep| {
         mod.addImport(dep.name, dep.module);
     }
@@ -126,6 +129,7 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .shared = false,
             .lang = .luajit,
+            .library_name = "lua",
         });
         if (ziglua_opt == null) return; // This will then go and fetch the dependency
 
@@ -133,7 +137,7 @@ pub fn build(b: *std.Build) !void {
         // lazy dependencies of lazy dependencies.
         // To fix the ziglua build, we must directly reference and use its luajit lazy dependency
         // so that ziglua will actually build luajit.
-        _ = b.lazyDependency("luajit", .{
+        const luajit = b.lazyDependency("luajit", .{
             .optimize = optimize,
             .target = target,
         }) orelse return;
@@ -158,8 +162,17 @@ pub fn build(b: *std.Build) !void {
         }
         lua_mod.root_module.addImport(ziglua_dep.name, ziglua_dep.module);
 
-        const luajit_lib = ziglua.artifact("lua");
-        lua_mod.root_module.linkLibrary(luajit_lib);
+        ////////////////////////////////////////////////////////////////////////////
+        // cImport is gone; translate all C files to Zig at build time instead
+        ////////////////////////////////////////////////////////////////////////////
+        const translate_c = b.dependency("translate_c", .{});
+        const lua_translator: Translator = .init(translate_c, .{
+            .c_source_file = b.path("src/lua/lua_headers.h"),
+            .target = target,
+            .optimize = optimize,
+        });
+        lua_translator.addIncludePath(luajit.builder.path("src"));
+        lua_mod.root_module.addImport("lua.h", lua_translator.mod);
 
         b.installArtifact(lua_mod);
 
@@ -184,8 +197,7 @@ pub fn build(b: *std.Build) !void {
         }),
         .linkage = .static,
     });
-    const lib_deps = try getDependencies(b, target, optimize, ts_language_list.items);
-    for (lib_deps.items) |dep| {
+    for (deps.items) |dep| {
         lib.root_module.addImport(dep.name, dep.module);
     }
 
@@ -238,7 +250,7 @@ pub fn build(b: *std.Build) !void {
             .name = "zigdown-wasm",
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/app/wasm_main.zig"),
-                .optimize = .ReleaseSmall,
+                .optimize = .small,
                 .target = wasm_target,
             }),
         });
@@ -314,7 +326,7 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
             .optimize = opts.optimize,
             .target = opts.target orelse b.graph.host,
         }),
-        .use_llvm = if (opts.use_llvm) true else opts.optimize != .Debug,
+        .use_llvm = if (opts.use_llvm) true else opts.optimize != .debug,
     });
 
     // Add dependencies
@@ -341,9 +353,7 @@ fn addExecutable(b: *std.Build, config: ExeConfig, opts: BuildOpts) void {
         // Configure how the main executable should be run
         const run_exe = b.addRunArtifact(exe);
         run_exe.step.dependOn(&install_step.step);
-        if (b.args) |args| {
-            run_exe.addArgs(args);
-        }
+        run_exe.addPassthruArgs();
 
         const step = b.step(config.run_cmd, config.run_description);
         step.dependOn(&run_exe.step);
@@ -394,7 +404,7 @@ fn getDependencies(b: *std.Build, target: Target, optimize: OptimizeMode, ts_lan
     var dependencies: std.ArrayList(Dependency) = .empty;
 
     // Module for baked-in data and files
-    const asset_mod = b.addModule("assets", .{
+    const asset_mod = b.createModule(.{
         .root_source_file = b.path("src/assets/assets.zig"),
         .target = target,
         .optimize = optimize,

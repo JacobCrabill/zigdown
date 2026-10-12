@@ -490,9 +490,9 @@ pub const HtmlRenderer = struct {
 
     /// Print out all of the CSS entries from the css struct
     fn renderCss(self: *Self) void {
-        inline for (@typeInfo(Css).@"struct".fields) |field| {
-            self.print("/* css field: {s} */\n", .{utils.toKebab(field.name)});
-            self.print("{s}\n", .{@field(self.config.css, field.name)});
+        inline for (@typeInfo(Css).@"struct".field_names) |field_name| {
+            self.print("/* css field: {s} */\n", .{utils.toKebab(field_name)});
+            self.print("{s}\n", .{@field(self.config.css, field_name)});
         }
     }
 };

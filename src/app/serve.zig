@@ -71,9 +71,7 @@ pub fn serve(io: std.Io, alloc: Allocator, config: ServeOpts) !void {
         const url = try std.fmt.allocPrint(alloc, "http://localhost:{d}/{s}", .{ config.port, file });
         defer alloc.free(url);
         log.info("Serving at {s}\n", .{url});
-        const cmd = if (builtin.os.tag == .windows) "start"
-            else if (builtin.os.tag.isDarwin()) "open"
-            else "xdg-open";
+        const cmd = if (builtin.os.tag == .windows) "start" else if (builtin.os.tag.isDarwin()) "open" else "xdg-open";
         _ = try std.process.spawn(io, .{ .argv = &.{ cmd, url } });
     }
 }
@@ -137,9 +135,9 @@ fn serveRequest(io: std.Io, request: *std.http.Server.Request, context: *const C
         });
     } else if (std.mem.startsWith(u8, path, "/fonts/")) {
         const font = path[7..];
-        inline for (@typeInfo(html.Fonts).@"struct".decls) |decl| {
-            if (std.mem.eql(u8, decl.name, font)) {
-                try request.respond(@field(html.Fonts, decl.name), .{
+        inline for (@typeInfo(html.Fonts).@"struct".decl_names) |decl_name| {
+            if (std.mem.eql(u8, decl_name, font)) {
+                try request.respond(@field(html.Fonts, decl_name), .{
                     .extra_headers = &.{
                         .{ .name = "content-type", .value = "application/x-font-ttf" },
                     },
@@ -150,8 +148,8 @@ fn serveRequest(io: std.Io, request: *std.http.Server.Request, context: *const C
         const stylesheet: []const u8 = comptime blk: {
             const css = html.Css{};
             var txt: []const u8 = "";
-            for (@typeInfo(html.Css).@"struct".fields) |field| {
-                txt = txt ++ @field(css, field.name);
+            for (@typeInfo(html.Css).@"struct".field_names) |field_name| {
+                txt = txt ++ @field(css, field_name);
                 txt = txt ++ "\n";
             }
             break :blk txt;

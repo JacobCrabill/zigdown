@@ -1,8 +1,8 @@
 .{
     .name = .zigdown,
     .fingerprint = 0xec26eaf34f894e33,
-    .version = "1.3.1",
-    .minimum_zig_version = "0.16.0",
+    .version = "1.4.0",
+    .minimum_zig_version = "0.17.0",
     .paths = .{
         "lua",
         "plugin",
@@ -13,30 +13,28 @@
     },
     .dependencies = .{
         .stbi = .{
-            .url = "https://github.com/JacobCrabill/zig-stb-image/archive/db40631ef191d3692a706b142f524022c6be80d7.tar.gz",
-            .hash = "zig_stb_image-2.28.0-2-9dD1dfoYBQCzF7IA9_-tSbsF1PgN7HGfzDzGVRG2BoUY",
+            .url = "https://github.com/JacobCrabill/zig-stb-image/archive/67b306a8b7f331a62396f1a03f94237b36995f39.tar.gz",
+            .hash = "zig_stb_image-2.28.0-2-9dD1dVccBQD_h9JnFLgabVswnNKhcogldXBhwA8yn9HW",
         },
         .plutosvg = .{
-            .url = "https://github.com/JacobCrabill/zig-plutosvg/archive/7704671d5130040fb8a25e45c8112809aa89ae6c.tar.gz",
-            .hash = "plutosvg-0.0.6-2-LyMxgdAuAACyA7po0YLhr75Net3boHUgEf3SP2k7DY-1",
+            .url = "https://github.com/JacobCrabill/zig-plutosvg/archive/7a66945aeb273bf2d7b563c0d5783c4da3df3dcf.tar.gz",
+            .hash = "plutosvg-0.0.6-3-LyMxgXMyAAD6k7ItjCRXOfbv3dDsF-oPiTWZZgLdEiIB",
         },
         .flags = .{
-            .url = "https://github.com/JacobCrabill/zig-flags/archive/de90d081cd4ef7907fbdd8e1e3853fcee9bcf1b9.tar.gz",
-            .hash = "flags-0.12.0-a_9h3p94AACZ_64EtswSKUGy_mvh8IVL8CIiu0SVebvS",
+            .url = "https://github.com/JacobCrabill/zig-flags/archive/2c6c016c53b9877fe7f383f9cdec5d52fc90909f.tar.gz",
+            .hash = "flags-0.13.0-a_9h3uJ5AADnIUpC78Gs4mW8DQoSwdyag_N9eimVW9zG",
         },
         .treez = .{
-            .url = "https://github.com/JacobCrabill/treez/archive/2d1f27c92a2d4a2179740a8ba4bd866b328dd24f.tar.gz",
-            .hash = "treez-0.2.0-4JX9hYSkAABbotzNQsOTNzU8wcDglGCo9Ffik-qi1o_a",
+            .url = "https://github.com/JacobCrabill/treez/archive/e04fff3a1a8af8ffb28928b1fde6ac5fa0679eaa.tar.gz",
+            .hash = "treez-0.3.0-4JX9hXikAACjmU66MbFuJBGwtCcgmOCPPki8lstYqFyE",
         },
         .known_folders = .{
             .url = "https://github.com/ziglibs/known-folders/archive/5865fd0f1bc5241de8355fcf2066692bf1b0ea02.tar.gz",
             .hash = "known_folders-0.0.0-Fy-PJpLKAAAmMEnwre7fFcfsxBGULd24N8Bp2pWEu3sf",
         },
         .ziglua = .{
-            // .url = "https://github.com/JacobCrabill/ziglua/archive/011758bab2c2b5a4b6e678e33a8dbb24570d4394.tar.gz",
-            // .hash = "zlua-0.2.0-hGRpC2sYBQCawPfqP3rxM95KUN3IYdRNKTAeSussl7kM",
-            .url = "https://github.com/natecraddock/ziglua/archive/22cad3abc50bca7c73145e07ed2835926e2dda44.tar.gz",
-            .hash = "zlua-0.1.0-hGRpC5dqBQCm1fzCu23-RM5xE9_6JSnUitX9HFi9jSYA",
+            .url = "https://github.com/natecraddock/ziglua/archive/8b2c14e0f9f89a9407dd7dd91752c7d8fd03cb62.tar.gz",
+            .hash = "zlua-0.1.0-hGRpC8yYBQAtI5hy60lb1vK9Tc7s-Ouu0aMFe2Kdc3_s",
             .lazy = true,
         },
         // Needed in order for ziglua to build luajit.
@@ -53,8 +51,8 @@
             .hash = "N-V-__8AANjenwCy_cXlIbU8nqBzGxMlEHVokLZJYrmIXtoz",
         },
         .tree_sitter_c = .{
-            .url = "https://github.com/tree-sitter/tree-sitter-c/archive/b780e47fc780ddc8da13afa35a3f4ed5c157823d.tar.gz",
-            .hash = "tree_sitter_c-0.24.2-y5boS-ptQADHoCoVfjGT_nFtFQ5LbomIkW0fxG3_cmdB",
+            .url = "https://github.com/JacobCrabill/tree-sitter-c/archive/55c7bf554d2bbec8d3025e7c6660b2f15d6771ef.tar.gz",
+            .hash = "tree_sitter_c-0.24.2-y5boS8htQAC5BNYyHwR0tFiOo-k1gxs237x98xUNG1wE",
         },
         .tree_sitter_cmake = .{
             .url = "https://github.com/uyha/tree-sitter-cmake/archive/fe48221d4d9842d916d66b5e71ab3c6307ec28b3.tar.gz",
@@ -91,6 +89,10 @@
         .tree_sitter_zig = .{
             .url = "https://github.com/tree-sitter-grammars/tree-sitter-zig/archive/b670c8df85a1568f498aa5c8cae42f51a90473c0.tar.gz",
             .hash = "N-V-__8AAN6NXgCZxLUnqe4620P_FqHrEY8PHTA1-VlOn4yX",
+        },
+        .translate_c = .{
+            .url = "git+https://codeberg.org/ziglang/translate-c#38d8339d9050eafe5dcf85b4fc9368576ca967e1",
+            .hash = "translate_c-0.0.0-Q_BUWoROBwAyokT5SJSw4YIrwdLd1w53i-pEYwBDqXZt",
         },
     },
 }

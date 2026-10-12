@@ -7,12 +7,7 @@ const zd = @import("zigdown");
 
 // The code here is specific to Lua 5.1
 // This has been tested with LuaJIT 5.1, specifically
-pub const c = @cImport({
-    @cInclude("luaconf.h");
-    @cInclude("lua.h");
-    @cInclude("lualib.h");
-    @cInclude("lauxlib.h");
-});
+pub const c = @import("lua.h");
 
 const ArrayList = std.array_list.Managed;
 const LuaState = c.lua_State;
@@ -23,7 +18,7 @@ const FnReg = c.luaL_Reg;
 const lib_fn_reg = [_]FnReg{
     .{ .name = "render_markdown", .func = render_markdown },
     .{ .name = "format_markdown", .func = format_markdown },
-    FnReg{},
+    std.mem.zeroInit(FnReg, .{}),
 };
 
 /// Register the function with Lua using the special luaopen_x function.
