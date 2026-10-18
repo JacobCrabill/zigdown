@@ -37,8 +37,8 @@ pub fn init(io: std.Io, writer: *std.Io.Writer) !Self {
         .ISTRIP = false,
     };
 
-    raw.cc[@intFromEnum(std.c.V.TIME)] = 0;
-    raw.cc[@intFromEnum(std.c.V.MIN)] = 1;
+    raw.cc[@backingInt(std.c.V.TIME)] = 0;
+    raw.cc[@backingInt(std.c.V.MIN)] = 1;
     _ = std.c.tcsetattr(tty.handle, .FLUSH, &raw);
 
     try writer.writeAll("\x1B[?25l"); // Hide the cursor

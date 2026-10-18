@@ -3,7 +3,7 @@ const stb = @import("stb_image");
 const builtin = @import("builtin");
 
 const debug = @import("debug.zig");
-const utils = @import("utils.zig");
+const utils = @import("jaymark").utils;
 
 const Allocator = std.mem.Allocator;
 const File = std.Io.File;

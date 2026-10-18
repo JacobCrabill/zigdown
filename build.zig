@@ -403,6 +403,10 @@ fn isWasm(target: std.Build.ResolvedTarget) bool {
 fn getDependencies(b: *std.Build, target: Target, optimize: OptimizeMode, ts_language_list: []const []const u8) !std.ArrayList(Dependency) {
     var dependencies: std.ArrayList(Dependency) = .empty;
 
+    // Jaymark: the core Markdown lexer/parser/formatter, with zero dependencies of its own
+    const jaymark = b.dependency("jaymark", .{ .target = target, .optimize = optimize });
+    try dependencies.append(b.allocator, .{ .name = "jaymark", .module = jaymark.module("jaymark") });
+
     // Module for baked-in data and files
     const asset_mod = b.createModule(.{
         .root_source_file = b.path("src/assets/assets.zig"),

@@ -1,14 +1,15 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const assets = @import("assets");
+const jaymark = @import("jaymark");
 
-const blocks = @import("../ast/blocks.zig");
-const inls = @import("../ast/inlines.zig");
-const leaves = @import("../ast/leaves.zig");
-const containers = @import("../ast/containers.zig");
+const blocks = jaymark.blocks;
+const inls = jaymark.inlines;
+const leaves = jaymark.leaves;
+const containers = jaymark.containers;
 
 const debug = @import("../debug.zig");
-const utils = @import("../utils.zig");
+const utils = jaymark.utils;
 const theme = @import("../theme.zig");
 const syntax = @import("../syntax.zig");
 const ts_queries = @import("../ts_queries.zig");
@@ -138,30 +139,31 @@ pub const HtmlRenderer = struct {
             self.root = block;
         }
         switch (block) {
-            .Container => |c| try self.renderContainer(c),
-            .Leaf => |l| try self.renderLeaf(l),
+            .container => |c| try self.renderContainer(c),
+            .leaf => |l| try self.renderLeaf(l),
         }
     }
 
     /// Render a Container block
     pub fn renderContainer(self: *Self, block: Container) !void {
         switch (block.content) {
-            .Document => try self.renderDocument(block),
-            .Quote => try self.renderQuote(block),
-            .List => try self.renderList(block),
-            .ListItem => try self.renderListItem(block),
-            .Table => try self.renderTable(block),
+            .document => try self.renderDocument(block),
+            .quote => try self.renderQuote(block),
+            .list => try self.renderList(block),
+            .list_item => try self.renderListItem(block),
+            .table => try self.renderTable(block),
         }
     }
 
     /// Render a Leaf block
     pub fn renderLeaf(self: *Self, block: Leaf) !void {
         switch (block.content) {
-            .Alert => try self.renderAlert(block),
-            .Break => try self.renderBreak(),
-            .Code => |c| try self.renderCode(c),
-            .Heading => try self.renderHeading(block),
-            .Paragraph => try self.renderParagraph(block),
+            .alert => try self.renderAlert(block),
+            .linebreak => try self.renderBreak(),
+            .code => |c| try self.renderCode(c),
+            .directive => try self.renderDirective(block),
+            .heading => try self.renderHeading(block),
+            .paragraph => try self.renderParagraph(block),
         }
     }
 
@@ -190,8 +192,8 @@ pub const HtmlRenderer = struct {
 
     /// Render a List of Items (may be ordered or unordered)
     fn renderList(self: *Self, list: Container) !void {
-        switch (list.content.List.kind) {
-            .ordered => self.print("<ol start={d}>\n", .{list.content.List.start}),
+        switch (list.content.list.kind) {
+            .ordered => self.print("<ol start={d}>\n", .{list.content.list.start}),
             .unordered => self.write("<ul>\n"),
             .task => self.write("<ul class=\"task_list\">\n"),
         }
@@ -200,10 +202,10 @@ pub const HtmlRenderer = struct {
         // using the basic Container type as the child ListItems can be
         // any other Block type
         for (list.children.items) |item| {
-            switch (list.content.List.kind) {
+            switch (list.content.list.kind) {
                 .ordered, .unordered => self.write("<li>\n"),
                 .task => {
-                    if (item.Container.content.ListItem.checked) {
+                    if (item.container.content.list_item.checked) {
                         self.write("<li class=\"task_checked\">\n");
                     } else {
                         self.write("<li class=\"task_unchecked\">\n");
@@ -215,7 +217,7 @@ pub const HtmlRenderer = struct {
             self.write("</li>\n");
         }
 
-        switch (list.content.List.kind) {
+        switch (list.content.list.kind) {
             .ordered => self.write("</ol>\n"),
             .unordered, .task => self.write("</ul>\n"),
         }
@@ -236,7 +238,7 @@ pub const HtmlRenderer = struct {
 
     /// Render an ATX Heading
     fn renderHeading(self: *Self, leaf: Leaf) !void {
-        const h: leaves.Heading = leaf.content.Heading;
+        const h: leaves.Heading = leaf.content.heading;
 
         // Generate the link name for the heading
         const id_s = try utils.pathToUri(self.io, self.alloc, h.text, .{ .replace_whitespace = true, .lowercase = true });
@@ -256,10 +258,6 @@ pub const HtmlRenderer = struct {
 
     /// Render a raw block of code
     fn renderCode(self: *Self, c: leaves.Code) !void {
-        if (c.directive) |_| {
-            try self.renderDirective(c);
-            return;
-        }
         self.write("\n<div class=\"code_block\">");
 
         const language = c.tag orelse "none";
@@ -325,7 +323,7 @@ pub const HtmlRenderer = struct {
     }
 
     fn renderAlert(self: *Self, b: Leaf) !void {
-        const alert = try std.ascii.allocLowerString(self.alloc, b.content.Alert.alert orelse "note");
+        const alert = try std.ascii.allocLowerString(self.alloc, b.content.alert.alert orelse "note");
         defer self.alloc.free(alert);
         self.print("\n<div class=\"directive {s}\">\n", .{alert});
         self.print("<h1>{s}</h1>\n", .{alert});
@@ -337,8 +335,8 @@ pub const HtmlRenderer = struct {
         self.write("\n</div>\n");
     }
 
-    fn renderDirective(self: *Self, d: leaves.Code) !void {
-        const directive = try std.ascii.allocLowerString(self.alloc, d.directive orelse "note");
+    fn renderDirective(self: *Self, b: Leaf) !void {
+        const directive = try std.ascii.allocLowerString(self.alloc, b.content.directive.name orelse "note");
         defer self.alloc.free(directive);
         if (utils.isDirectiveToC(directive)) {
             // Generate and render a Table of Contents for the whole document
@@ -349,9 +347,11 @@ pub const HtmlRenderer = struct {
         }
         self.print("\n<div class=\"directive {s}\">\n", .{directive});
         self.print("<h1>{s}</h1>\n", .{directive});
-        if (d.text) |text| {
-            self.print("{s}", .{text});
+        self.write("<p>");
+        for (b.inlines.items) |item| {
+            try self.renderInline(item);
         }
+        self.write("</p>");
         self.write("\n</div>\n");
     }
 
@@ -415,7 +415,7 @@ pub const HtmlRenderer = struct {
     }
 
     fn renderTable(self: *Self, table: Container) !void {
-        const ncol = table.content.Table.ncol;
+        const ncol = table.content.table.ncol;
         const nrow: usize = @divFloor(table.children.items.len, ncol);
         std.debug.assert(table.children.items.len == ncol * nrow);
 
@@ -499,5 +499,5 @@ pub const HtmlRenderer = struct {
 
 fn isBreak(block: *const Block) bool {
     if (!block.isLeaf()) return false;
-    return block.Leaf.content == .Break;
+    return block.leaf.content == .Break;
 }

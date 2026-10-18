@@ -3,11 +3,12 @@ const std = @import("std");
 const stb = @import("stb_image");
 const plutosvg = if (builtin.os.tag == .windows) {} else @import("plutosvg");
 
-const blocks = @import("../ast/blocks.zig");
-const containers = @import("../ast/containers.zig");
-const leaves = @import("../ast/leaves.zig");
-const inls = @import("../ast/inlines.zig");
-const utils = @import("../utils.zig");
+const jaymark = @import("jaymark");
+const blocks = jaymark.blocks;
+const containers = jaymark.containers;
+const leaves = jaymark.leaves;
+const inls = jaymark.inlines;
+const utils = jaymark.utils;
 
 const cons = @import("../console.zig");
 const debug = @import("../debug.zig");
@@ -15,6 +16,7 @@ const gfx = @import("../image.zig");
 const ts_queries = @import("../ts_queries.zig");
 const syntax = @import("../syntax.zig");
 const theme = @import("../theme.zig");
+const net = @import("../utils.zig");
 
 pub const Renderer = @import("Renderer.zig");
 
@@ -30,19 +32,38 @@ const Container = blocks.Container;
 const Leaf = blocks.Leaf;
 const Inline = inls.Inline;
 const Text = inls.Text;
+const AstTextStyle = inls.TextStyle;
 const TextStyle = theme.TextStyle;
 
-const quote_indent = Text{ .style = .{ .fg_color = .White }, .text = "┃ " };
-const list_indent = Text{ .style = .{}, .text = "  " };
-const numlist_indent_0 = Text{ .style = .{}, .text = "   " };
-const numlist_indent_10 = Text{ .style = .{}, .text = "    " };
-const numlist_indent_100 = Text{ .style = .{}, .text = "     " };
-const numlist_indent_1000 = Text{ .style = .{}, .text = "      " };
-const task_list_indent = Text{ .style = .{}, .text = "  " };
+/// Convert the AST's plain TextStyle (bold/italic/underline/strike only)
+/// into the renderer's richer, color-aware TextStyle.
+fn toRenderStyle(style: AstTextStyle) TextStyle {
+    return .{
+        .bold = style.bold,
+        .italic = style.italic,
+        .underline = style.underline,
+        .strike = style.strike,
+    };
+}
+
+/// A renderer-local leader/trailer string with full (color-aware) styling.
+/// Distinct from the AST's `Text`, whose style is limited to bold/italic/underline/strike.
+const Leader = struct {
+    style: TextStyle = .{},
+    text: []const u8,
+};
+
+const quote_indent = Leader{ .style = .{ .fg_color = .White }, .text = "┃ " };
+const list_indent = Leader{ .style = .{}, .text = "  " };
+const numlist_indent_0 = Leader{ .style = .{}, .text = "   " };
+const numlist_indent_10 = Leader{ .style = .{}, .text = "    " };
+const numlist_indent_100 = Leader{ .style = .{}, .text = "     " };
+const numlist_indent_1000 = Leader{ .style = .{}, .text = "      " };
+const task_list_indent = Leader{ .style = .{}, .text = "  " };
 
 const code_fence_style = TextStyle{ .fg_color = .PurpleGrey, .bold = true };
 const code_text_style = TextStyle{ .bg_color = .DarkGrey, .fg_color = .PurpleGrey };
-const code_indent = Text{ .style = code_fence_style, .text = "│ " };
+const code_indent = Leader{ .style = code_fence_style, .text = "│ " };
 
 const TreezError = error{
     Unknown,
@@ -83,7 +104,7 @@ pub const ConsoleRenderer = struct {
     stream: Writer,
     prerender: std.Io.Writer.Allocating = undefined,
     column: usize = 0,
-    leader_stack: ArrayList(Text),
+    leader_stack: ArrayList(Leader),
     needs_leaders: bool = true,
     opts: Config = undefined,
     style_override: ?TextStyle = null,
@@ -98,7 +119,7 @@ pub const ConsoleRenderer = struct {
             .io = io,
             .alloc = alloc,
             .stream = stream,
-            .leader_stack = ArrayList(Text).init(alloc),
+            .leader_stack = ArrayList(Leader).init(alloc),
             .opts = opts,
             // .prerender = std.Io.Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
         };
@@ -326,7 +347,7 @@ pub const ConsoleRenderer = struct {
     /// Write the text, wrapping (with the current indentation) at 'width' characters
     /// TODO: Probably should simply make this "wrapTextBox" and bake in the knowledge
     /// that we're using a 2-char unicode leader/trailer that's actually 5 bytes (UTF-8)
-    fn wrapTextWithTrailer(self: *Self, text: []const u8, trailer: Text) void {
+    fn wrapTextWithTrailer(self: *Self, text: []const u8, trailer: Leader) void {
         const len = text.len;
         if (len == 0) return;
 
@@ -436,19 +457,19 @@ pub const ConsoleRenderer = struct {
             self.prerender = std.Io.Writer.Allocating.init(self.alloc);
         }
         switch (block) {
-            .Container => |c| try self.renderContainer(c),
-            .Leaf => |l| try self.renderLeaf(l),
+            .container => |c| try self.renderContainer(c),
+            .leaf => |l| try self.renderLeaf(l),
         }
     }
 
     /// Render a Container block
     pub fn renderContainer(self: *Self, block: blocks.Container) !void {
         switch (block.content) {
-            .Document => try self.renderDocument(block),
-            .Quote => try self.renderQuote(block),
-            .List => try self.renderList(block),
-            .ListItem => try self.renderListItem(block, 0),
-            .Table => try self.renderTable(block),
+            .document => try self.renderDocument(block),
+            .quote => try self.renderQuote(block),
+            .list => try self.renderList(block),
+            .list_item => try self.renderListItem(block, 0),
+            .table => try self.renderTable(block),
         }
     }
 
@@ -459,11 +480,12 @@ pub const ConsoleRenderer = struct {
             self.needs_leaders = false;
         }
         switch (block.content) {
-            .Alert => try self.renderAlert(block),
-            .Break => {},
-            .Code => try self.renderCode(block),
-            .Heading => try self.renderHeading(block),
-            .Paragraph => try self.renderParagraph(block),
+            .alert => try self.renderAlert(block),
+            .linebreak => {},
+            .code => try self.renderCode(block),
+            .directive => try self.renderDirective(block),
+            .heading => try self.renderHeading(block),
+            .paragraph => try self.renderParagraph(block),
         }
     }
 
@@ -500,7 +522,7 @@ pub const ConsoleRenderer = struct {
 
     /// Render a List of Items (may be ordered or unordered)
     fn renderList(self: *Self, list: blocks.Container) !void {
-        switch (list.content.List.kind) {
+        switch (list.content.list.kind) {
             .ordered => try self.renderNumberedList(list),
             .unordered => try self.renderUnorderedList(list),
             .task => try self.renderTaskList(list),
@@ -516,7 +538,7 @@ pub const ConsoleRenderer = struct {
 
             // For all but the first item, handle the extra line spacing between items
             if (i > 0) {
-                for (0..list.content.List.spacing) |_| {
+                for (0..list.content.list.spacing) |_| {
                     self.renderBreak();
                 }
             }
@@ -532,13 +554,13 @@ pub const ConsoleRenderer = struct {
             self.needs_leaders = false;
             try self.leader_stack.append(list_indent);
             defer _ = self.leader_stack.pop();
-            try self.renderListItem(item.Container, list.content.List.spacing);
+            try self.renderListItem(item.container, list.content.list.spacing);
         }
     }
 
     /// Render an ordered (numbered) list of items
     fn renderNumberedList(self: *Self, list: blocks.Container) !void {
-        const start: usize = list.content.List.start;
+        const start: usize = list.content.list.start;
         var buffer: [16]u8 = undefined;
         for (list.children.items, 0..) |item, i| {
             // Ensure we start each list item on a new line
@@ -547,7 +569,7 @@ pub const ConsoleRenderer = struct {
 
             // For all but the first item, handle the extra line spacing between items
             if (i > 0) {
-                for (0..list.content.List.spacing) |_| {
+                for (0..list.content.list.spacing) |_| {
                     self.renderBreak();
                 }
             }
@@ -574,7 +596,7 @@ pub const ConsoleRenderer = struct {
             }
             defer _ = self.leader_stack.pop();
 
-            try self.renderListItem(item.Container, list.content.List.spacing);
+            try self.renderListItem(item.container, list.content.list.spacing);
         }
     }
 
@@ -587,13 +609,13 @@ pub const ConsoleRenderer = struct {
 
             // For all but the first item, handle the extra line spacing between items
             if (i > 0) {
-                for (0..list.content.List.spacing) |_| {
+                for (0..list.content.list.spacing) |_| {
                     self.renderBreak();
                 }
             }
 
             self.writeLeaders();
-            if (item.Container.content.ListItem.checked) {
+            if (item.container.content.list_item.checked) {
                 self.startStyle(.{ .fg_color = .Green, .bold = true });
                 self.write("󰄵 ");
             } else {
@@ -607,7 +629,7 @@ pub const ConsoleRenderer = struct {
             self.needs_leaders = false;
             try self.leader_stack.append(task_list_indent);
             defer _ = self.leader_stack.pop();
-            try self.renderListItem(item.Container, list.content.List.spacing);
+            try self.renderListItem(item.container, list.content.list.spacing);
         }
     }
 
@@ -628,7 +650,7 @@ pub const ConsoleRenderer = struct {
         if (self.column > self.opts.indent)
             self.renderBreak();
 
-        const ncol = table.content.Table.ncol;
+        const ncol = table.content.table.ncol;
         const col_w = @divFloor(self.opts.width - (2 * self.opts.indent) - (ncol + 1), ncol);
 
         // The total width of all text to be rendered (removing inter-column spacing)
@@ -647,35 +669,14 @@ pub const ConsoleRenderer = struct {
         };
         var cells = ArrayList(Cell).init(alloc);
 
-        const relative_widths = table.content.Table.relative_width.items;
-        const use_relative_widths = relative_widths.len == ncol;
-        const total_width: usize = blk: {
-            var sum: usize = 0;
-            for (relative_widths) |w| {
-                sum += w;
-            }
-            break :blk sum;
-        };
-        const total_width_f: f32 = @floatFromInt(total_width);
-
         // Compute & store the (integer) width of each column
         // Calculate all columns except the last, then assign remaining width to last column
         // to ensure total width equals render_width exactly (avoiding rounding errors)
         var col_widths = try ArrayList(u32).initCapacity(alloc, ncol);
         var total_assigned: u32 = 0;
-        if (use_relative_widths and total_width > 0) {
-            for (relative_widths[0 .. ncol - 1]) |w| {
-                const rel_width: f32 = @floatFromInt(w);
-                const width_frac: f32 = rel_width / total_width_f;
-                const width: u32 = @intFromFloat(@round(width_frac * render_width_f));
-                col_widths.appendAssumeCapacity(width);
-                total_assigned += width;
-            }
-        } else {
-            for (0..ncol - 1) |_| {
-                col_widths.appendAssumeCapacity(@intCast(col_w));
-                total_assigned += @intCast(col_w);
-            }
+        for (0..ncol - 1) |_| {
+            col_widths.appendAssumeCapacity(@intCast(col_w));
+            total_assigned += @intCast(col_w);
         }
         // Last column gets the remaining width to ensure exact total
         const render_width_u32: u32 = @intFromFloat(render_width_f);
@@ -905,7 +906,7 @@ pub const ConsoleRenderer = struct {
 
     /// Render an ATX Heading
     fn renderHeading(self: *Self, leaf: blocks.Leaf) !void {
-        const h: leaves.Heading = leaf.content.Heading;
+        const h: leaves.Heading = leaf.content.heading;
         var style = TextStyle{};
         var pad_char: []const u8 = " ";
 
@@ -963,11 +964,7 @@ pub const ConsoleRenderer = struct {
 
     /// Render a raw block of code
     fn renderCode(self: *Self, b: blocks.Leaf) !void {
-        const c: leaves.Code = b.content.Code;
-        if (c.directive) |_| {
-            try self.renderDirective(b);
-            return;
-        }
+        const c: leaves.Code = b.content.code;
         self.writeLeaders();
         self.startStyle(code_fence_style);
         self.print("╭──────────────────── <{s}>", .{c.tag orelse "none"});
@@ -1013,7 +1010,7 @@ pub const ConsoleRenderer = struct {
     }
 
     fn renderAlert(self: *Self, b: blocks.Leaf) !void {
-        const alert = b.content.Alert.alert orelse "NOTE";
+        const alert = b.content.alert.alert orelse "NOTE";
 
         // Create a new renderer to render all of our inlines into
         // Use an arena to simplify memory management here
@@ -1024,8 +1021,8 @@ pub const ConsoleRenderer = struct {
         // Create a new Paragraph block using the inlines of the Alert
         // We'll render this into a new buffer which will then get wrapped
         // inside of our alert box
-        var item: Block = Block.initLeaf(self.alloc, .Paragraph, 0);
-        item.Leaf.inlines = b.inlines;
+        var item: Block = Block.initLeaf(self.alloc, .paragraph, 0);
+        item.leaf.inlines = b.inlines;
 
         // Render the table cell into a new buffer
         const width: usize = self.opts.width - 2 * self.opts.indent - 2;
@@ -1050,8 +1047,8 @@ pub const ConsoleRenderer = struct {
 
         const icon = theme.directiveToIcon(alert);
         const style: TextStyle = .{ .fg_color = theme.directiveToColor(alert), .bold = true };
-        const leader: Text = .{ .text = "│ ", .style = style };
-        const trailer: Text = .{ .text = " │", .style = style };
+        const leader: Leader = .{ .text = "│ ", .style = style };
+        const trailer: Leader = .{ .text = " │", .style = style };
 
         // Write the first line of the Alert box
         self.writeLeaders();
@@ -1092,8 +1089,7 @@ pub const ConsoleRenderer = struct {
     }
 
     fn renderDirective(self: *Self, b: blocks.Leaf) !void {
-        const d: leaves.Code = b.content.Code;
-        const directive = d.directive orelse "note";
+        const directive = b.content.directive.name orelse "note";
 
         if (utils.isDirectiveToC(directive)) {
             // Generate and render a Table of Contents for the whole document
@@ -1113,8 +1109,8 @@ pub const ConsoleRenderer = struct {
         // Create a new Paragraph block using the inlines of the Alert
         // We'll render this into a new buffer which will then get wrapped
         // inside of our alert box
-        var item: Block = Block.initLeaf(self.alloc, .Paragraph, 0);
-        item.Leaf.inlines = b.inlines;
+        var item: Block = Block.initLeaf(self.alloc, .paragraph, 0);
+        item.leaf.inlines = b.inlines;
 
         // Render the table cell into a new buffer
         const width: usize = self.opts.width - 2 * self.opts.indent - 2;
@@ -1139,8 +1135,8 @@ pub const ConsoleRenderer = struct {
 
         const icon = theme.directiveToIcon(directive);
         const style: TextStyle = .{ .fg_color = theme.directiveToColor(directive), .bold = true };
-        const leader: Text = .{ .text = "│ ", .style = style };
-        const trailer: Text = .{ .text = " │", .style = style };
+        const leader: Leader = .{ .text = "│ ", .style = style };
+        const trailer: Leader = .{ .text = " │", .style = style };
 
         self.writeLeaders();
         self.startStyle(style);
@@ -1225,7 +1221,7 @@ pub const ConsoleRenderer = struct {
     }
 
     fn renderText(self: *Self, text: Text) !void {
-        self.startStyle(text.style);
+        self.startStyle(toRenderStyle(text.style));
         self.wrapText(text.text);
     }
 
@@ -1280,7 +1276,7 @@ pub const ConsoleRenderer = struct {
             var writer = std.Io.Writer.Allocating.init(self.alloc);
             defer writer.deinit();
 
-            utils.fetchFile(self.io, self.alloc, image.src, &writer.writer) catch |err| {
+            net.fetchFile(self.io, self.alloc, image.src, &writer.writer) catch |err| {
                 debug.print("Error fetching '{s}': {any}\n", .{ image.src, err });
                 break :blk;
             };
@@ -1417,8 +1413,8 @@ pub const ConsoleRenderer = struct {
 //////////////////////////////////////////////////////////
 
 fn testRender(io: std.Io, alloc: Allocator, input: []const u8, out_stream: Writer, width: usize) !void {
-    var p = @import("../parser.zig").Parser.init(alloc, .{});
-    try p.parseMarkdown(input);
+    var p = jaymark.Parser.init(alloc, .{});
+    try p.parse(input);
     defer p.deinit();
 
     var r = ConsoleRenderer.init(io, alloc, out_stream, .{
@@ -1451,7 +1447,7 @@ test "ConsoleRenderer" {
         .{
             .input =
             \\| First row                                                          | 2nd cell                 | 3rd cell |
-            \\| :----------------------------------------------------------------- | :----------------------- | -------- |
+            \\| ------------------------------------------------------------------ | ------------------------ | -------- |
             \\| `The` **2nd row** (_header row_) sets the alignment of each column | same number of columns   | foo      |
             \\| An `other` row                                                     | `same` number of columns | bar      |
             ,

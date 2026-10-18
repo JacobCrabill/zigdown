@@ -89,7 +89,7 @@ fn renderMarkdownImpl(path: []const u8) ?[]const u8 {
     var parser: zd.Parser = zd.Parser.init(alloc, .{ .copy_input = false, .verbose = false });
     defer parser.deinit();
 
-    parser.parseMarkdown(md_text) catch |err| {
+    parser.parse(md_text) catch |err| {
         log.err("Error parsing markdown file: {any}", .{err});
         return null;
     };
