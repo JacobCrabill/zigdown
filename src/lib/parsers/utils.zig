@@ -301,7 +301,7 @@ pub fn isTableRow(line: []const Token) bool {
     const trimmed = trimLeadingWhitespace(line);
     if (trimmed.len == 0) return false;
     if (trimmed[0].kind != .PIPE) return false;
-    return countTablePipes(trimmed) >= 2;
+    return countKind(trimmed, .PIPE) >= 2;
 }
 
 /// Check for the pattern "[ ]*[>][ ]+"
@@ -607,52 +607,28 @@ test validateLink {
     }
 }
 
+/// Count all instances of the 'kind' token in the given line,
+/// ignoring any tokens within an inline code span.
 pub fn countKind(line: []const Token, kind: TokenType) usize {
     var count: usize = 0;
-    for (line) |tok| {
-        if (tok.kind == kind) count += 1;
-    }
-    return count;
-}
-
-/// Count PIPE tokens that act as table column separators, i.e. those *not* inside an
-/// inline code span (delimited by CODE_INLINE '`' tokens). A '|' within `code` is literal.
-pub fn countTablePipes(line: []const Token) usize {
-    var count: usize = 0;
     var in_code: bool = false;
     for (line) |tok| {
-        switch (tok.kind) {
-            .CODE_INLINE => in_code = !in_code,
-            .PIPE => if (!in_code) {
-                count += 1;
-            },
-            else => {},
-        }
+        if (tok.kind == .CODE_INLINE) in_code = !in_code;
+        if (tok.kind == kind and !in_code) count += 1;
     }
     return count;
-}
-
-/// Find the index of the first PIPE token at or after 'start_index' that acts as a table
-/// column separator, i.e. is *not* inside an inline code span. Code-span state is tracked
-/// from the start of the line, so 'start_index' may fall anywhere.
-pub fn indexOfTablePipe(line: []const Token, start_index: usize) ?usize {
-    var in_code: bool = false;
-    for (line, 0..) |tok, i| {
-        switch (tok.kind) {
-            .CODE_INLINE => in_code = !in_code,
-            .PIPE => if (!in_code and i >= start_index) return i,
-            else => {},
-        }
-    }
-    return null;
 }
 
 /// Find the index of the first occurance of a 'kind' Token beginning from 'start_index' (inclusive).
 ///
+/// Skips tokens inside an inline code span.
+///
 /// The index is relative to the start of the 'line' slice.
 pub fn indexOfTokenPos(line: []const Token, start_index: usize, kind: TokenType) ?usize {
+    var in_code: bool = false;
     for (line[start_index..], start_index..) |tok, i| {
-        if (tok.kind == kind) return i;
+        if (tok.kind == .CODE_INLINE) in_code = !in_code;
+        if (tok.kind == kind and !in_code) return i;
     }
     return null;
 }

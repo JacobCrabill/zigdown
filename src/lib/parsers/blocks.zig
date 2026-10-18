@@ -647,7 +647,7 @@ pub const Parser = struct {
         self.logger.printText(trimmed_line, false);
 
         // A table row must contain *at least* '||' (but pipes inside inline code are literal)
-        if (utils.countTablePipes(trimmed_line) < 2)
+        if (utils.countKind(trimmed_line, .PIPE) < 2)
             return false;
 
         var cblock = block.container();
@@ -655,7 +655,7 @@ pub const Parser = struct {
 
         // If any row has a different number of columns, cancel
         if (table.row > 0) {
-            const pipe_count = utils.countTablePipes(trimmed_line);
+            const pipe_count = utils.countKind(trimmed_line, .PIPE);
             if (pipe_count != table.ncol + 1) {
                 self.logger.log("Incorrect column count: Expected {d}, got {d}\n", .{ table.ncol, pipe_count -| 1 });
                 return false;
@@ -665,8 +665,8 @@ pub const Parser = struct {
         // Check the 2nd row - this should be the "header" / formatting row
         if (table.row == 1) {
             // Parse the alignment and relative widths of each column
-            var start: ?usize = utils.indexOfTablePipe(trimmed_line, 0);
-            var end: ?usize = utils.indexOfTablePipe(trimmed_line, start.? + 1);
+            var start: ?usize = utils.indexOfTokenPos(trimmed_line, 0, .PIPE);
+            var end: ?usize = utils.indexOfTokenPos(trimmed_line, start.? + 1, .PIPE);
             while (end != null) {
                 const start_idx: usize = start.?;
                 const end_idx: usize = end.?;
@@ -711,7 +711,7 @@ pub const Parser = struct {
                 // advance to the next column
                 start = end;
                 if (end_idx + 1 < trimmed_line.len) {
-                    end = utils.indexOfTablePipe(trimmed_line, end_idx + 1);
+                    end = utils.indexOfTokenPos(trimmed_line, end_idx + 1, .PIPE);
                 } else {
                     end = null;
                 }
@@ -732,7 +732,7 @@ pub const Parser = struct {
             } else if (tok.kind == .BREAK) {
                 // End of line
             } else if (i < trimmed_line.len) {
-                if (utils.indexOfTablePipe(trimmed_line, i)) |idx| {
+                if (utils.indexOfTokenPos(trimmed_line, i, .PIPE)) |idx| {
                     const child = self.parseNewBlock(trimmed_line[i..idx]) catch unreachable;
                     cblock.children.append(child) catch unreachable;
                     i = idx - 1;
