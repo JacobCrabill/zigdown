@@ -4,7 +4,7 @@ const builtin = @import("builtin");
 const cons = @import("console.zig");
 const wasm = @import("wasm.zig");
 
-const Token = @import("tokens.zig").Token;
+const Token = @import("jaymark").Token;
 
 /// Log levels for diagnostic output.
 pub const LogLevel = enum {

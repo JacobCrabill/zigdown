@@ -9,3 +9,4 @@ zig-pkg/
 .ccls-cache/
 docs/
 .worktrees/
+tmp/

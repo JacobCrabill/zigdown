@@ -7,9 +7,7 @@ const os = std.os;
 const cli = zd.cli;
 const Css = zd.assets.html.Css;
 const cons = zd.cons;
-const TextStyle = zd.utils.TextStyle;
 const Parser = zd.Parser;
-const TokenList = zd.TokenList;
 
 var g_colorscheme: flags.ColorScheme = .default;
 
@@ -197,8 +195,8 @@ fn handleRender(
     defer alloc.free(md_text);
 
     // Parse the document
-    var parsed = try zd.parser.timedParse(io, alloc, md_text, r_opts.verbose());
-    defer parsed.parser.deinit();
+    var parsed = try zd.timedParse(io, alloc, md_text, r_opts.verbose());
+    defer parsed.document.deinit();
 
     // Get the output stream
     var out_buf: [256]u8 = undefined;
@@ -233,11 +231,11 @@ fn handleRender(
     }
 
     // Configure and perform the rendering
-    var rtimer = zd.utils.Timer.start(io);
+    var rtimer = zd.jaymark.utils.Timer.start(io);
     try zd.render.render(.{
         .io = io,
         .alloc = alloc,
-        .document = parsed.parser.document,
+        .document = parsed.document,
         .document_dir = md_dir,
         .out_stream = out_stream,
         .width = r_opts.width(),

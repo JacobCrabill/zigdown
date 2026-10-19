@@ -1,14 +1,15 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const assets = @import("assets");
+const jaymark = @import("jaymark");
 
-const blocks = @import("../ast/blocks.zig");
-const inls = @import("../ast/inlines.zig");
-const leaves = @import("../ast/leaves.zig");
-const containers = @import("../ast/containers.zig");
+const blocks = jaymark.blocks;
+const inls = jaymark.inlines;
+const leaves = jaymark.leaves;
+const containers = jaymark.containers;
 
 const debug = @import("../debug.zig");
-const utils = @import("../utils.zig");
+const utils = jaymark.utils;
 const theme = @import("../theme.zig");
 const syntax = @import("../syntax.zig");
 const ts_queries = @import("../ts_queries.zig");

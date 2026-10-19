@@ -3,11 +3,12 @@ const std = @import("std");
 const stb = @import("stb_image");
 const plutosvg = if (builtin.os.tag == .windows) {} else @import("plutosvg");
 
-const blocks = @import("../ast/blocks.zig");
-const containers = @import("../ast/containers.zig");
-const leaves = @import("../ast/leaves.zig");
-const inls = @import("../ast/inlines.zig");
-const utils = @import("../utils.zig");
+const jaymark = @import("jaymark");
+const blocks = jaymark.blocks;
+const containers = jaymark.containers;
+const leaves = jaymark.leaves;
+const inls = jaymark.inlines;
+const utils = jaymark.utils;
 
 const cons = @import("../console.zig");
 const debug = @import("../debug.zig");
@@ -15,6 +16,7 @@ const gfx = @import("../image.zig");
 const ts_queries = @import("../ts_queries.zig");
 const syntax = @import("../syntax.zig");
 const theme = @import("../theme.zig");
+const net = @import("../utils.zig");
 
 pub const Renderer = @import("Renderer.zig");
 
@@ -30,19 +32,38 @@ const Container = blocks.Container;
 const Leaf = blocks.Leaf;
 const Inline = inls.Inline;
 const Text = inls.Text;
+const AstTextStyle = inls.TextStyle;
 const TextStyle = theme.TextStyle;
 
-const quote_indent = Text{ .style = .{ .fg_color = .White }, .text = "┃ " };
-const list_indent = Text{ .style = .{}, .text = "  " };
-const numlist_indent_0 = Text{ .style = .{}, .text = "   " };
-const numlist_indent_10 = Text{ .style = .{}, .text = "    " };
-const numlist_indent_100 = Text{ .style = .{}, .text = "     " };
-const numlist_indent_1000 = Text{ .style = .{}, .text = "      " };
-const task_list_indent = Text{ .style = .{}, .text = "  " };
+/// Convert the AST's plain TextStyle (bold/italic/underline/strike only)
+/// into the renderer's richer, color-aware TextStyle.
+fn toRenderStyle(style: AstTextStyle) TextStyle {
+    return .{
+        .bold = style.bold,
+        .italic = style.italic,
+        .underline = style.underline,
+        .strike = style.strike,
+    };
+}
+
+/// A renderer-local leader/trailer string with full (color-aware) styling.
+/// Distinct from the AST's `Text`, whose style is limited to bold/italic/underline/strike.
+const Leader = struct {
+    style: TextStyle = .{},
+    text: []const u8,
+};
+
+const quote_indent = Leader{ .style = .{ .fg_color = .White }, .text = "┃ " };
+const list_indent = Leader{ .style = .{}, .text = "  " };
+const numlist_indent_0 = Leader{ .style = .{}, .text = "   " };
+const numlist_indent_10 = Leader{ .style = .{}, .text = "    " };
+const numlist_indent_100 = Leader{ .style = .{}, .text = "     " };
+const numlist_indent_1000 = Leader{ .style = .{}, .text = "      " };
+const task_list_indent = Leader{ .style = .{}, .text = "  " };
 
 const code_fence_style = TextStyle{ .fg_color = .PurpleGrey, .bold = true };
 const code_text_style = TextStyle{ .bg_color = .DarkGrey, .fg_color = .PurpleGrey };
-const code_indent = Text{ .style = code_fence_style, .text = "│ " };
+const code_indent = Leader{ .style = code_fence_style, .text = "│ " };
 
 const TreezError = error{
     Unknown,
@@ -83,7 +104,7 @@ pub const ConsoleRenderer = struct {
     stream: Writer,
     prerender: std.Io.Writer.Allocating = undefined,
     column: usize = 0,
-    leader_stack: ArrayList(Text),
+    leader_stack: ArrayList(Leader),
     needs_leaders: bool = true,
     opts: Config = undefined,
     style_override: ?TextStyle = null,
@@ -98,7 +119,7 @@ pub const ConsoleRenderer = struct {
             .io = io,
             .alloc = alloc,
             .stream = stream,
-            .leader_stack = ArrayList(Text).init(alloc),
+            .leader_stack = ArrayList(Leader).init(alloc),
             .opts = opts,
             // .prerender = std.Io.Writer.Allocating.initCapacity(alloc, 1024) catch @panic("OOM"),
         };
@@ -326,7 +347,7 @@ pub const ConsoleRenderer = struct {
     /// Write the text, wrapping (with the current indentation) at 'width' characters
     /// TODO: Probably should simply make this "wrapTextBox" and bake in the knowledge
     /// that we're using a 2-char unicode leader/trailer that's actually 5 bytes (UTF-8)
-    fn wrapTextWithTrailer(self: *Self, text: []const u8, trailer: Text) void {
+    fn wrapTextWithTrailer(self: *Self, text: []const u8, trailer: Leader) void {
         const len = text.len;
         if (len == 0) return;
 
@@ -1050,8 +1071,8 @@ pub const ConsoleRenderer = struct {
 
         const icon = theme.directiveToIcon(alert);
         const style: TextStyle = .{ .fg_color = theme.directiveToColor(alert), .bold = true };
-        const leader: Text = .{ .text = "│ ", .style = style };
-        const trailer: Text = .{ .text = " │", .style = style };
+        const leader: Leader = .{ .text = "│ ", .style = style };
+        const trailer: Leader = .{ .text = " │", .style = style };
 
         // Write the first line of the Alert box
         self.writeLeaders();
@@ -1139,8 +1160,8 @@ pub const ConsoleRenderer = struct {
 
         const icon = theme.directiveToIcon(directive);
         const style: TextStyle = .{ .fg_color = theme.directiveToColor(directive), .bold = true };
-        const leader: Text = .{ .text = "│ ", .style = style };
-        const trailer: Text = .{ .text = " │", .style = style };
+        const leader: Leader = .{ .text = "│ ", .style = style };
+        const trailer: Leader = .{ .text = " │", .style = style };
 
         self.writeLeaders();
         self.startStyle(style);
@@ -1225,7 +1246,7 @@ pub const ConsoleRenderer = struct {
     }
 
     fn renderText(self: *Self, text: Text) !void {
-        self.startStyle(text.style);
+        self.startStyle(toRenderStyle(text.style));
         self.wrapText(text.text);
     }
 
@@ -1280,7 +1301,7 @@ pub const ConsoleRenderer = struct {
             var writer = std.Io.Writer.Allocating.init(self.alloc);
             defer writer.deinit();
 
-            utils.fetchFile(self.io, self.alloc, image.src, &writer.writer) catch |err| {
+            net.fetchFile(self.io, self.alloc, image.src, &writer.writer) catch |err| {
                 debug.print("Error fetching '{s}': {any}\n", .{ image.src, err });
                 break :blk;
             };
@@ -1417,7 +1438,7 @@ pub const ConsoleRenderer = struct {
 //////////////////////////////////////////////////////////
 
 fn testRender(io: std.Io, alloc: Allocator, input: []const u8, out_stream: Writer, width: usize) !void {
-    var p = @import("../parser.zig").Parser.init(alloc, .{});
+    var p = jaymark.Parser.init(alloc, .{});
     try p.parseMarkdown(input);
     defer p.deinit();
 

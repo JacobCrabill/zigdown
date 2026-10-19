@@ -12,6 +12,10 @@
         "build.zig.zon",
     },
     .dependencies = .{
+        .jaymark = .{
+            .url = "https://github.com/JacobCrabill/jaymark/archive/40d6c78b06a6d22f79a3d363f1a5a5674d4ba3cb.tar.gz",
+            .hash = "jaymark-1.0.0-mfWpND7FAwDeyQuyHmj7ryha2bQbFAA2XLPX2n6aTbcW",
+        },
         .stbi = .{
             .url = "https://github.com/JacobCrabill/zig-stb-image/archive/67b306a8b7f331a62396f1a03f94237b36995f39.tar.gz",
             .hash = "zig_stb_image-2.28.0-2-9dD1dVccBQD_h9JnFLgabVswnNKhcogldXBhwA8yn9HW",

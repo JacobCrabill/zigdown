@@ -2,7 +2,7 @@
 /// Can be used in the future to easily enable new renderer types.
 const std = @import("std");
 
-const blocks = @import("../ast/blocks.zig");
+const blocks = @import("jaymark").blocks;
 
 /// The type erased pointer to the renderer implementation
 ptr: *anyopaque,

@@ -126,24 +126,20 @@ export fn format_markdown(lua: ?*LuaState) callconv(.c) c_int {
     parser.parseMarkdown(input) catch @panic("Parse error!"); // TODO: better error handling?
     const md: zd.Block = parser.document;
 
-    // Create a buffer to render into - Note that Lua creates its own copy internally
-    var alloc_writer = std.Io.Writer.Allocating.initCapacity(alloc, len) catch @panic("OOM");
-    defer alloc_writer.deinit();
-
     var threaded_io: std.Io.Threaded = .init(alloc, .{});
     const io = threaded_io.io();
 
     // Render the document
-    const render_opts = zd.render.FormatRenderer.Config{
+    const render_opts = zd.jaymark.Formatter.Config{
         .width = columns,
         .indent = 0,
     };
-    var formatter = zd.render.FormatRenderer.init(io, alloc, &alloc_writer.writer, render_opts);
+    var formatter = zd.jaymark.Formatter.init(io, alloc, render_opts);
     defer formatter.deinit();
-    formatter.renderBlock(md) catch @panic("Render error!");
+    const buffer = formatter.format(md) catch @panic("Render error!");
+    defer alloc.free(buffer);
 
     // Push the rendered string to the Lua stack
-    const buffer = alloc_writer.written();
     c.lua_pushlstring(lua, @ptrCast(buffer), buffer.len);
 
     return 1;

@@ -1,5 +1,6 @@
 const std = @import("std");
-const blocks = @import("ast/blocks.zig");
+const jaymark = @import("jaymark");
+const blocks = jaymark.blocks;
 const gfx = @import("image.zig");
 const cli = @import("cli.zig");
 const cons = @import("console.zig");
@@ -12,7 +13,6 @@ pub const Renderer = @import("render/Renderer.zig");
 
 pub const HtmlRenderer = @import("render/render_html.zig").HtmlRenderer;
 pub const ConsoleRenderer = @import("render/render_console.zig").ConsoleRenderer;
-pub const FormatRenderer = @import("render/render_format.zig").FormatRenderer;
 pub const RangeRenderer = @import("render/render_range.zig").RangeRenderer;
 
 /// Supported rendering methods
@@ -120,13 +120,13 @@ pub fn render(opts: RenderOptions) !void {
             // This API isn't meant for this particular renderer.
         },
         .format => {
-            const render_opts = FormatRenderer.Config{
+            var formatter = jaymark.Formatter.init(opts.io, arena.allocator(), .{
                 .indent = 0,
                 .width = opts.width orelse 90,
-            };
-            var formatter = FormatRenderer.init(opts.io, arena.allocator(), opts.out_stream, render_opts);
+            });
             defer formatter.deinit();
-            try formatter.renderBlock(opts.document);
+            const output = try formatter.format(opts.document);
+            try opts.out_stream.writeAll(output);
         },
     }
 
