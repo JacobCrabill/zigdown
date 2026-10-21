@@ -140,7 +140,7 @@ export fn renderToHtml(md_ptr: [*:0]u8) void {
     wasm.log("Parsing: {s}\n", .{md_text});
     var parser = zd.Parser.init(alloc, opts);
     defer parser.deinit();
-    parser.parseMarkdown(md_text) catch |err| {
+    parser.parse(md_text) catch |err| {
         wasm.log("[parse] Caught Zig error: {any}\n", .{err});
     };
 

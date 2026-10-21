@@ -1439,7 +1439,7 @@ pub const ConsoleRenderer = struct {
 
 fn testRender(io: std.Io, alloc: Allocator, input: []const u8, out_stream: Writer, width: usize) !void {
     var p = jaymark.Parser.init(alloc, .{});
-    try p.parseMarkdown(input);
+    try p.parse(input);
     defer p.deinit();
 
     var r = ConsoleRenderer.init(io, alloc, out_stream, .{

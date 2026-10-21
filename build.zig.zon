@@ -13,8 +13,8 @@
     },
     .dependencies = .{
         .jaymark = .{
-            .url = "https://github.com/JacobCrabill/jaymark/archive/40d6c78b06a6d22f79a3d363f1a5a5674d4ba3cb.tar.gz",
-            .hash = "jaymark-1.0.0-mfWpND7FAwDeyQuyHmj7ryha2bQbFAA2XLPX2n6aTbcW",
+            .url = "https://github.com/JacobCrabill/jaymark/archive/6dddbff6dbd0aa22d3e29fcc54002a9e2833da78.tar.gz",
+            .hash = "jaymark-1.0.0-mfWpNMzAAwAzXwYeNxKTB1P5TDMobg_FE2vPTDOkRY-w",
         },
         .stbi = .{
             .url = "https://github.com/JacobCrabill/zig-stb-image/archive/67b306a8b7f331a62396f1a03f94237b36995f39.tar.gz",

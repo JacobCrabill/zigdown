@@ -1420,7 +1420,7 @@ pub const RangeRenderer = struct {
 
 fn testRender(io: std.Io, alloc: Allocator, input: []const u8, out_stream: *std.Io.Writer, width: usize) !void {
     var p = jaymark.Parser.init(alloc, .{});
-    try p.parseMarkdown(input);
+    try p.parse(input);
     var r = RangeRenderer.init(io, alloc, out_stream, .{ .width = width });
     try r.renderBlock(p.document);
 }
@@ -1518,7 +1518,7 @@ test "RangeRenderer table style ranges" {
         var alloc_writer = std.Io.Writer.Allocating.init(arena.allocator());
 
         var p = jaymark.Parser.init(arena.allocator(), .{});
-        try p.parseMarkdown(data.input);
+        try p.parse(data.input);
         var r = RangeRenderer.init(std.testing.io, arena.allocator(), &alloc_writer.writer, .{ .width = data.width });
         try r.renderBlock(p.document);
 

@@ -131,7 +131,7 @@ fn renderFile(io: std.Io, alloc: Allocator, writer: *std.Io.Writer, dir: []const
     var parser: Parser = Parser.init(arena.allocator(), .{ .copy_input = false, .verbose = false });
     defer parser.deinit();
 
-    try parser.parseMarkdown(md_text);
+    try parser.parse(md_text);
 
     // Clear the screen
     // Get the terminal size; limit our width to that

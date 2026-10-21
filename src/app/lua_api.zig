@@ -57,7 +57,7 @@ export fn render_markdown(lua: ?*LuaState) callconv(.c) c_int {
     var parser = zd.Parser.init(alloc, opts);
     defer parser.deinit();
 
-    parser.parseMarkdown(input) catch @panic("Parse error!"); // TODO: better error handling?
+    parser.parse(input) catch @panic("Parse error!"); // TODO: better error handling?
     const md: zd.Block = parser.document;
 
     // Create a buffer to render into - Note that Lua creates its own copy internally
@@ -123,7 +123,7 @@ export fn format_markdown(lua: ?*LuaState) callconv(.c) c_int {
     var parser = zd.Parser.init(alloc, opts);
     defer parser.deinit();
 
-    parser.parseMarkdown(input) catch @panic("Parse error!"); // TODO: better error handling?
+    parser.parse(input) catch @panic("Parse error!"); // TODO: better error handling?
     const md: zd.Block = parser.document;
 
     var threaded_io: std.Io.Threaded = .init(alloc, .{});
