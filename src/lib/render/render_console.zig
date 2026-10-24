@@ -457,19 +457,19 @@ pub const ConsoleRenderer = struct {
             self.prerender = std.Io.Writer.Allocating.init(self.alloc);
         }
         switch (block) {
-            .Container => |c| try self.renderContainer(c),
-            .Leaf => |l| try self.renderLeaf(l),
+            .container => |c| try self.renderContainer(c),
+            .leaf => |l| try self.renderLeaf(l),
         }
     }
 
     /// Render a Container block
     pub fn renderContainer(self: *Self, block: blocks.Container) !void {
         switch (block.content) {
-            .Document => try self.renderDocument(block),
-            .Quote => try self.renderQuote(block),
-            .List => try self.renderList(block),
-            .ListItem => try self.renderListItem(block, 0),
-            .Table => try self.renderTable(block),
+            .document => try self.renderDocument(block),
+            .quote => try self.renderQuote(block),
+            .list => try self.renderList(block),
+            .list_item => try self.renderListItem(block, 0),
+            .table => try self.renderTable(block),
         }
     }
 
@@ -480,11 +480,11 @@ pub const ConsoleRenderer = struct {
             self.needs_leaders = false;
         }
         switch (block.content) {
-            .Alert => try self.renderAlert(block),
-            .Break => {},
-            .Code => try self.renderCode(block),
-            .Heading => try self.renderHeading(block),
-            .Paragraph => try self.renderParagraph(block),
+            .alert => try self.renderAlert(block),
+            .linebreak => {},
+            .code => try self.renderCode(block),
+            .heading => try self.renderHeading(block),
+            .paragraph => try self.renderParagraph(block),
         }
     }
 
@@ -521,7 +521,7 @@ pub const ConsoleRenderer = struct {
 
     /// Render a List of Items (may be ordered or unordered)
     fn renderList(self: *Self, list: blocks.Container) !void {
-        switch (list.content.List.kind) {
+        switch (list.content.list.kind) {
             .ordered => try self.renderNumberedList(list),
             .unordered => try self.renderUnorderedList(list),
             .task => try self.renderTaskList(list),
@@ -537,7 +537,7 @@ pub const ConsoleRenderer = struct {
 
             // For all but the first item, handle the extra line spacing between items
             if (i > 0) {
-                for (0..list.content.List.spacing) |_| {
+                for (0..list.content.list.spacing) |_| {
                     self.renderBreak();
                 }
             }
@@ -553,13 +553,13 @@ pub const ConsoleRenderer = struct {
             self.needs_leaders = false;
             try self.leader_stack.append(list_indent);
             defer _ = self.leader_stack.pop();
-            try self.renderListItem(item.Container, list.content.List.spacing);
+            try self.renderListItem(item.container, list.content.list.spacing);
         }
     }
 
     /// Render an ordered (numbered) list of items
     fn renderNumberedList(self: *Self, list: blocks.Container) !void {
-        const start: usize = list.content.List.start;
+        const start: usize = list.content.list.start;
         var buffer: [16]u8 = undefined;
         for (list.children.items, 0..) |item, i| {
             // Ensure we start each list item on a new line
@@ -568,7 +568,7 @@ pub const ConsoleRenderer = struct {
 
             // For all but the first item, handle the extra line spacing between items
             if (i > 0) {
-                for (0..list.content.List.spacing) |_| {
+                for (0..list.content.list.spacing) |_| {
                     self.renderBreak();
                 }
             }
@@ -595,7 +595,7 @@ pub const ConsoleRenderer = struct {
             }
             defer _ = self.leader_stack.pop();
 
-            try self.renderListItem(item.Container, list.content.List.spacing);
+            try self.renderListItem(item.container, list.content.list.spacing);
         }
     }
 
@@ -608,13 +608,13 @@ pub const ConsoleRenderer = struct {
 
             // For all but the first item, handle the extra line spacing between items
             if (i > 0) {
-                for (0..list.content.List.spacing) |_| {
+                for (0..list.content.list.spacing) |_| {
                     self.renderBreak();
                 }
             }
 
             self.writeLeaders();
-            if (item.Container.content.ListItem.checked) {
+            if (item.container.content.list_item.checked) {
                 self.startStyle(.{ .fg_color = .Green, .bold = true });
                 self.write("󰄵 ");
             } else {
@@ -628,7 +628,7 @@ pub const ConsoleRenderer = struct {
             self.needs_leaders = false;
             try self.leader_stack.append(task_list_indent);
             defer _ = self.leader_stack.pop();
-            try self.renderListItem(item.Container, list.content.List.spacing);
+            try self.renderListItem(item.container, list.content.list.spacing);
         }
     }
 
@@ -649,7 +649,7 @@ pub const ConsoleRenderer = struct {
         if (self.column > self.opts.indent)
             self.renderBreak();
 
-        const ncol = table.content.Table.ncol;
+        const ncol = table.content.table.ncol;
         const col_w = @divFloor(self.opts.width - (2 * self.opts.indent) - (ncol + 1), ncol);
 
         // The total width of all text to be rendered (removing inter-column spacing)
@@ -668,7 +668,7 @@ pub const ConsoleRenderer = struct {
         };
         var cells = ArrayList(Cell).init(alloc);
 
-        const relative_widths = table.content.Table.relative_width.items;
+        const relative_widths = table.content.table.relative_width.items;
         const use_relative_widths = relative_widths.len == ncol;
         const total_width: usize = blk: {
             var sum: usize = 0;
@@ -926,7 +926,7 @@ pub const ConsoleRenderer = struct {
 
     /// Render an ATX Heading
     fn renderHeading(self: *Self, leaf: blocks.Leaf) !void {
-        const h: leaves.Heading = leaf.content.Heading;
+        const h: leaves.Heading = leaf.content.heading;
         var style = TextStyle{};
         var pad_char: []const u8 = " ";
 
@@ -984,7 +984,7 @@ pub const ConsoleRenderer = struct {
 
     /// Render a raw block of code
     fn renderCode(self: *Self, b: blocks.Leaf) !void {
-        const c: leaves.Code = b.content.Code;
+        const c: leaves.Code = b.content.code;
         if (c.directive) |_| {
             try self.renderDirective(b);
             return;
@@ -1034,7 +1034,7 @@ pub const ConsoleRenderer = struct {
     }
 
     fn renderAlert(self: *Self, b: blocks.Leaf) !void {
-        const alert = b.content.Alert.alert orelse "NOTE";
+        const alert = b.content.alert.alert orelse "NOTE";
 
         // Create a new renderer to render all of our inlines into
         // Use an arena to simplify memory management here
@@ -1045,8 +1045,8 @@ pub const ConsoleRenderer = struct {
         // Create a new Paragraph block using the inlines of the Alert
         // We'll render this into a new buffer which will then get wrapped
         // inside of our alert box
-        var item: Block = Block.initLeaf(self.alloc, .Paragraph, 0);
-        item.Leaf.inlines = b.inlines;
+        var item: Block = Block.initLeaf(self.alloc, .paragraph, 0);
+        item.leaf.inlines = b.inlines;
 
         // Render the table cell into a new buffer
         const width: usize = self.opts.width - 2 * self.opts.indent - 2;
@@ -1113,7 +1113,7 @@ pub const ConsoleRenderer = struct {
     }
 
     fn renderDirective(self: *Self, b: blocks.Leaf) !void {
-        const d: leaves.Code = b.content.Code;
+        const d: leaves.Code = b.content.code;
         const directive = d.directive orelse "note";
 
         if (utils.isDirectiveToC(directive)) {
@@ -1134,8 +1134,8 @@ pub const ConsoleRenderer = struct {
         // Create a new Paragraph block using the inlines of the Alert
         // We'll render this into a new buffer which will then get wrapped
         // inside of our alert box
-        var item: Block = Block.initLeaf(self.alloc, .Paragraph, 0);
-        item.Leaf.inlines = b.inlines;
+        var item: Block = Block.initLeaf(self.alloc, .paragraph, 0);
+        item.leaf.inlines = b.inlines;
 
         // Render the table cell into a new buffer
         const width: usize = self.opts.width - 2 * self.opts.indent - 2;
