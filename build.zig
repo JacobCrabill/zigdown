@@ -50,7 +50,7 @@ pub fn build(b: *std.Build) !void {
         const target_cpu: std.Target.Cpu.Arch = target.query.cpu_arch orelse host_target.cpu.arch;
         const target_os: std.Target.Os.Tag = target.query.os_tag orelse host_target.os.tag;
         // TODO: Figure out which ABIs are supported by the Zig backend (MUSL isn't supported?)
-        break :blk if (optimize == .small and target_cpu == .x86_64 and target_os != .windows) false else true;
+        break :blk if (optimize == .debug and target_cpu == .x86_64 and target_os != .windows) false else true;
     };
 
     // Add an option to list the set of TreeSitter parsers to statically link into the build
